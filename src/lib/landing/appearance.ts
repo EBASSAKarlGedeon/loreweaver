@@ -18,11 +18,18 @@ export const THEMES = [
 	{ id: 'mono', label: 'Monochrome', accent: '#e5e7eb', accent2: '#6b7280', bg: '#111111' }
 ];
 
+// Body font stacks. Luxury uses the self-hosted Manrope (imported in the layout).
 export const FONTS: Record<Appearance['font'], string> = {
-	system: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+	luxury: '"Manrope Variable", Manrope, system-ui, -apple-system, "Segoe UI", sans-serif',
+	system:'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 	serif: 'Georgia, "Iowan Old Style", "Times New Roman", serif',
 	rounded: 'ui-rounded, "SF Pro Rounded", Nunito, "Varela Round", system-ui, sans-serif',
 	mono: 'ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace'
+};
+
+// Headings and character names. Only Luxury differs from the body font.
+const DISPLAY_FONTS: Partial<Record<Appearance['font'], string>> = {
+	luxury: '"Fraunces Variable", Fraunces, Georgia, "Times New Roman", serif'
 };
 
 const DENSITIES: Record<Appearance['density'], { gap: number; pad: number }> = {
@@ -93,6 +100,9 @@ export function themeVars(a: Appearance): Record<string, string> {
 		'--lw-card-min': `${clamp(a.cardMinWidth, 150, 400, 230)}px`,
 		'--lw-chat-card-w': `${clamp(a.chatCardWidth, 240, 520, 340)}px`,
 		'--lw-font': FONTS[a.font] ?? FONTS.system,
+		'--lw-font-display': DISPLAY_FONTS[a.font] ?? FONTS[a.font] ?? FONTS.system,
+		// Serif body text reads better with a little more line height
+		'--lw-leading': a.font === 'serif' ? '1.7' : '1.55',
 		'--lw-font-scale': String(clamp(a.fontScale, 75, 140, 100) / 100),
 		'--lw-gap': `${density.gap}px`,
 		'--lw-pad': `${density.pad}px`

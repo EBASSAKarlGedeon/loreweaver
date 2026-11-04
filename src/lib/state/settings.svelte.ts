@@ -15,7 +15,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
 	radius: 14,
 	glow: true,
 	animations: true,
-	font: 'system',
+	font: 'luxury',
 	fontScale: 100,
 	density: 'comfortable',
 	sectionOrder: 'chats-first',

@@ -51,7 +51,7 @@ export interface Appearance {
 	glow: boolean; // accent glow on hover
 	animations: boolean;
 	// Typography
-	font: 'system' | 'serif' | 'rounded' | 'mono';
+	font: 'luxury' | 'system' | 'serif' | 'rounded' | 'mono';
 	fontScale: number; // %
 	// Layout
 	density: 'compact' | 'comfortable' | 'spacious';

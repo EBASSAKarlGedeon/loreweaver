@@ -37,6 +37,24 @@
 	--font-display: var(--lw-font-display);
 	--font-body: var(--lw-font);
 
+	/* Type scale: size, then line height. Serif body gets more leading via --lw-leading. */
+	--text-xs: 0.75rem;
+	--text-xs--line-height: 1rem;
+	--text-sm: 0.875rem;
+	--text-sm--line-height: 1.25rem;
+	--text-base: 1rem;
+	--text-base--line-height: 1.5rem;
+	--text-lg: 1.125rem;
+	--text-lg--line-height: 1.75rem;
+	--text-xl: 1.3rem;
+	--text-xl--line-height: 1.8rem;
+	--text-2xl: 1.625rem;
+	--text-2xl--line-height: 2rem;
+	--text-3xl: 2.1rem;
+	--text-3xl--line-height: 2.5rem;
+	--text-4xl: 2.75rem;
+	--text-4xl--line-height: 3rem;
+
 	--ease-lw: cubic-bezier(0.2, 0.7, 0.2, 1);
 	--duration-lw-fast: 160ms;
 	--duration-lw: 280ms;

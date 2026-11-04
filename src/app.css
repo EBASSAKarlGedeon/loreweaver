@@ -34,8 +34,9 @@
 	--lw-radius: 14px;
 	--lw-gap: 16px;
 	--lw-pad: 14px;
-	--lw-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
-	--lw-font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+	--lw-font: "Manrope Variable", Manrope, system-ui, -apple-system, "Segoe UI", sans-serif;
+	--lw-leading: 1.55;
+	--lw-font-display: "Fraunces Variable", Fraunces, Georgia, "Times New Roman", serif;
 	--lw-font-scale: 1;
 	--lw-card-min: 230px;
 	--lw-chat-card-w: 340px;
@@ -280,4 +281,15 @@ button.danger {
 	.msg {
 		max-width: 92%;
 	}
+}
+
+/* Headings use the display font. Under the system/sans presets it is the body font. */
+h1,
+h2,
+h3 {
+	font-family: var(--lw-font-display);
+}
+
+body {
+	line-height: var(--lw-leading);
 }

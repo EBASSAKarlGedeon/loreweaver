@@ -3,6 +3,8 @@
 	import { page } from '$app/stores';
 	import { loadSettings, settings } from '$lib/state/settings.svelte';
 	import { rootClasses, themeVars } from '$lib/landing/appearance';
+	import '@fontsource-variable/fraunces';
+	import '@fontsource-variable/manrope';
 	import '../styles/tailwind.css';
 	import '../app.css';
 

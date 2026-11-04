@@ -156,6 +156,7 @@
 					<div class="stlp-settings-row">
 						<span class="stlp-settings-label">Font</span>
 						<select value={a.font} onchange={(e) => set('font', e.currentTarget.value as Appearance['font'])}>
+							<option value="luxury">Luxury (Fraunces and Manrope)</option>
 							<option value="system">System sans</option>
 							<option value="serif">Serif</option>
 							<option value="rounded">Rounded</option>
