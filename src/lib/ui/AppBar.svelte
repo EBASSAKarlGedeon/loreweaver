@@ -2,19 +2,43 @@
 	import { page } from '$app/stores';
 	import Icon from '../landing/Icon.svelte';
 	import { appbar } from '../state/appbar.svelte';
+	import { settings } from '../state/settings.svelte';
 	import { openStudio } from '../state/ui.svelte';
 
 	// Chats links to the chats section on the landing page
 	const NAV = [
-		{ href: '/', label: 'Home' },
-		{ href: '/#chats', label: 'Chats' },
-		{ href: '/characters', label: 'Characters' }
-	];
+		{ href: '/', label: 'Home', icon: 'home' },
+		{ href: '/#chats', label: 'Chats', icon: 'chat' },
+		{ href: '/characters', label: 'Characters', icon: 'users' }
+	] as const;
 
 	let path = $derived($page.url.pathname);
 	let isActive = (href: string) =>
 		href === '/characters' ? path.startsWith('/characters') : href === '/' ? path === '/' : false;
+	let activeIndex = $derived(NAV.findIndex((n) => isActive(n.href)));
+
+	// Sliding brass underline under the active link (desktop nav)
+	let links: HTMLAnchorElement[] = $state([]);
+	let indicator = $state({ left: 0, width: 0, on: false });
+	function measure() {
+		const el = activeIndex >= 0 ? links[activeIndex] : undefined;
+		indicator = el
+			? { left: el.offsetLeft, width: el.offsetWidth, on: true }
+			: { ...indicator, on: false };
+	}
+	// Re-measure when the active route changes, the window resizes, and after the
+	// webfonts load (they change link widths, so a measure before that is stale).
+	$effect(() => {
+		activeIndex;
+		links.length;
+		measure();
+	});
+	$effect(() => {
+		document.fonts?.ready.then(measure);
+	});
 </script>
+
+<svelte:window onresize={measure} />
 
 <header
 	class="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-hairline bg-bg/80 px-4 text-text md:px-6"
@@ -24,9 +48,10 @@
 		Lore<span class="text-accent">Weaver</span>
 	</a>
 
-	<nav aria-label="Main" class="hidden items-center gap-1 md:flex">
-		{#each NAV as item (item.href)}
+	<nav aria-label="Main" class="relative hidden items-center gap-1 md:flex">
+		{#each NAV as item, i (item.href)}
 			<a
+				bind:this={links[i]}
 				href={item.href}
 				aria-current={isActive(item.href) ? 'page' : undefined}
 				class="rounded-md px-2.5 py-1.5 text-sm transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent {isActive(item.href) ? 'text-text' : 'text-dim'}"
@@ -34,6 +59,11 @@
 				{item.label}
 			</a>
 		{/each}
+		<span
+			aria-hidden="true"
+			class="pointer-events-none absolute -bottom-[7px] left-0 h-0.5 rounded-full bg-accent transition-[transform,width,opacity] duration-lw ease-lw motion-reduce:transition-none {settings.appearance.animations ? '' : '!transition-none'}"
+			style="transform: translateX({indicator.left}px); width: {indicator.width}px; opacity: {indicator.on ? 1 : 0};"
+		></span>
 	</nav>
 
 	<div class="flex min-w-0 flex-1 items-center gap-3">
@@ -83,9 +113,35 @@
 			onclick={() => openStudio()}
 			title="Studio"
 			aria-label="Open Studio"
-			class="grid size-10 place-items-center rounded-md border-0 bg-transparent text-dim [&_svg]:size-5 transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
+			class="grid size-10 place-items-center rounded-md border-0 bg-transparent text-dim transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-5"
 		>
 			<Icon name="gear" />
 		</button>
 	</div>
 </header>
+
+<!-- Mobile: bottom tab bar. Respects the iOS home indicator. -->
+<nav
+	aria-label="Main"
+	class="fixed inset-x-0 bottom-0 z-40 flex border-t border-hairline bg-bg/90 pb-[env(safe-area-inset-bottom)] md:hidden"
+	style="backdrop-filter: blur(var(--lw-blur)); -webkit-backdrop-filter: blur(var(--lw-blur));"
+>
+	{#each NAV as item (item.href)}
+		<a
+			href={item.href}
+			aria-current={isActive(item.href) ? 'page' : undefined}
+			class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs focus-visible:outline-2 focus-visible:outline-accent {isActive(item.href) ? 'text-accent' : 'text-dim'}"
+		>
+			<Icon name={item.icon} />
+			{item.label}
+		</a>
+	{/each}
+	<button
+		type="button"
+		onclick={() => openStudio()}
+		class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 border-0 bg-transparent text-xs text-dim focus-visible:outline-2 focus-visible:outline-accent"
+	>
+		<Icon name="gear" />
+		Studio
+	</button>
+</nav>

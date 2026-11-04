@@ -45,7 +45,7 @@
 
 <div class="flex h-dvh flex-col">
 	<AppBar />
-	<main class="min-h-0 flex-1 overflow-y-auto">
+	<main class="min-h-0 flex-1 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
 		{@render children()}
 	</main>
 </div>

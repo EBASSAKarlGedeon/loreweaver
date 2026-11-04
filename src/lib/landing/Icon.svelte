@@ -3,6 +3,7 @@
 	type IconName =
 		| 'search'
 		| 'close'
+		| 'home'
 		| 'users'
 		| 'chat'
 		| 'clock'
@@ -31,6 +32,8 @@
 		<circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
 	{:else if name === 'close'}
 		<line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+	{:else if name === 'home'}
+		<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
 	{:else if name === 'users'}
 		<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
 	{:else if name === 'chat'}
