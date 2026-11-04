@@ -1,0 +1,1913 @@
+/* ==========================================================================
+   Landing Page — design tokens
+   Base values are set from JS (src/appearance.js) via inline custom
+   properties; everything else is DERIVED here, so one accent color
+   re-themes the whole page. Never hardcode a theme color below.
+   ========================================================================== */
+.landing {
+    /* Base (overridden by applyAppearance) */
+    --stlp-accent: #ff4d5e;
+    --stlp-accent2: #d92c42;
+    --stlp-bg: #16181d;
+    --stlp-on-accent: #fff;
+    --stlp-overlay: 0.85;
+    --stlp-blur: 12px;
+    --stlp-radius: 14px;
+    --stlp-gap: 16px;
+    --stlp-pad: 14px;
+    --stlp-font: var(--mainFontFamily, sans-serif);
+    --stlp-font-scale: 1;
+    --stlp-card-min: 230px;
+    --stlp-chat-card-w: 340px;
+    --stlp-card-art-height: 260px;
+
+    /* Derived */
+    --stlp-accent-hover: color-mix(in srgb, var(--stlp-accent) 72%, white);
+    --stlp-accent-dim: color-mix(in srgb, var(--stlp-accent) 60%, black);
+    --stlp-accent-soft: color-mix(in srgb, var(--stlp-accent) 16%, transparent);
+    --stlp-accent-line: color-mix(in srgb, var(--stlp-accent) 45%, transparent);
+    --stlp-grad: linear-gradient(120deg, var(--stlp-accent), var(--stlp-accent2));
+    --stlp-text: #f4f4f6;
+    --stlp-text-muted: color-mix(in srgb, var(--stlp-text) 62%, transparent);
+    --stlp-border: color-mix(in srgb, var(--stlp-text) 10%, transparent);
+    --stlp-border-strong: color-mix(in srgb, var(--stlp-text) 20%, transparent);
+    --stlp-surface: color-mix(in srgb, var(--stlp-bg) 93%, white);
+    --stlp-surface-2: color-mix(in srgb, var(--stlp-bg) 86%, white);
+    --stlp-glass: color-mix(in srgb, var(--stlp-bg) 55%, transparent);
+    --stlp-radius-sm: calc(var(--stlp-radius) * 0.65);
+    --stlp-hover-glow: 0 10px 30px color-mix(in srgb, var(--stlp-accent) 22%, transparent);
+
+    /* Card surface (changed per card style below) */
+    --stlp-card-bg: color-mix(in srgb, var(--stlp-text) 5%, transparent);
+    --stlp-card-border: var(--stlp-border);
+    --stlp-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    --stlp-card-blur: var(--stlp-blur);
+
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background-color: var(--stlp-bg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: var(--stlp-text);
+    font-family: var(--stlp-font);
+    font-size: calc(1rem * var(--stlp-font-scale));
+    overflow: hidden;
+    transition: top 0.2s ease;
+}
+
+.landing button,
+.landing input,
+.landing select,
+.landing textarea {
+    font-family: inherit;
+}
+
+.landing ::selection {
+    background: color-mix(in srgb, var(--stlp-accent) 40%, transparent);
+}
+
+/* ---- Card styles ---- */
+.landing.stlp-style-solid {
+    --stlp-card-bg: var(--stlp-surface);
+    --stlp-card-blur: 0px;
+    --stlp-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.landing.stlp-style-outline {
+    --stlp-card-bg: transparent;
+    --stlp-card-border: color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+    --stlp-card-shadow: none;
+    --stlp-card-blur: 0px;
+}
+
+.landing.stlp-style-neon {
+    --stlp-card-bg: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
+    --stlp-card-border: color-mix(in srgb, var(--stlp-accent) 65%, transparent);
+    --stlp-card-shadow: 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 18%, transparent),
+                        0 0 18px color-mix(in srgb, var(--stlp-accent) 22%, transparent),
+                        inset 0 0 22px color-mix(in srgb, var(--stlp-accent) 8%, transparent);
+    --stlp-hover-glow: 0 0 0 1px var(--stlp-accent), 0 0 32px color-mix(in srgb, var(--stlp-accent) 45%, transparent);
+}
+
+.landing.stlp-no-glow {
+    --stlp-hover-glow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Visibility toggles (header, stats, card details, ambient orbs) ---- */
+.landing.stlp-hide-hero .stlp-hero,
+.landing.stlp-hide-stats .stlp-stats,
+.landing.stlp-hide-desc .stlp-char-desc,
+.landing.stlp-hide-chatcount .stlp-char-ribbon,
+.landing.stlp-no-ambient .stlp-ambient {
+    display: none !important;
+}
+
+.landing.stlp-no-anim *,
+.landing.stlp-no-anim *::before,
+.landing.stlp-no-anim *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .landing *,
+    .landing *::before,
+    .landing *::after {
+        animation: none !important;
+    }
+}
+
+/* ==========================================================================
+   Background layers
+   ========================================================================== */
+.landing .stlp-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--stlp-bg) 80%, transparent),
+        var(--stlp-bg));
+    opacity: var(--stlp-overlay);
+    pointer-events: none;
+}
+
+.landing.stlp-bgmode-solid .stlp-bg-overlay {
+    display: none;
+}
+
+.landing.stlp-bgmode-gradient .stlp-bg-overlay {
+    opacity: 1;
+    background:
+        radial-gradient(ellipse 60% 50% at 12% 0%, color-mix(in srgb, var(--stlp-accent) 30%, transparent), transparent 70%),
+        radial-gradient(ellipse 50% 45% at 90% 15%, color-mix(in srgb, var(--stlp-accent2) 26%, transparent), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 50% 110%, color-mix(in srgb, var(--stlp-accent2) 18%, transparent), transparent 70%),
+        var(--stlp-bg);
+}
+
+.landing .stlp-ambient {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* Soft edge is baked into the gradient — no filter: blur(), so the GPU
+   never re-rasterizes a giant blur while the orbs drift. Transform-only
+   animation = fully composited = no repaints behind the glass surfaces. */
+.landing .stlp-orb {
+    position: absolute;
+    width: 70vmax;
+    height: 70vmax;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        color-mix(in srgb, var(--orb-c, var(--stlp-accent)) 55%, transparent) 0%,
+        color-mix(in srgb, var(--orb-c, var(--stlp-accent)) 22%, transparent) 38%,
+        transparent 68%);
+    opacity: 0.35;
+    will-change: transform;
+}
+
+.landing .stlp-orb-1 {
+    top: -30vmax;
+    left: -18vmax;
+    --orb-c: var(--stlp-accent);
+    animation: stlp-drift-1 26s ease-in-out infinite alternate;
+}
+
+.landing .stlp-orb-2 {
+    top: 6vmax;
+    right: -24vmax;
+    --orb-c: var(--stlp-accent2);
+    animation: stlp-drift-2 32s ease-in-out infinite alternate;
+}
+
+.landing .stlp-orb-3 {
+    bottom: -34vmax;
+    left: 30%;
+    width: 56vmax;
+    height: 56vmax;
+    --orb-c: var(--stlp-accent);
+    opacity: 0.22;
+    animation: stlp-drift-1 38s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes stlp-drift-1 {
+    to { transform: translate(14vmax, 10vmax) scale(1.15); }
+}
+
+@keyframes stlp-drift-2 {
+    to { transform: translate(-12vmax, 14vmax) scale(0.9); }
+}
+
+@keyframes stlp-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes stlp-pop {
+    from { opacity: 0; transform: translateY(14px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes stlp-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ==========================================================================
+   Page scaffold + top bar
+   ========================================================================== */
+.landing .stlp-page {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.landing .stlp-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--stlp-border);
+    background: var(--stlp-glass);
+    backdrop-filter: blur(var(--stlp-blur)) saturate(1.3);
+    -webkit-backdrop-filter: blur(var(--stlp-blur)) saturate(1.3);
+    flex-shrink: 0;
+}
+
+.landing .stlp-brand {
+    flex-shrink: 0;
+}
+
+.landing .stlp-brand-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--stlp-radius-sm);
+    background: var(--stlp-grad);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 40%, transparent);
+}
+
+.landing .stlp-brand-mark::after {
+    content: "✦";
+    color: var(--stlp-on-accent);
+    font-size: 1.05em;
+    line-height: 1;
+}
+
+.landing .stlp-search-wrap {
+    position: relative;
+    flex: 1;
+    max-width: 520px;
+}
+
+.landing .stlp-search-icon {
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.landing .stlp-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 14px 9px 38px;
+    border: 1px solid var(--stlp-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    color: var(--stlp-text);
+    font-size: 0.95em;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.landing .stlp-search::placeholder,
+.landing .stlp-modal-search::placeholder,
+.landing .stlp-text-input::placeholder,
+.landing .stlp-textarea::placeholder {
+    color: color-mix(in srgb, var(--stlp-text) 35%, transparent);
+}
+
+.landing .stlp-search:focus {
+    border-color: var(--stlp-accent);
+    background: color-mix(in srgb, var(--stlp-text) 9%, transparent);
+    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+}
+
+.landing .stlp-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.landing .stlp-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    color: var(--stlp-text);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.landing .stlp-icon-btn svg {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.25s ease;
+}
+
+.landing .stlp-icon-btn:hover {
+    background: var(--stlp-accent-soft);
+    border-color: var(--stlp-accent-line);
+    color: var(--stlp-accent-hover);
+}
+
+.landing .stlp-settings-btn:hover svg {
+    transform: rotate(60deg);
+}
+
+.landing .stlp-icon-btn.stlp-exit:hover {
+    background: color-mix(in srgb, #ef4444 20%, transparent);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+/* ==========================================================================
+   Content + sections
+   ========================================================================== */
+.landing .stlp-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 24px 56px;
+    display: flex;
+    flex-direction: column;
+    scroll-behavior: smooth;
+}
+
+.landing .stlp-section {
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto 40px;
+    box-sizing: border-box;
+    flex-shrink: 0; /* .stlp-content is a flex column (for section order) */
+}
+
+.landing .stlp-hero { order: 0; }
+.landing .stlp-section-chats { order: 1; }
+.landing .stlp-section-chars { order: 2; }
+.landing.stlp-chars-first .stlp-section-chars { order: 1; }
+.landing.stlp-chars-first .stlp-section-chats { order: 2; }
+
+.landing .stlp-section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 18px;
+    font-size: 1.35em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.landing .stlp-section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    margin-left: 6px;
+    background: linear-gradient(90deg, var(--stlp-accent-line), transparent 70%);
+}
+
+.landing .stlp-section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--stlp-radius-sm);
+    color: var(--stlp-accent-hover);
+    background: var(--stlp-accent-soft);
+    border: 1px solid var(--stlp-accent-line);
+}
+
+.landing .stlp-section-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.landing .stlp-placeholder {
+    padding: 40px 24px;
+    border: 1px dashed var(--stlp-border-strong);
+    border-radius: var(--stlp-radius);
+    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
+    text-align: center;
+    color: var(--stlp-text-muted);
+    animation: stlp-fade 0.3s ease both;
+}
+
+/* Scrollbars (Firefox, then WebKit) */
+.landing,
+.landing * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--stlp-text) 18%, transparent) transparent;
+}
+
+.landing ::-webkit-scrollbar {
+    width: 10px;
+    height: 8px;
+}
+
+.landing ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.landing ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--stlp-text) 14%, transparent);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.landing ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--stlp-accent) 55%, transparent);
+    background-clip: padding-box;
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+.landing .stlp-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px 32px;
+    padding: 28px 30px;
+    border: 1px solid var(--stlp-border);
+    border-radius: calc(var(--stlp-radius) * 1.4);
+    background:
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 20%, transparent), transparent 55%),
+        radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--stlp-accent2) 16%, transparent), transparent 55%),
+        color-mix(in srgb, var(--stlp-bg) 45%, transparent);
+    backdrop-filter: blur(var(--stlp-blur));
+    -webkit-backdrop-filter: blur(var(--stlp-blur));
+    position: relative;
+    overflow: hidden;
+    animation: stlp-rise 0.5s ease both;
+}
+
+.landing .stlp-hero:empty {
+    display: none;
+}
+
+.landing .stlp-hero-text {
+    min-width: 0;
+}
+
+.landing .stlp-hero-title {
+    margin: 0 0 6px;
+    font-size: 2.1em;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--stlp-text);
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+}
+
+.landing .stlp-hero-sub {
+    margin: 0;
+    color: var(--stlp-text-muted);
+    font-size: 0.98em;
+}
+
+.landing .stlp-hero-side {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+}
+
+.landing .stlp-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.landing .stlp-stat {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    align-items: center;
+    padding: 8px 14px;
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--stlp-bg) 50%, transparent);
+}
+
+.landing .stlp-stat-icon {
+    grid-row: span 2;
+    display: inline-flex;
+    color: var(--stlp-accent);
+}
+
+.landing .stlp-stat-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.landing .stlp-stat-value {
+    font-size: 1.15em;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.landing .stlp-stat-label {
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--stlp-text-muted);
+}
+
+/* ---- Primary (gradient) button, shared ---- */
+.landing .stlp-btn-primary,
+.landing .stlp-chat-continue,
+.landing .stlp-details-resume {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    color: var(--stlp-on-accent);
+    background: var(--stlp-grad);
+    background-size: 160% 100%;
+    background-position: 0% 0;
+    cursor: pointer;
+    font-weight: 650;
+    transition: background-position 0.35s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.landing .stlp-btn-primary:hover,
+.landing .stlp-chat-continue:hover,
+.landing .stlp-details-resume:hover {
+    background-position: 100% 0;
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--stlp-accent) 45%, transparent);
+}
+
+.landing .stlp-btn-primary:active,
+.landing .stlp-chat-continue:active,
+.landing .stlp-details-resume:active {
+    transform: scale(0.97);
+}
+
+.landing .stlp-hero-continue {
+    padding: 12px 20px;
+    border-radius: 999px;
+    font-size: 0.92em;
+    max-width: 320px;
+}
+
+.landing .stlp-hero-continue span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.landing .stlp-hero-continue svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   My Chats — horizontal carousel
+   ========================================================================== */
+.landing .stlp-chat-list {
+    display: flex;
+    align-items: stretch;
+    gap: var(--stlp-gap);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 4px 16px;
+    margin: 0 -4px;
+    scroll-snap-type: x mandatory;
+}
+
+.landing .stlp-chat-card {
+    flex: 0 0 var(--stlp-chat-card-w);
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border: 1px solid var(--stlp-card-border);
+    border-radius: var(--stlp-radius);
+    background: var(--stlp-card-bg);
+    box-shadow: var(--stlp-card-shadow);
+    backdrop-filter: blur(var(--stlp-card-blur));
+    -webkit-backdrop-filter: blur(var(--stlp-card-blur));
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    animation: stlp-rise 0.45s ease both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* Accent strip along the top edge */
+.landing .stlp-chat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--stlp-grad);
+    opacity: 0.55;
+    transition: opacity 0.2s ease;
+}
+
+.landing .stlp-chat-card:hover {
+    border-color: var(--stlp-accent-line);
+    transform: translateY(-3px);
+    box-shadow: var(--stlp-hover-glow);
+}
+
+.landing .stlp-chat-card:hover::before {
+    opacity: 1;
+}
+
+.landing .stlp-chat-header {
+    padding: calc(var(--stlp-pad) - 1px) var(--stlp-pad) 8px;
+}
+
+.landing .stlp-chat-name {
+    font-weight: 700;
+    font-size: 1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.landing .stlp-chat-content-row {
+    display: flex;
+    gap: 12px;
+    padding: 0 var(--stlp-pad);
+    flex: 1;
+    min-height: 0;
+}
+
+.landing .stlp-chat-avatar-wrap {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--stlp-radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--stlp-border);
+    background: color-mix(in srgb, var(--stlp-text) 5%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stlp-accent) 0%, transparent);
+    transition: box-shadow 0.2s ease;
+}
+
+.landing .stlp-chat-card:hover .stlp-chat-avatar-wrap {
+    box-shadow: 0 0 0 2px var(--stlp-accent-line);
+}
+
+.landing .stlp-chat-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.landing .stlp-chat-desc-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.landing .stlp-chat-desc {
+    font-size: 0.82em;
+    line-height: 1.45;
+    color: var(--stlp-text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.landing .stlp-chat-desc-fade {
+    display: none;
+}
+
+.landing .stlp-chat-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 10px;
+    padding: 10px var(--stlp-pad) var(--stlp-pad);
+    margin-top: 8px;
+}
+
+.landing .stlp-chat-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.landing .stlp-chat-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78em;
+    color: var(--stlp-text-muted);
+    white-space: nowrap;
+}
+
+.landing .stlp-chat-stat svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--stlp-accent);
+}
+
+.landing .stlp-chat-continue {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 0.85em;
+}
+
+.landing .stlp-chat-more,
+.landing .stlp-load-more {
+    padding: 10px 22px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    border: 1px solid var(--stlp-border-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.landing .stlp-chat-more {
+    flex: 0 0 auto;
+    align-self: center;
+}
+
+.landing .stlp-chat-more:hover,
+.landing .stlp-load-more:hover {
+    background: var(--stlp-accent-soft);
+    border-color: var(--stlp-accent);
+    color: var(--stlp-accent-hover);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 25%, transparent);
+}
+
+.landing .stlp-chat-group-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--stlp-accent-line);
+    background: var(--stlp-accent-soft);
+    color: var(--stlp-accent-hover);
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+.landing .stlp-chat-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: var(--stlp-on-accent);
+    background: var(--stlp-grad);
+}
+
+/* ==========================================================================
+   Modals (shared overlay) + "View all"
+   ========================================================================== */
+.landing .stlp-modal-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: color-mix(in srgb, var(--stlp-bg) 70%, rgba(0, 0, 0, 0.6));
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: stlp-fade 0.2s ease both;
+}
+
+.landing .stlp-modal,
+.landing .stlp-details,
+.landing .stlp-settings {
+    border: 1px solid var(--stlp-border-strong);
+    border-radius: calc(var(--stlp-radius) * 1.3);
+    background:
+        radial-gradient(90% 60% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 9%, transparent), transparent 60%),
+        var(--stlp-surface);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 8%, transparent);
+    overflow: hidden;
+    animation: stlp-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.landing .stlp-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(1100px, 100%);
+    max-height: min(860px, 100%);
+}
+
+.landing .stlp-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--stlp-border);
+    flex-shrink: 0;
+}
+
+.landing .stlp-modal-title-group {
+    min-width: 0;
+}
+
+.landing .stlp-modal-title {
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 700;
+}
+
+.landing .stlp-modal-count {
+    font-size: 0.8em;
+    color: var(--stlp-text-muted);
+}
+
+.landing .stlp-modal-tools {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.landing .stlp-modal-search-wrap {
+    position: relative;
+    width: 260px;
+}
+
+.landing .stlp-modal-search-wrap svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.landing .stlp-modal-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px 8px 32px;
+    border: 1px solid var(--stlp-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    color: var(--stlp-text);
+    font-size: 0.9em;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.landing .stlp-modal-search:focus {
+    border-color: var(--stlp-accent);
+    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+}
+
+.landing .stlp-modal-body {
+    overflow-y: auto;
+    padding: 16px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.landing .stlp-modal-body .stlp-chat-card {
+    flex: 0 0 auto;
+    width: 100%;
+}
+
+/* ==========================================================================
+   Characters — filter bar + grid
+   ========================================================================== */
+.landing .stlp-char-filterbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 0 0 12px;
+}
+
+.landing .stlp-char-pills {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--stlp-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-bg) 50%, transparent);
+}
+
+.landing .stlp-char-pill {
+    padding: 6px 16px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--stlp-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landing .stlp-char-pill:hover {
+    color: var(--stlp-text);
+}
+
+.landing .stlp-char-pill.active {
+    color: var(--stlp-on-accent);
+    background: var(--stlp-grad);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+}
+
+.landing .stlp-char-sort,
+.landing .stlp-settings select {
+    padding: 7px 12px;
+    font-size: 0.85em;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    border: 1px solid var(--stlp-border);
+    border-radius: 999px;
+    cursor: pointer;
+    outline: none;
+}
+
+.landing .stlp-char-sort:focus,
+.landing .stlp-settings select:focus {
+    border-color: var(--stlp-accent);
+}
+
+.landing select option {
+    background: var(--stlp-surface);
+    color: var(--stlp-text);
+}
+
+.landing .stlp-char-count {
+    font-size: 0.8em;
+    color: var(--stlp-text-muted);
+    margin-left: auto;
+}
+
+.landing .stlp-char-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--stlp-card-min), 100%), 1fr));
+    gap: var(--stlp-gap);
+}
+
+.landing .stlp-char-grid .stlp-placeholder {
+    grid-column: 1 / -1;
+}
+
+.landing .stlp-char-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--stlp-card-border);
+    border-radius: var(--stlp-radius);
+    background: var(--stlp-card-bg);
+    box-shadow: var(--stlp-card-shadow);
+    backdrop-filter: blur(var(--stlp-card-blur));
+    -webkit-backdrop-filter: blur(var(--stlp-card-blur));
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.25s ease, box-shadow 0.25s ease;
+    animation: stlp-rise 0.45s ease both;
+    animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+.landing .stlp-char-card:hover {
+    border-color: var(--stlp-accent-line);
+    transform: translateY(-4px);
+    box-shadow: var(--stlp-hover-glow);
+}
+
+.landing .stlp-char-art {
+    position: relative;
+    height: var(--stlp-card-art-height);
+    background: color-mix(in srgb, var(--stlp-text) 4%, transparent);
+    overflow: hidden;
+}
+
+.landing .stlp-char-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.3s ease;
+}
+
+.landing .stlp-char-card:hover .stlp-char-art img {
+    transform: scale(1.06);
+    filter: saturate(1.1);
+}
+
+.landing .stlp-char-art-fade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--stlp-bg) 30%, transparent) 0%,
+        transparent 32%,
+        color-mix(in srgb, var(--stlp-bg) 92%, transparent) 100%);
+    pointer-events: none;
+}
+
+/* Accent tint rises from the bottom on hover */
+.landing .stlp-char-art-fade::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(0deg, color-mix(in srgb, var(--stlp-accent) 28%, transparent), transparent 55%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.landing .stlp-char-card:hover .stlp-char-art-fade::after {
+    opacity: 1;
+}
+
+.landing .stlp-char-ribbon {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 3px 10px;
+    font-size: 0.72em;
+    font-weight: 700;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
+    border: 1px solid var(--stlp-border-strong);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.landing .stlp-char-fav {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--stlp-border-strong);
+    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
+    color: color-mix(in srgb, var(--stlp-text) 75%, transparent);
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.landing .stlp-char-fav svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.landing .stlp-char-fav:hover {
+    color: var(--stlp-text);
+    border-color: var(--stlp-accent-line);
+    transform: scale(1.1);
+}
+
+.landing .stlp-char-fav.active {
+    color: var(--stlp-accent);
+    border-color: var(--stlp-accent-line);
+    background: color-mix(in srgb, var(--stlp-accent) 22%, transparent);
+}
+
+.landing .stlp-char-fav.active svg {
+    fill: var(--stlp-accent);
+    stroke: var(--stlp-accent);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--stlp-accent) 70%, transparent));
+}
+
+.landing .stlp-char-name {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    font-weight: 750;
+    font-size: 1.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+
+.landing .stlp-char-body {
+    padding: 12px var(--stlp-pad) var(--stlp-pad);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.landing .stlp-char-desc {
+    font-size: 0.82em;
+    line-height: 1.45;
+    color: var(--stlp-text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.landing .stlp-char-meta {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.landing .stlp-char-tokens {
+    font-size: 0.72em;
+    color: var(--stlp-text-muted);
+    white-space: nowrap;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.landing .stlp-load-more {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-top: 8px;
+}
+
+/* ==========================================================================
+   Character details popup
+   ========================================================================== */
+.landing .stlp-details {
+    position: relative;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    width: min(1000px, 100%);
+    height: min(800px, 100%);
+}
+
+.landing .stlp-details-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    background: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
+}
+
+.landing .stlp-details-left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
+    border-right: 1px solid var(--stlp-border);
+    overflow-y: auto;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--stlp-accent) 10%, transparent), transparent 50%);
+}
+
+.landing .stlp-details-art {
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius);
+    overflow: hidden;
+    background: color-mix(in srgb, var(--stlp-text) 4%, transparent);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 15%, transparent);
+}
+
+.landing .stlp-details-art img {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    display: block;
+}
+
+.landing .stlp-details-name {
+    margin: 4px 0 0;
+    font-size: 1.3em;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+}
+
+.landing .stlp-details-date {
+    font-size: 0.82em;
+    color: var(--stlp-text-muted);
+}
+
+.landing .stlp-details-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.landing .stlp-details-resume,
+.landing .stlp-details-newchat {
+    padding: 11px 16px;
+    border-radius: var(--stlp-radius-sm);
+    font-size: 0.9em;
+}
+
+.landing .stlp-details-newchat {
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    border: 1px solid var(--stlp-border-strong);
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.landing .stlp-details-newchat:hover {
+    background: var(--stlp-accent-soft);
+    border-color: var(--stlp-accent);
+    color: var(--stlp-accent-hover);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 25%, transparent);
+}
+
+.landing .stlp-details-right {
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-height: 0;
+}
+
+.landing .stlp-details-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    font-size: 0.78em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stlp-accent-hover);
+}
+
+.landing .stlp-details-section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--stlp-accent-line), transparent);
+}
+
+.landing .stlp-details-empty {
+    font-size: 0.85em;
+    color: var(--stlp-text-muted);
+}
+
+.landing .stlp-lb-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.landing .stlp-lb-card {
+    --stlp-lb-color: #a78bfa;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--stlp-lb-color) 60%, transparent);
+    border-left-width: 4px;
+    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--stlp-lb-color) 6%, transparent);
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.landing .stlp-lb-card:hover {
+    background: color-mix(in srgb, var(--stlp-lb-color) 11%, transparent);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.landing .stlp-lb-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.landing .stlp-lb-title {
+    flex: 1;
+    margin: 0;
+    font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.landing .stlp-lb-badge {
+    flex-shrink: 0;
+    margin-top: 1px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.68em;
+    font-weight: 500;
+    text-transform: capitalize;
+    white-space: nowrap;
+    color: var(--stlp-lb-color);
+    background: color-mix(in srgb, var(--stlp-lb-color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--stlp-lb-color) 30%, transparent);
+}
+
+.landing .stlp-lb-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--stlp-border);
+    font-size: 0.75em;
+    color: var(--stlp-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.landing .stlp-details-notes {
+    font-size: 0.88em;
+    line-height: 1.65;
+    color: color-mix(in srgb, var(--stlp-text) 85%, transparent);
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    padding-right: 6px;
+}
+
+.landing .stlp-details-notes p {
+    margin: 0 0 10px;
+}
+
+.landing .stlp-details-notes p:last-child {
+    margin-bottom: 0;
+}
+
+.landing .stlp-details-notes img {
+    max-width: 100%;
+    border-radius: var(--stlp-radius-sm);
+}
+
+.landing .stlp-details-notes a {
+    color: var(--stlp-accent-hover);
+}
+
+/* ==========================================================================
+   Settings panel
+   ========================================================================== */
+.landing .stlp-settings {
+    position: relative;
+    width: min(640px, 100%);
+    max-height: min(760px, 100%);
+    display: flex;
+    flex-direction: column;
+}
+
+.landing .stlp-settings-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 22px 12px;
+}
+
+.landing .stlp-settings-title {
+    margin: 0;
+    font-size: 1.25em;
+    font-weight: 800;
+}
+
+.landing .stlp-settings-subtitle {
+    font-size: 0.78em;
+    color: var(--stlp-text-muted);
+}
+
+.landing .stlp-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 0 22px;
+    padding: 4px;
+    border: 1px solid var(--stlp-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.landing .stlp-tabs button {
+    flex: 1;
+    padding: 7px 12px;
+    font-size: 0.84em;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--stlp-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.landing .stlp-tabs button:hover {
+    color: var(--stlp-text);
+}
+
+.landing .stlp-tabs button.active {
+    color: var(--stlp-on-accent);
+    background: var(--stlp-grad);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+}
+
+.landing .stlp-settings-body {
+    overflow-y: auto;
+    padding: 18px 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.landing .stlp-settings-body > * {
+    animation: stlp-fade 0.2s ease both;
+}
+
+.landing .stlp-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.landing .stlp-settings-group-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 2px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--stlp-accent-hover);
+}
+
+.landing .stlp-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.landing .stlp-settings-row:hover {
+    border-color: var(--stlp-border-strong);
+    background: color-mix(in srgb, var(--stlp-text) 5%, transparent);
+}
+
+.landing .stlp-settings-row[hidden] {
+    display: none;
+}
+
+.landing label.stlp-settings-row {
+    cursor: pointer;
+}
+
+.landing .stlp-settings-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.88em;
+    flex: 1;
+    min-width: 0;
+}
+
+.landing .stlp-settings-label small,
+.landing .stlp-settings-hint {
+    font-size: 0.82em;
+    color: var(--stlp-text-muted);
+    line-height: 1.4;
+}
+
+.landing .stlp-settings-hint code {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--stlp-text) 8%, transparent);
+}
+
+.landing .stlp-settings select {
+    border-radius: var(--stlp-radius-sm);
+    min-width: 160px;
+}
+
+.landing .stlp-settings input[type="color"] {
+    width: 48px;
+    height: 32px;
+    padding: 2px;
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    border: 1px solid var(--stlp-border-strong);
+    border-radius: var(--stlp-radius-sm);
+    cursor: pointer;
+}
+
+.landing .stlp-range {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.landing .stlp-range input[type="range"] {
+    width: 170px;
+    accent-color: var(--stlp-accent);
+    cursor: pointer;
+}
+
+.landing .stlp-range output {
+    min-width: 46px;
+    text-align: right;
+    font-size: 0.82em;
+    font-variant-numeric: tabular-nums;
+    color: var(--stlp-text-muted);
+}
+
+/* Switch */
+.landing .stlp-switch {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.landing .stlp-switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.landing .stlp-switch-track {
+    display: block;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--stlp-text) 16%, transparent);
+    transition: background 0.2s ease;
+}
+
+.landing .stlp-switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.landing .stlp-switch input:checked + .stlp-switch-track {
+    background: var(--stlp-grad);
+}
+
+.landing .stlp-switch input:checked + .stlp-switch-track .stlp-switch-thumb {
+    transform: translateX(18px);
+}
+
+.landing .stlp-switch input:focus-visible + .stlp-switch-track {
+    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+}
+
+/* Segmented control */
+.landing .stlp-segmented {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--stlp-bg) 55%, transparent);
+}
+
+.landing .stlp-segmented button {
+    flex: 1;
+    padding: 7px 10px;
+    font-size: 0.82em;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--stlp-text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: calc(var(--stlp-radius-sm) * 0.75);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.landing .stlp-segmented button:hover {
+    color: var(--stlp-text);
+}
+
+.landing .stlp-segmented button.active {
+    color: var(--stlp-accent-hover);
+    background: var(--stlp-accent-soft);
+    border-color: var(--stlp-accent-line);
+}
+
+/* Theme swatches */
+.landing .stlp-swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+}
+
+.landing .stlp-swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.landing .stlp-swatch:hover {
+    transform: translateY(-2px);
+    border-color: var(--sw-a);
+}
+
+.landing .stlp-swatch.active {
+    border-color: var(--sw-a);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw-a) 45%, transparent), 0 0 16px color-mix(in srgb, var(--sw-a) 30%, transparent);
+}
+
+.landing .stlp-swatch-preview {
+    position: relative;
+    display: block;
+    height: 44px;
+    border-radius: calc(var(--stlp-radius-sm) * 0.7);
+    background:
+        radial-gradient(circle at 25% 30%, color-mix(in srgb, var(--sw-a) 55%, transparent), transparent 60%),
+        var(--sw-bg);
+    overflow: hidden;
+}
+
+.landing .stlp-swatch-preview span {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 30px;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--sw-a), var(--sw-b));
+}
+
+.landing .stlp-swatch-label {
+    font-size: 0.76em;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* Text inputs */
+.landing .stlp-text-input,
+.landing .stlp-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    font-size: 0.86em;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
+    border: 1px solid var(--stlp-border);
+    border-radius: var(--stlp-radius-sm);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.landing .stlp-text-input:focus,
+.landing .stlp-textarea:focus {
+    border-color: var(--stlp-accent);
+    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+}
+
+.landing .stlp-textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+.landing .stlp-code {
+    font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    font-size: 0.8em;
+    line-height: 1.5;
+}
+
+.landing .stlp-settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.landing .stlp-chip-btn {
+    padding: 6px 14px;
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
+    border: 1px solid var(--stlp-border-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.landing .stlp-chip-btn:hover {
+    background: var(--stlp-accent-soft);
+    border-color: var(--stlp-accent);
+    color: var(--stlp-accent-hover);
+}
+
+.landing .stlp-chip-btn.stlp-danger:hover {
+    background: color-mix(in srgb, #ef4444 18%, transparent);
+    border-color: #ef4444;
+    color: #fca5a5;
+}
+
+/* ==========================================================================
+   Narrow screens
+   ========================================================================== */
+@media (max-width: 768px) {
+    .landing .stlp-topbar {
+        padding: 10px 14px;
+        gap: 10px;
+    }
+
+    .landing .stlp-brand {
+        display: none;
+    }
+
+    .landing .stlp-content {
+        padding: 18px 14px 40px;
+    }
+
+    .landing .stlp-hero {
+        padding: 20px;
+    }
+
+    .landing .stlp-hero-title {
+        font-size: 1.6em;
+    }
+
+    .landing .stlp-stats {
+        flex-wrap: wrap;
+    }
+
+    .landing .stlp-modal-overlay {
+        padding: 12px;
+    }
+
+    .landing .stlp-details {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        overflow-y: auto;
+    }
+
+    .landing .stlp-details-left {
+        border-right: none;
+        border-bottom: 1px solid var(--stlp-border);
+    }
+
+    .landing .stlp-details-art img {
+        aspect-ratio: 16 / 9;
+    }
+
+    .landing .stlp-details-notes {
+        max-height: 40vh;
+    }
+
+    .landing .stlp-modal-search-wrap {
+        width: auto;
+        flex: 1;
+    }
+
+    .landing .stlp-range input[type="range"] {
+        width: 110px;
+    }
+
+    .landing .stlp-settings-row {
+        flex-wrap: wrap;
+    }
+}
+
+/* ============ Firefox/Zen rendering workaround ============
+   Gecko's backdrop-filter renders artifacts when the content behind
+   the glass animates (our ambient orbs over a fullscreen photo).
+   Chrome renders this fine, so only Gecko builds lose the blur;
+   surfaces firm up so they still read as solid without it. */
+@supports (-moz-appearance: none) {
+    .landing .stlp-topbar,
+    .landing .stlp-hero,
+    .landing .stlp-chat-card,
+    .landing .stlp-char-card,
+    .landing .stlp-char-ribbon,
+    .landing .stlp-char-fav,
+    .landing .stlp-modal-overlay {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    /* Without blur the translucent surfaces would smear the photo — firm them */
+    .landing.stlp-style-glass {
+        --stlp-card-bg: color-mix(in srgb, var(--stlp-surface-2) 90%, transparent);
+        --stlp-card-blur: 0px;
+    }
+
+    .landing .stlp-topbar {
+        background: color-mix(in srgb, var(--stlp-bg) 88%, transparent);
+    }
+
+    .landing .stlp-hero {
+        background:
+            radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 20%, transparent), transparent 55%),
+            radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--stlp-accent2) 16%, transparent), transparent 55%),
+            color-mix(in srgb, var(--stlp-bg) 85%, transparent);
+    }
+}
+/* Initial-letter art for characters without a portrait */
+.landing .stlp-char-initial {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4.2em;
+    font-weight: 800;
+    color: var(--stlp-on-accent);
+    background: var(--stlp-grad);
+    opacity: 0.85;
+}
+
+.landing .stlp-details-art .stlp-char-initial {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    font-size: 6em;
+}
+
+.landing .stlp-details-notes-text {
+    white-space: pre-wrap;
+    margin: 0 0 10px;
+}
+
+/* Top-bar links styled as icon buttons */
+.landing a.stlp-icon-btn {
+    text-decoration: none;
+}
+
+/* app.css styles every select at 100% width; the sort control and appearance selects size to content */
+.landing .stlp-char-sort,
+.landing .stlp-settings select {
+    width: auto;
+}

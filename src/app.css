@@ -167,40 +167,8 @@ button.danger {
 /* Chat */
 .chat {
 	display: grid;
-	grid-template-columns: 260px 1fr;
+	grid-template-columns: 1fr;
 	height: 100%;
-}
-.sidebar {
-	background: var(--bg-panel);
-	border-right: 1px solid var(--border);
-	overflow: auto;
-	padding: 1rem;
-}
-.sidebar h3 {
-	margin: 0 0 0.75rem;
-	font-size: 0.78rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--text-dim);
-}
-.char-list {
-	display: grid;
-	gap: 0.4rem;
-}
-.char-item {
-	background: var(--bg-panel-2);
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	padding: 0.6rem 0.75rem;
-	cursor: pointer;
-	text-align: left;
-	width: 100%;
-	color: var(--text);
-	font: inherit;
-}
-.char-item.active {
-	border-color: var(--accent);
-	background: var(--user-bubble);
 }
 .conversation {
 	display: grid;
@@ -277,9 +245,6 @@ button.danger {
 @media (max-width: 640px) {
 	.chat {
 		grid-template-columns: 1fr;
-	}
-	.sidebar {
-		display: none;
 	}
 	.panel {
 		margin: 1rem;

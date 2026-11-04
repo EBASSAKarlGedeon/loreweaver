@@ -33,15 +33,18 @@ Single SvelteKit app (Svelte 5, runes mode, TypeScript). All persistence is clie
 3. **`src/lib/state/settings.svelte.ts`** — reactive singleton using runes-in-module (`$state` in a `.svelte.ts` file). Pattern: read `settings.x` reactively anywhere; mutate only through `saveSettings()` so changes persist to the Dexie `settings` row (singleton keyed `id: 1`).
 4. **`src/lib/prompt.ts` — the extension seam.** `buildPromptMessages()` assembles the API message array from a character card + history. All SillyTavern-style context features (personas, lorebooks/world-info, prompt presets, author's notes) belong here as additional messages injected into this array — not scattered elsewhere.
 5. **`src/lib/llm.ts`** — `streamChat()` talks to any OpenAI-compatible endpoint via SSE (`/chat/completions`, `stream: true`), parsing `data:` chunks manually. Provider switching (OpenAI / Ollama / llama.cpp / KoboldCpp) is purely base-URL + model in settings; no code forks per provider. New providers should stay behind this single OpenAI-compatible interface unless truly impossible.
-6. **`src/routes/`** — three pages: `/` (chat, streaming with stop/regenerate-to-come), `/characters` (card CRUD), `/settings` (connection config).
+6. **`src/routes/`** — `/` is the landing page (`src/lib/landing/`: My Chats carousel, character grid, character details, "View all", Appearance panel). `/chat/[id]` is the conversation (streaming, stop). `/characters` (card CRUD) and `/settings` (connection config) are the other pages. The layout hides the app nav on `/`.
+7. **Landing page (`src/lib/landing/`)** — ported from the SillyTavern "Landing Page" extension (`copy_landing_page/`, untracked reference copy). Its data comes from `library.svelte.ts`, a Dexie `liveQuery`, so the page updates when the database changes. Appearance settings live in the `settings.appearance` block; change them with `updateAppearance()`, not by writing the object directly. The page styles are in `landing.css`, scoped under `.landing`, and the theme presets and CSS variables are in `appearance.ts`.
 
 ### Invariants and gotchas
 
 - **First message is materialized, not injected.** When a chat is created, `character.firstMessage` is written as a real assistant message into history. `prompt.ts` never special-cases it. Don't add firstMessage at prompt time or it will be sent twice.
 - **History never contains `system` rows**; `buildPromptMessages` skips them defensively, but the system prompt is built solely from the character card.
+- **Dexie and browser APIs only run in `onMount` or `$effect`.** The layout once called `loadSettings()` in its component body, which ran during SSR, rejected with `MissingAPIError`, and killed the dev server.
 - **SSR is on** (adapter-auto). Browser-only APIs (IndexedDB, cross-origin fetch to user-set base URLs) are safe in the current code because Dexie ops sit in async/effect contexts. If adding synchronous top-level Dexie/browser-API calls to component scripts, they will execute once server-side during SSR and can break it.
 - **Local model servers and CORS**: when a user reports a connection failure against Ollama/KoboldCpp from the browser, suspect CORS first (e.g. Ollama's `OLLAMA_ORIGINS`) — the fetch goes straight from the page to the user's base URL.
 - **Svelte 5 runes everywhere** (`$state`, `$derived`, `$effect`, `$props`, `{@render children()}`); only legacy store in use is `$app/stores` `page` for active-route styling in the layout. New code should use runes.
+- **Persist with `$state.snapshot`.** IndexedDB cannot store Svelte proxies, so `saveSettings()` snapshots the settings before `db.settings.put`.
 
 ## Roadmap context (for choosing where new code goes)
 
