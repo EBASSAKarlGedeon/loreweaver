@@ -16,7 +16,7 @@ npm run preview    # serve the production build
 npm run check      # type check (svelte-kit sync + svelte-check) — run this after changes
 ```
 
-There are no tests and no linter yet. `npm run check` is the only verification gate; it must pass with 0 errors before considering work done.
+There are no tests and no linter yet. `npm run check` is the only verification gate; it must pass with 0 errors before considering work done. For how to verify UI and database behaviour in a headless browser, and how to add tests later, read `docs/TESTING.md`.
 
 ## Git workflow
 
