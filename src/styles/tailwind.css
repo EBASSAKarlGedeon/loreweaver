@@ -1,5 +1,48 @@
-/* Tailwind v4: theme and utilities only. Preflight is deliberately not imported
-   yet (see docs/UI-OVERHAUL-PLAN.md, Step 25) because it would reset elements
-   that landing.css and app.css rely on. */
+/*
+ * Tailwind v4 theme. Utilities read the live theme variables set on <html>
+ * (see src/lib/landing/appearance.ts), so theme changes apply without a re-render.
+ *
+ * Tokens (utility names):
+ *   colors    bg-surface bg-surface-2 border-border border-hairline text-text text-dim
+ *             bg-accent text-accent bg-accent-2 text-danger text-ok (and -on-accent)
+ *   radius    rounded-sm rounded-md rounded-lg rounded-xl (from --lw-radius)
+ *   fonts     font-display font-body
+ *   motion    duration-lw-fast duration-lw duration-lw-slow ease-lw
+ *   elevation shadow-lw-1 shadow-lw-2 shadow-lw-3
+ *
+ * Preflight is deliberately not imported yet (docs/UI-OVERHAUL-PLAN.md, Step 25).
+ */
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme inline {
+	--color-bg: var(--lw-bg);
+	--color-surface: var(--lw-surface);
+	--color-surface-2: var(--lw-surface-2);
+	--color-border: var(--lw-border);
+	--color-hairline: var(--lw-hairline);
+	--color-text: var(--lw-text);
+	--color-dim: var(--lw-text-dim);
+	--color-accent: var(--lw-accent);
+	--color-accent-2: var(--lw-accent2);
+	--color-on-accent: var(--lw-on-accent);
+	--color-danger: var(--lw-danger);
+	--color-ok: var(--lw-ok);
+
+	--radius-sm: calc(var(--lw-radius) * 0.5);
+	--radius-md: calc(var(--lw-radius) * 0.75);
+	--radius-lg: var(--lw-radius);
+	--radius-xl: calc(var(--lw-radius) * 1.5);
+
+	--font-display: var(--lw-font-display);
+	--font-body: var(--lw-font);
+
+	--ease-lw: cubic-bezier(0.2, 0.7, 0.2, 1);
+	--duration-lw-fast: 160ms;
+	--duration-lw: 280ms;
+	--duration-lw-slow: 480ms;
+
+	--shadow-lw-1: 0 1px 2px rgb(0 0 0 / 0.25);
+	--shadow-lw-2: 0 6px 18px rgb(0 0 0 / 0.3), 0 0 0 1px var(--lw-hairline);
+	--shadow-lw-3: 0 18px 48px rgb(0 0 0 / 0.45), 0 0 0 1px var(--lw-hairline);
+}

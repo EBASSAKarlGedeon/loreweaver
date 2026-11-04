@@ -35,6 +35,7 @@
 	--lw-gap: 16px;
 	--lw-pad: 14px;
 	--lw-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+	--lw-font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
 	--lw-font-scale: 1;
 	--lw-card-min: 230px;
 	--lw-chat-card-w: 340px;
