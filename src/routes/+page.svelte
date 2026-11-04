@@ -173,7 +173,7 @@
 					{#if !library.ready}
 						<div class="stlp-placeholder">Loading chats…</div>
 					{:else if entries.length === 0}
-						<div class="stlp-placeholder">No chats yet. Start one from the Characters section below.</div>
+						<div class="stlp-placeholder">No conversations yet. Pick a character to begin.</div>
 					{:else}
 						{#each recent as entry, i (entry.chat.id)}
 							<ChatCard {entry} index={i} onopen={openChat} />

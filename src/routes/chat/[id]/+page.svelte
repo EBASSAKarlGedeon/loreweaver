@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { setAppbar } from '$lib/state/appbar.svelte';
+	import { openStudio } from '$lib/state/ui.svelte';
 	import { db } from '$lib/db';
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
