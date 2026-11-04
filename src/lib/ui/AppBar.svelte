@@ -42,7 +42,7 @@
 <svelte:window onresize={measure} />
 
 <header
-	class="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-hairline bg-bg/80 px-4 text-text md:px-6"
+	class="relative z-40 flex h-14 shrink-0 items-center gap-2 border-b md:gap-4 border-hairline bg-bg/80 px-4 text-text md:px-6"
 	style="backdrop-filter: blur(var(--lw-blur)); -webkit-backdrop-filter: blur(var(--lw-blur));"
 >
 	<a href="/" class="shrink-0 font-display text-lg tracking-wide" aria-label="LoreWeaver home">
@@ -105,7 +105,7 @@
 				type="button"
 				onclick={() => openStudio('model')}
 				title="Model: {settings.model}"
-				class="flex min-w-0 max-w-40 items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
+				class="flex min-w-0 max-w-28 items-center gap-2 rounded-md sm:max-w-40 border border-border bg-surface px-2.5 py-1.5 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
 			>
 				<span
 					aria-hidden="true"
@@ -126,9 +126,11 @@
 			<button
 				type="button"
 				onclick={action.onclick}
-				class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text transition-colors duration-lw-fast hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
+				aria-label={action.label}
+				class="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text sm:px-3 transition-colors duration-lw-fast hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
 			>
-				{action.label}
+				<span class="sm:hidden" aria-hidden="true">+</span>
+				<span class="hidden sm:inline">{action.label}</span>
 			</button>
 		{/each}
 		<button
