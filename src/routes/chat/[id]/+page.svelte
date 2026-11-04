@@ -140,7 +140,7 @@
 						{streamingText}<span class="hint">…</span>
 					</div>
 				{/if}
-				{#if error}<p class="error">{error}</p>{/if}
+				{#if error}<p class="error">{error} <button type="button" class="ghost" onclick={() => openStudio('model')}>Check connection</button></p>{/if}
 			</div>
 
 			<div class="composer">
