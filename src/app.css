@@ -1,23 +1,33 @@
 :root {
 	color-scheme: dark;
-	--bg: #0e0f13;
-	--bg-panel: #171922;
-	--bg-panel-2: #1e2130;
-	--border: #2a2e40;
-	--text: #e6e8ef;
-	--text-dim: #9aa1b4;
-	--accent: #8b6cff;
-	--accent-2: #c9a3ff;
-	--user-bubble: #2a2350;
-	--assistant-bubble: #1b1e2c;
-	--danger: #e06c6c;
-	--ok: #6ccf8e;
-	font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+	/* Legacy names kept as aliases so pages not yet migrated inherit the theme. */
+	--bg: var(--lw-bg);
+	--bg-panel: var(--lw-surface);
+	--bg-panel-2: var(--lw-surface-2);
+	--border: var(--lw-border);
+	--text: var(--lw-text);
+	--text-dim: var(--lw-text-dim);
+	--accent: var(--lw-accent);
+	--accent-2: var(--lw-accent2);
+	--user-bubble: color-mix(in oklab, var(--lw-accent) 22%, var(--lw-bg));
+	--assistant-bubble: var(--lw-surface);
+	--danger: var(--lw-danger);
+	--ok: var(--lw-ok);
+	font-family: var(--lw-font);
 
-	/* Theme defaults. The layout overwrites these on <html> from the settings. */
-	--lw-accent: #ff4d5e;
-	--lw-accent2: #d92c42;
-	--lw-bg: #16181d;
+	/* Theme defaults (Obsidian & Brass). The layout overwrites these on <html>
+	   from the settings; they only apply when the theme cache is missing. */
+	--lw-accent: #c9a45c;
+	--lw-accent2: #8a6a2f;
+	--lw-bg: #0d0c0a;
+	--lw-text: #ece6d8;
+	--lw-text-dim: color-mix(in oklab, #ece6d8 62%, #0d0c0a);
+	--lw-surface: color-mix(in oklab, #0d0c0a 94%, #ece6d8);
+	--lw-surface-2: color-mix(in oklab, #0d0c0a 88%, #ece6d8);
+	--lw-border: color-mix(in oklab, #ece6d8 14%, transparent);
+	--lw-hairline: color-mix(in oklab, #ece6d8 8%, transparent);
+	--lw-danger: #e06c6c;
+	--lw-ok: #6ccf8e;
 	--lw-on-accent: #fff;
 	--lw-overlay: 0.85;
 	--lw-blur: 12px;

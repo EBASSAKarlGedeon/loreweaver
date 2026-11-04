@@ -2,7 +2,7 @@ import { db } from '../db';
 import type { Appearance, Settings } from '../types';
 
 export const DEFAULT_APPEARANCE: Appearance = {
-	theme: 'red',
+	theme: 'obsidian',
 	accentColor: null,
 	accent2Color: null,
 	bgColor: null,

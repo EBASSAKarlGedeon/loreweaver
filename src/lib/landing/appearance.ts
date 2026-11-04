@@ -1,9 +1,11 @@
-// Theme engine for the landing page: presets, CSS variables and root classes.
-// Everything visual is driven by CSS variables and root classes, so a
-// settings change never needs a re-render.
+// Theme engine: presets, CSS variables and root classes. The layout writes the
+// variables on <html>, so every route shares one theme. Everything visual is
+// driven by CSS variables and root classes, so a settings change never needs a
+// re-render.
 import type { Appearance } from '../types';
 
 export const THEMES = [
+	{ id: 'obsidian', label: 'Obsidian & Brass', accent: '#c9a45c', accent2: '#8a6a2f', bg: '#0d0c0a' },
 	{ id: 'red', label: 'Crimson', accent: '#ff4d5e', accent2: '#d92c42', bg: '#16181d' },
 	{ id: 'purple', label: 'Amethyst', accent: '#a78bfa', accent2: '#7c3aed', bg: '#15131d' },
 	{ id: 'teal', label: 'Lagoon', accent: '#2dd4bf', accent2: '#0891b2', bg: '#0e1719' },
@@ -47,30 +49,43 @@ function clamp(n: number, min: number, max: number, fallback: number): number {
 	return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 }
 
+// WCAG relative luminance of a #rrggbb color (0 = black, 1 = white)
+function luminance(hex: string): number {
+	const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+	if (!m) return 0.3;
+	const n = parseInt(m[1], 16);
+	const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+		const x = v / 255;
+		return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+	});
+	return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
 // Dark text on light accents (Sakura, Gilded, Monochrome...), white otherwise
 function onAccentColor(a: string, b: string): string {
-	const lum = (hex: string) => {
-		const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-		if (!m) return 0.3;
-		const n = parseInt(m[1], 16);
-		const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
-			const x = v / 255;
-			return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-		});
-		return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
-	};
-	return (lum(a) + lum(b)) / 2 > 0.4 ? '#111318' : '#ffffff';
+	return (luminance(a) + luminance(b)) / 2 > 0.4 ? '#111318' : '#ffffff';
 }
 
 // CSS custom properties for the whole app. The layout writes these on <html>.
+// Derived surfaces are color-mix() expressions over the live --lw-bg and
+// --lw-text, so they follow any preset or custom palette, light or dark.
 export function themeVars(a: Appearance): Record<string, string> {
 	const { accent, accent2, bg } = effectiveColors(a);
 	const density = DENSITIES[a.density] ?? DENSITIES.comfortable;
+	const lightBg = luminance(bg) > 0.4;
 	return {
 		'--lw-accent': accent,
 		'--lw-accent2': accent2,
 		'--lw-bg': bg,
 		'--lw-on-accent': onAccentColor(accent, accent2),
+		'--lw-text': lightBg ? '#111318' : '#ece6d8',
+		'--lw-text-dim': 'color-mix(in oklab, var(--lw-text) 62%, var(--lw-bg))',
+		'--lw-surface': 'color-mix(in oklab, var(--lw-bg) 94%, var(--lw-text))',
+		'--lw-surface-2': 'color-mix(in oklab, var(--lw-bg) 88%, var(--lw-text))',
+		'--lw-border': 'color-mix(in oklab, var(--lw-text) 14%, transparent)',
+		'--lw-hairline': 'color-mix(in oklab, var(--lw-text) 8%, transparent)',
+		'--lw-danger': lightBg ? '#b42318' : '#e06c6c',
+		'--lw-ok': lightBg ? '#067647' : '#6ccf8e',
 		'--lw-overlay': String(clamp(a.overlayOpacity, 0, 100, 85) / 100),
 		'--lw-blur': `${clamp(a.blur, 0, 40, 12)}px`,
 		'--lw-radius': `${clamp(a.radius, 0, 32, 14)}px`,
