@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { loadSettings } from '$lib/state/settings.svelte';
+	import '../styles/tailwind.css';
 	import '../app.css';
 
 	let { children } = $props();
