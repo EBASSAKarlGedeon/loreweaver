@@ -8,7 +8,7 @@ This is the **Phase 1 MVP**: the working spine. It runs entirely in the browser 
 
 - **Character cards** — create / edit / delete characters (name, description, personality, scenario, first message). Stored locally.
 - **Chat** — stream replies from an LLM, with persistent per-character chat history.
-- **Settings** — point LoreWeaver at OpenAI or any local model server (Ollama, llama.cpp, KoboldCpp) by changing the base URL + model.
+- **Studio** — point LoreWeaver at OpenAI or any local model server (Ollama, llama.cpp, KoboldCpp) from the Model tab (base URL, model, API key), and change the look from the other tabs. Open it with the gear in the top bar.
 - **Works offline** — everything is stored in IndexedDB; no backend required yet.
 
 ## Roadmap
@@ -27,13 +27,13 @@ npm run dev
 
 Open the printed URL (default http://localhost:5173), then:
 
-1. Go to **Settings** and set your base URL + model (and API key, if using OpenAI).
+1. Open **Studio** (the gear in the top bar) and go to the **Model** tab. Pick a provider and set the model (and API key, if using OpenAI).
 2. Go to **Characters** and create a character.
 3. Go to **Chat**, pick the character, and start writing.
 
 ### Connecting a local model
 
-For a fully private setup, run [Ollama](https://ollama.com) and pull a model (e.g. `ollama run llama3.1`), then in Settings set:
+For a fully private setup, run [Ollama](https://ollama.com) and pull a model (e.g. `ollama run llama3.1`), then in Studio → Model set:
 
 - **Base URL:** `http://localhost:11434/v1`
 - **Model:** `llama3.1` (or whichever you pulled)
