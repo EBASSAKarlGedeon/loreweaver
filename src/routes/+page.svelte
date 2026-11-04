@@ -98,14 +98,6 @@
 			document.querySelector<HTMLInputElement>('#lw-search')?.focus();
 			return;
 		}
-		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-			e.preventDefault();
-			// While "View all" is open, Ctrl+K targets its filter instead
-			const target = showAllChats
-				? document.querySelector<HTMLInputElement>('.stlp-modal-search')
-				: document.querySelector<HTMLInputElement>('#lw-search');
-			target?.focus();
-		}
 	}
 </script>
 
