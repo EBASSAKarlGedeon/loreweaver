@@ -3,6 +3,7 @@
 	import Icon from '../landing/Icon.svelte';
 	import { appbar } from '../state/appbar.svelte';
 	import { settings } from '../state/settings.svelte';
+	import { connection } from '../state/connection.svelte';
 	import { openStudio } from '../state/ui.svelte';
 
 	// Chats links to the chats section on the landing page
@@ -99,6 +100,28 @@
 	</div>
 
 	<div class="flex shrink-0 items-center gap-1">
+		{#if settings.model}
+			<button
+				type="button"
+				onclick={() => openStudio('model')}
+				title="Model: {settings.model}"
+				class="flex min-w-0 max-w-40 items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
+			>
+				<span
+					aria-hidden="true"
+					class="size-2 shrink-0 rounded-full {connection.status === 'ok' ? 'bg-ok' : connection.status === 'error' ? 'bg-danger' : 'bg-dim'}"
+				></span>
+				<span class="truncate">{settings.model}</span>
+			</button>
+		{:else}
+			<button
+				type="button"
+				onclick={() => openStudio('model')}
+				class="rounded-md border border-accent px-2.5 py-1.5 text-xs text-accent focus-visible:outline-2 focus-visible:outline-accent"
+			>
+				Set up model
+			</button>
+		{/if}
 		{#each appbar.actions as action (action.label)}
 			<button
 				type="button"

@@ -8,6 +8,7 @@ export interface Character {
 	personality: string; // how they behave / speak
 	scenario: string; // the setting / starting situation
 	firstMessage: string; // the opening assistant turn when a chat begins
+	model?: string; // optional per-character model; empty uses the default model in Studio
 	image?: string; // optional portrait (URL or data URL) shown on landing cards
 	favorite?: boolean; // pinned to the "Favorites" filter on the landing page
 	createdAt: number;

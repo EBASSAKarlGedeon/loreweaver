@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { setAppbar } from '$lib/state/appbar.svelte';
+	import { settings } from '$lib/state/settings.svelte';
+	import { connection } from '$lib/state/connection.svelte';
 	import { db } from '$lib/db';
 	import type { Character } from '$lib/types';
 
@@ -91,6 +93,13 @@
 		<label>
 			First message
 			<textarea bind:value={form.firstMessage} placeholder="The opening line the character says to begin the roleplay."></textarea>
+		</label>
+		<label>
+			Model (leave empty to use the default)
+			<input list="lw-models-characters" bind:value={form.model} placeholder={settings.model} autocomplete="off" />
+			<datalist id="lw-models-characters">
+				{#each connection.models as m (m)}<option value={m}></option>{/each}
+			</datalist>
 		</label>
 		<div class="row">
 			<button type="submit">{editing ? 'Update' : 'Create'}</button>

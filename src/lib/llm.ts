@@ -21,7 +21,8 @@ export interface StreamCallbacks {
 export async function streamChat(
 	messages: ApiMessage[],
 	signal: AbortSignal,
-	cb: StreamCallbacks
+	cb: StreamCallbacks,
+	model: string = settings.model
 ): Promise<void> {
 	const base = settings.baseUrl.replace(/\/+$/, '');
 	const url = `${base}/chat/completions`;
@@ -34,7 +35,7 @@ export async function streamChat(
 				...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {})
 			},
 			body: JSON.stringify({
-				model: settings.model,
+				model: model || settings.model,
 				messages,
 				stream: true
 			}),

@@ -43,3 +43,9 @@
 		animation: none;
 	}
 }
+
+/* Six tabs must stay visible in the drawer, so let them wrap instead of scrolling */
+.landing.lw-studio .stlp-tabs {
+	flex-wrap: wrap;
+	overflow: visible;
+}

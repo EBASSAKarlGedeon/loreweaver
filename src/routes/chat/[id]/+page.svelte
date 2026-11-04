@@ -12,7 +12,7 @@
 	let character = $state<Character | null>(null);
 
 	$effect(() => {
-		if (character) setAppbar({ title: character.name, subtitle: '', avatar: character.image ?? '', search: false, actions: [] });
+		if (character) setAppbar({ title: character.name, subtitle: character.model || settings.model, avatar: character.image ?? '', search: false, actions: [] });
 	});
 	let messages = $state<ChatMessage[]>([]);
 	let loadError = $state('');
@@ -90,7 +90,7 @@
 				streamingText = '';
 				controller = null;
 			}
-		});
+		}, character.model || undefined);
 	}
 
 	function stop() {
