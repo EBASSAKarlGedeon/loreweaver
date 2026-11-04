@@ -155,7 +155,7 @@
 		<a
 			href={item.href}
 			aria-current={isActive(item.href) ? 'page' : undefined}
-			class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs focus-visible:outline-2 focus-visible:outline-accent {isActive(item.href) ? 'text-accent' : 'text-dim'}"
+			class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs [&_svg]:size-5 focus-visible:outline-2 focus-visible:outline-accent {isActive(item.href) ? 'text-accent' : 'text-dim'}"
 		>
 			<Icon name={item.icon} />
 			{item.label}
@@ -164,7 +164,7 @@
 	<button
 		type="button"
 		onclick={() => openStudio()}
-		class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 border-0 bg-transparent text-xs text-dim focus-visible:outline-2 focus-visible:outline-accent"
+		class="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 border-0 bg-transparent text-xs [&_svg]:size-5 text-dim focus-visible:outline-2 focus-visible:outline-accent"
 	>
 		<Icon name="gear" />
 		Studio
