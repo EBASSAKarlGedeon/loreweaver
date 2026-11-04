@@ -18,6 +18,12 @@ npm run check      # type check (svelte-kit sync + svelte-check) — run this af
 
 There are no tests and no linter yet. `npm run check` is the only verification gate; it must pass with 0 errors before considering work done.
 
+## Git workflow
+
+- **Commit and push frequently.** Commit each logical change as soon as it passes `npm run check`, rather than batching a session's work into one commit. Keep commits small enough that each one can be understood and reverted on its own.
+- **Push after every commit** to `origin` so work is never only on one machine. Don't leave commits unpushed at the end of a session.
+- Write commit messages that say what changed and why, in the imperative mood (e.g. `Fix layout calling IndexedDB during SSR`).
+
 ## Architecture
 
 Single SvelteKit app (Svelte 5, runes mode, TypeScript). All persistence is client-side IndexedDB via Dexie. The layering:

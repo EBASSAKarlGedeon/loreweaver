@@ -1,11 +1,16 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { loadSettings } from '$lib/state/settings.svelte';
 	import '../app.css';
 
 	let { children } = $props();
 
-	loadSettings();
+	// IndexedDB only exists in the browser. onMount never runs during SSR, so
+	// the Dexie call here can't reject inside Node.
+	onMount(() => {
+		loadSettings().catch((err) => console.error('Failed to load settings', err));
+	});
 </script>
 
 <div class="app">
