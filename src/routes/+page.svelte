@@ -26,6 +26,19 @@
 
 	// Ephemeral UI state (not persisted)
 	setAppbar({ title: "", subtitle: "", avatar: "", search: true, actions: [] });
+
+	// One entrance per browser session. sessionStorage can be blocked, which just skips it.
+	let entering = $state(false);
+	$effect(() => {
+		try {
+			if (!sessionStorage.getItem('lw-entered')) {
+				entering = true;
+				sessionStorage.setItem('lw-entered', '1');
+			}
+		} catch {
+			// Storage blocked: no entrance
+		}
+	});
 	let favoritesOnly = $state(false);
 	let sortOverride = $state<Sort | null>(null);
 	let shown = $state(PAGE_SIZE);
@@ -103,7 +116,7 @@
 
 <svelte:window onkeydown={onWindowKey} />
 
-<div class="landing" style={backgroundStyle(a)}>
+<div class="landing" class:lw-enter={entering} style={backgroundStyle(a)}>
 	<div class="stlp-bg-overlay"></div>
 	<div class="stlp-ambient" aria-hidden="true">
 		<span class="stlp-orb stlp-orb-1"></span>

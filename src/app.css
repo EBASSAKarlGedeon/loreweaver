@@ -293,3 +293,27 @@ h3 {
 body {
 	line-height: var(--lw-leading);
 }
+
+/* Reduced motion: no animation or transition for users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+	.landing .stlp-ambient {
+		display: none;
+	}
+}
+
+/* Theme switch: a short crossfade. The layout adds lw-theming for ~320ms after each change. */
+html.lw-theming,
+html.lw-theming body,
+html.lw-theming .landing * {
+	transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease !important;
+}
+:root.stlp-no-anim.lw-theming * {
+	transition: none !important;
+}

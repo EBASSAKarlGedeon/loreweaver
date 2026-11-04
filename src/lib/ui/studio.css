@@ -49,3 +49,7 @@
 	flex-wrap: wrap;
 	overflow: visible;
 }
+
+:root.stlp-no-anim .landing.lw-studio {
+	animation: none;
+}

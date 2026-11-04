@@ -14,6 +14,8 @@
 	import '../app.css';
 
 	let { children } = $props();
+	let firstTheme = true;
+	let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
 	// Theme variables and root classes live on <html> so every route shares them.
 	// The resolved values are cached in localStorage so app.html can apply them
@@ -26,6 +28,13 @@
 		for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
 		for (const c of [...root.classList]) if (c.startsWith('stlp-')) root.classList.remove(c);
 		root.classList.add(...classes);
+		// Crossfade colors on a theme change, but not on first load
+		if (!firstTheme) {
+			root.classList.add('lw-theming');
+			clearTimeout(fadeTimer);
+			fadeTimer = setTimeout(() => root.classList.remove('lw-theming'), 320);
+		}
+		firstTheme = false;
 		try {
 			localStorage.setItem('lw-theme', JSON.stringify({ vars, classes }));
 		} catch {
