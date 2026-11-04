@@ -1,10 +1,12 @@
 // Checks the character details popup and the Appearance panel on the landing page.
 // Needs seeded data first: node scripts/seed-sample-data.mjs
 // Usage: node scripts/check-popups.mjs
-import { connect, wait } from './cdp.mjs';
+import { APP_URL, connect, wait } from './cdp.mjs';
 
 const ESCAPE = ['Escape', 'Escape', 27];
 const browser = await connect();
+await browser.send('Page.navigate', { url: `${APP_URL}/` });
+await wait(4000);
 
 // Character details
 await browser.evaluate(`document.querySelectorAll('.stlp-char-card')[0].click()`);
@@ -15,8 +17,8 @@ await browser.pressKey(...ESCAPE);
 await wait(400);
 browser.check('Escape closes details', await browser.evaluate(`!document.querySelector('.stlp-details')`), true);
 
-// Appearance panel
-await browser.evaluate(`document.querySelector('.stlp-settings-btn').click()`);
+// Studio drawer (opened from the top bar gear)
+await browser.evaluate(`document.querySelector('button[aria-label="Open Studio"]').click()`);
 await wait(800);
 browser.check('panel opens on Theme tab', await browser.evaluate(`document.querySelector('.stlp-tabs .active')?.textContent.trim()`), 'Theme');
 await browser.evaluate(`[...document.querySelectorAll('.stlp-tabs button')].find(b => b.textContent.trim() === 'Cards').click()`);
