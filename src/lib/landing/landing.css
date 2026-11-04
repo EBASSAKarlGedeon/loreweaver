@@ -5,54 +5,39 @@
    re-themes the whole page. Never hardcode a theme color below.
    ========================================================================== */
 .landing {
-    /* Base (overridden by applyAppearance) */
-    --stlp-accent: #ff4d5e;
-    --stlp-accent2: #d92c42;
-    --stlp-bg: #16181d;
-    --stlp-on-accent: #fff;
-    --stlp-overlay: 0.85;
-    --stlp-blur: 12px;
-    --stlp-radius: 14px;
-    --stlp-gap: 16px;
-    --stlp-pad: 14px;
-    --stlp-font: var(--mainFontFamily, sans-serif);
-    --stlp-font-scale: 1;
-    --stlp-card-min: 230px;
-    --stlp-chat-card-w: 340px;
-    --stlp-card-art-height: 260px;
 
     /* Derived */
-    --stlp-accent-hover: color-mix(in srgb, var(--stlp-accent) 72%, white);
-    --stlp-accent-dim: color-mix(in srgb, var(--stlp-accent) 60%, black);
-    --stlp-accent-soft: color-mix(in srgb, var(--stlp-accent) 16%, transparent);
-    --stlp-accent-line: color-mix(in srgb, var(--stlp-accent) 45%, transparent);
-    --stlp-grad: linear-gradient(120deg, var(--stlp-accent), var(--stlp-accent2));
-    --stlp-text: #f4f4f6;
-    --stlp-text-muted: color-mix(in srgb, var(--stlp-text) 62%, transparent);
-    --stlp-border: color-mix(in srgb, var(--stlp-text) 10%, transparent);
-    --stlp-border-strong: color-mix(in srgb, var(--stlp-text) 20%, transparent);
-    --stlp-surface: color-mix(in srgb, var(--stlp-bg) 93%, white);
-    --stlp-surface-2: color-mix(in srgb, var(--stlp-bg) 86%, white);
-    --stlp-glass: color-mix(in srgb, var(--stlp-bg) 55%, transparent);
-    --stlp-radius-sm: calc(var(--stlp-radius) * 0.65);
-    --stlp-hover-glow: 0 10px 30px color-mix(in srgb, var(--stlp-accent) 22%, transparent);
+    --lw-accent-hover: color-mix(in srgb, var(--lw-accent) 72%, white);
+    --lw-accent-dim: color-mix(in srgb, var(--lw-accent) 60%, black);
+    --lw-accent-soft: color-mix(in srgb, var(--lw-accent) 16%, transparent);
+    --lw-accent-line: color-mix(in srgb, var(--lw-accent) 45%, transparent);
+    --lw-grad: linear-gradient(120deg, var(--lw-accent), var(--lw-accent2));
+    --lw-text: #f4f4f6;
+    --lw-text-muted: color-mix(in srgb, var(--lw-text) 62%, transparent);
+    --lw-border: color-mix(in srgb, var(--lw-text) 10%, transparent);
+    --lw-border-strong: color-mix(in srgb, var(--lw-text) 20%, transparent);
+    --lw-surface: color-mix(in srgb, var(--lw-bg) 93%, white);
+    --lw-surface-2: color-mix(in srgb, var(--lw-bg) 86%, white);
+    --lw-glass: color-mix(in srgb, var(--lw-bg) 55%, transparent);
+    --lw-radius-sm: calc(var(--lw-radius) * 0.65);
+    --lw-hover-glow: 0 10px 30px color-mix(in srgb, var(--lw-accent) 22%, transparent);
 
     /* Card surface (changed per card style below) */
-    --stlp-card-bg: color-mix(in srgb, var(--stlp-text) 5%, transparent);
-    --stlp-card-border: var(--stlp-border);
-    --stlp-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-    --stlp-card-blur: var(--stlp-blur);
+    --lw-card-bg: color-mix(in srgb, var(--lw-text) 5%, transparent);
+    --lw-card-border: var(--lw-border);
+    --lw-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    --lw-card-blur: var(--lw-blur);
 
     position: fixed;
     inset: 0;
     z-index: 10000;
-    background-color: var(--stlp-bg);
+    background-color: var(--lw-bg);
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    color: var(--stlp-text);
-    font-family: var(--stlp-font);
-    font-size: calc(1rem * var(--stlp-font-scale));
+    color: var(--lw-text);
+    font-family: var(--lw-font);
+    font-size: calc(1rem * var(--lw-font-scale));
     overflow: hidden;
     transition: top 0.2s ease;
 }
@@ -65,48 +50,48 @@
 }
 
 .landing ::selection {
-    background: color-mix(in srgb, var(--stlp-accent) 40%, transparent);
+    background: color-mix(in srgb, var(--lw-accent) 40%, transparent);
 }
 
 /* ---- Card styles ---- */
-.landing.stlp-style-solid {
-    --stlp-card-bg: var(--stlp-surface);
-    --stlp-card-blur: 0px;
-    --stlp-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+:root.stlp-style-solid .landing {
+    --lw-card-bg: var(--lw-surface);
+    --lw-card-blur: 0px;
+    --lw-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-.landing.stlp-style-outline {
-    --stlp-card-bg: transparent;
-    --stlp-card-border: color-mix(in srgb, var(--stlp-accent) 35%, transparent);
-    --stlp-card-shadow: none;
-    --stlp-card-blur: 0px;
+:root.stlp-style-outline .landing {
+    --lw-card-bg: transparent;
+    --lw-card-border: color-mix(in srgb, var(--lw-accent) 35%, transparent);
+    --lw-card-shadow: none;
+    --lw-card-blur: 0px;
 }
 
-.landing.stlp-style-neon {
-    --stlp-card-bg: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
-    --stlp-card-border: color-mix(in srgb, var(--stlp-accent) 65%, transparent);
-    --stlp-card-shadow: 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 18%, transparent),
-                        0 0 18px color-mix(in srgb, var(--stlp-accent) 22%, transparent),
-                        inset 0 0 22px color-mix(in srgb, var(--stlp-accent) 8%, transparent);
-    --stlp-hover-glow: 0 0 0 1px var(--stlp-accent), 0 0 32px color-mix(in srgb, var(--stlp-accent) 45%, transparent);
+:root.stlp-style-neon .landing {
+    --lw-card-bg: color-mix(in srgb, var(--lw-bg) 70%, transparent);
+    --lw-card-border: color-mix(in srgb, var(--lw-accent) 65%, transparent);
+    --lw-card-shadow: 0 0 0 1px color-mix(in srgb, var(--lw-accent) 18%, transparent),
+                        0 0 18px color-mix(in srgb, var(--lw-accent) 22%, transparent),
+                        inset 0 0 22px color-mix(in srgb, var(--lw-accent) 8%, transparent);
+    --lw-hover-glow: 0 0 0 1px var(--lw-accent), 0 0 32px color-mix(in srgb, var(--lw-accent) 45%, transparent);
 }
 
-.landing.stlp-no-glow {
-    --stlp-hover-glow: 0 8px 22px rgba(0, 0, 0, 0.35);
+:root.stlp-no-glow .landing {
+    --lw-hover-glow: 0 8px 22px rgba(0, 0, 0, 0.35);
 }
 
 /* ---- Visibility toggles (header, stats, card details, ambient orbs) ---- */
-.landing.stlp-hide-hero .stlp-hero,
-.landing.stlp-hide-stats .stlp-stats,
-.landing.stlp-hide-desc .stlp-char-desc,
-.landing.stlp-hide-chatcount .stlp-char-ribbon,
-.landing.stlp-no-ambient .stlp-ambient {
+:root.stlp-hide-hero .landing .stlp-hero,
+:root.stlp-hide-stats .landing .stlp-stats,
+:root.stlp-hide-desc .landing .stlp-char-desc,
+:root.stlp-hide-chatcount .landing .stlp-char-ribbon,
+:root.stlp-no-ambient .landing .stlp-ambient {
     display: none !important;
 }
 
-.landing.stlp-no-anim *,
-.landing.stlp-no-anim *::before,
-.landing.stlp-no-anim *::after {
+:root.stlp-no-anim .landing *,
+:root.stlp-no-anim .landing *::before,
+:root.stlp-no-anim .landing *::after {
     animation: none !important;
     transition: none !important;
 }
@@ -126,23 +111,23 @@
     position: absolute;
     inset: 0;
     background: linear-gradient(180deg,
-        color-mix(in srgb, var(--stlp-bg) 80%, transparent),
-        var(--stlp-bg));
-    opacity: var(--stlp-overlay);
+        color-mix(in srgb, var(--lw-bg) 80%, transparent),
+        var(--lw-bg));
+    opacity: var(--lw-overlay);
     pointer-events: none;
 }
 
-.landing.stlp-bgmode-solid .stlp-bg-overlay {
+:root.stlp-bgmode-solid .landing .stlp-bg-overlay {
     display: none;
 }
 
-.landing.stlp-bgmode-gradient .stlp-bg-overlay {
+:root.stlp-bgmode-gradient .landing .stlp-bg-overlay {
     opacity: 1;
     background:
-        radial-gradient(ellipse 60% 50% at 12% 0%, color-mix(in srgb, var(--stlp-accent) 30%, transparent), transparent 70%),
-        radial-gradient(ellipse 50% 45% at 90% 15%, color-mix(in srgb, var(--stlp-accent2) 26%, transparent), transparent 70%),
-        radial-gradient(ellipse 70% 50% at 50% 110%, color-mix(in srgb, var(--stlp-accent2) 18%, transparent), transparent 70%),
-        var(--stlp-bg);
+        radial-gradient(ellipse 60% 50% at 12% 0%, color-mix(in srgb, var(--lw-accent) 30%, transparent), transparent 70%),
+        radial-gradient(ellipse 50% 45% at 90% 15%, color-mix(in srgb, var(--lw-accent2) 26%, transparent), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 50% 110%, color-mix(in srgb, var(--lw-accent2) 18%, transparent), transparent 70%),
+        var(--lw-bg);
 }
 
 .landing .stlp-ambient {
@@ -161,8 +146,8 @@
     height: 70vmax;
     border-radius: 50%;
     background: radial-gradient(circle,
-        color-mix(in srgb, var(--orb-c, var(--stlp-accent)) 55%, transparent) 0%,
-        color-mix(in srgb, var(--orb-c, var(--stlp-accent)) 22%, transparent) 38%,
+        color-mix(in srgb, var(--orb-c, var(--lw-accent)) 55%, transparent) 0%,
+        color-mix(in srgb, var(--orb-c, var(--lw-accent)) 22%, transparent) 38%,
         transparent 68%);
     opacity: 0.35;
     will-change: transform;
@@ -171,14 +156,14 @@
 .landing .stlp-orb-1 {
     top: -30vmax;
     left: -18vmax;
-    --orb-c: var(--stlp-accent);
+    --orb-c: var(--lw-accent);
     animation: stlp-drift-1 26s ease-in-out infinite alternate;
 }
 
 .landing .stlp-orb-2 {
     top: 6vmax;
     right: -24vmax;
-    --orb-c: var(--stlp-accent2);
+    --orb-c: var(--lw-accent2);
     animation: stlp-drift-2 32s ease-in-out infinite alternate;
 }
 
@@ -187,7 +172,7 @@
     left: 30%;
     width: 56vmax;
     height: 56vmax;
-    --orb-c: var(--stlp-accent);
+    --orb-c: var(--lw-accent);
     opacity: 0.22;
     animation: stlp-drift-1 38s ease-in-out infinite alternate-reverse;
 }
@@ -231,10 +216,10 @@
     align-items: center;
     gap: 14px;
     padding: 10px 24px;
-    border-bottom: 1px solid var(--stlp-border);
-    background: var(--stlp-glass);
-    backdrop-filter: blur(var(--stlp-blur)) saturate(1.3);
-    -webkit-backdrop-filter: blur(var(--stlp-blur)) saturate(1.3);
+    border-bottom: 1px solid var(--lw-border);
+    background: var(--lw-glass);
+    backdrop-filter: blur(var(--lw-blur)) saturate(1.3);
+    -webkit-backdrop-filter: blur(var(--lw-blur)) saturate(1.3);
     flex-shrink: 0;
 }
 
@@ -248,14 +233,14 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border-radius: var(--stlp-radius-sm);
-    background: var(--stlp-grad);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 40%, transparent);
+    border-radius: var(--lw-radius-sm);
+    background: var(--lw-grad);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--lw-accent) 40%, transparent);
 }
 
 .landing .stlp-brand-mark::after {
     content: "✦";
-    color: var(--stlp-on-accent);
+    color: var(--lw-on-accent);
     font-size: 1.05em;
     line-height: 1;
 }
@@ -281,10 +266,10 @@
     width: 100%;
     box-sizing: border-box;
     padding: 9px 14px 9px 38px;
-    border: 1px solid var(--stlp-border);
+    border: 1px solid var(--lw-border);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    color: var(--lw-text);
     font-size: 0.95em;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -294,13 +279,13 @@
 .landing .stlp-modal-search::placeholder,
 .landing .stlp-text-input::placeholder,
 .landing .stlp-textarea::placeholder {
-    color: color-mix(in srgb, var(--stlp-text) 35%, transparent);
+    color: color-mix(in srgb, var(--lw-text) 35%, transparent);
 }
 
 .landing .stlp-search:focus {
-    border-color: var(--stlp-accent);
-    background: color-mix(in srgb, var(--stlp-text) 9%, transparent);
-    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+    border-color: var(--lw-accent);
+    background: color-mix(in srgb, var(--lw-text) 9%, transparent);
+    box-shadow: 0 0 0 3px var(--lw-accent-soft);
 }
 
 .landing .stlp-topbar-actions {
@@ -317,10 +302,10 @@
     width: 38px;
     height: 38px;
     padding: 0;
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    color: var(--stlp-text);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    color: var(--lw-text);
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
@@ -332,9 +317,9 @@
 }
 
 .landing .stlp-icon-btn:hover {
-    background: var(--stlp-accent-soft);
-    border-color: var(--stlp-accent-line);
-    color: var(--stlp-accent-hover);
+    background: var(--lw-accent-soft);
+    border-color: var(--lw-accent-line);
+    color: var(--lw-accent-hover);
 }
 
 .landing .stlp-settings-btn:hover svg {
@@ -370,8 +355,8 @@
 .landing .stlp-hero { order: 0; }
 .landing .stlp-section-chats { order: 1; }
 .landing .stlp-section-chars { order: 2; }
-.landing.stlp-chars-first .stlp-section-chars { order: 1; }
-.landing.stlp-chars-first .stlp-section-chats { order: 2; }
+:root.stlp-chars-first .landing .stlp-section-chars { order: 1; }
+:root.stlp-chars-first .landing .stlp-section-chats { order: 2; }
 
 .landing .stlp-section-title {
     display: flex;
@@ -388,7 +373,7 @@
     flex: 1;
     height: 1px;
     margin-left: 6px;
-    background: linear-gradient(90deg, var(--stlp-accent-line), transparent 70%);
+    background: linear-gradient(90deg, var(--lw-accent-line), transparent 70%);
 }
 
 .landing .stlp-section-icon {
@@ -397,10 +382,10 @@
     justify-content: center;
     width: 34px;
     height: 34px;
-    border-radius: var(--stlp-radius-sm);
-    color: var(--stlp-accent-hover);
-    background: var(--stlp-accent-soft);
-    border: 1px solid var(--stlp-accent-line);
+    border-radius: var(--lw-radius-sm);
+    color: var(--lw-accent-hover);
+    background: var(--lw-accent-soft);
+    border: 1px solid var(--lw-accent-line);
 }
 
 .landing .stlp-section-icon svg {
@@ -410,11 +395,11 @@
 
 .landing .stlp-placeholder {
     padding: 40px 24px;
-    border: 1px dashed var(--stlp-border-strong);
-    border-radius: var(--stlp-radius);
-    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
+    border: 1px dashed var(--lw-border-strong);
+    border-radius: var(--lw-radius);
+    background: color-mix(in srgb, var(--lw-text) 3%, transparent);
     text-align: center;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     animation: stlp-fade 0.3s ease both;
 }
 
@@ -422,7 +407,7 @@
 .landing,
 .landing * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--stlp-text) 18%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--lw-text) 18%, transparent) transparent;
 }
 
 .landing ::-webkit-scrollbar {
@@ -435,14 +420,14 @@
 }
 
 .landing ::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--stlp-text) 14%, transparent);
+    background: color-mix(in srgb, var(--lw-text) 14%, transparent);
     border-radius: 6px;
     border: 2px solid transparent;
     background-clip: padding-box;
 }
 
 .landing ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--stlp-accent) 55%, transparent);
+    background: color-mix(in srgb, var(--lw-accent) 55%, transparent);
     background-clip: padding-box;
 }
 
@@ -456,14 +441,14 @@
     justify-content: space-between;
     gap: 20px 32px;
     padding: 28px 30px;
-    border: 1px solid var(--stlp-border);
-    border-radius: calc(var(--stlp-radius) * 1.4);
+    border: 1px solid var(--lw-border);
+    border-radius: calc(var(--lw-radius) * 1.4);
     background:
-        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 20%, transparent), transparent 55%),
-        radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--stlp-accent2) 16%, transparent), transparent 55%),
-        color-mix(in srgb, var(--stlp-bg) 45%, transparent);
-    backdrop-filter: blur(var(--stlp-blur));
-    -webkit-backdrop-filter: blur(var(--stlp-blur));
+        radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--lw-accent) 20%, transparent), transparent 55%),
+        radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--lw-accent2) 16%, transparent), transparent 55%),
+        color-mix(in srgb, var(--lw-bg) 45%, transparent);
+    backdrop-filter: blur(var(--lw-blur));
+    -webkit-backdrop-filter: blur(var(--lw-blur));
     position: relative;
     overflow: hidden;
     animation: stlp-rise 0.5s ease both;
@@ -483,13 +468,13 @@
     font-weight: 800;
     line-height: 1.15;
     letter-spacing: -0.02em;
-    color: var(--stlp-text);
+    color: var(--lw-text);
     text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
 }
 
 .landing .stlp-hero-sub {
     margin: 0;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     font-size: 0.98em;
 }
 
@@ -512,15 +497,15 @@
     column-gap: 10px;
     align-items: center;
     padding: 8px 14px;
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
-    background: color-mix(in srgb, var(--stlp-bg) 50%, transparent);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
+    background: color-mix(in srgb, var(--lw-bg) 50%, transparent);
 }
 
 .landing .stlp-stat-icon {
     grid-row: span 2;
     display: inline-flex;
-    color: var(--stlp-accent);
+    color: var(--lw-accent);
 }
 
 .landing .stlp-stat-icon svg {
@@ -538,7 +523,7 @@
     font-size: 0.72em;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 /* ---- Primary (gradient) button, shared ---- */
@@ -550,8 +535,8 @@
     justify-content: center;
     gap: 8px;
     border: none;
-    color: var(--stlp-on-accent);
-    background: var(--stlp-grad);
+    color: var(--lw-on-accent);
+    background: var(--lw-grad);
     background-size: 160% 100%;
     background-position: 0% 0;
     cursor: pointer;
@@ -563,7 +548,7 @@
 .landing .stlp-chat-continue:hover,
 .landing .stlp-details-resume:hover {
     background-position: 100% 0;
-    box-shadow: 0 6px 22px color-mix(in srgb, var(--stlp-accent) 45%, transparent);
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--lw-accent) 45%, transparent);
 }
 
 .landing .stlp-btn-primary:active,
@@ -597,7 +582,7 @@
 .landing .stlp-chat-list {
     display: flex;
     align-items: stretch;
-    gap: var(--stlp-gap);
+    gap: var(--lw-gap);
     overflow-x: auto;
     overflow-y: hidden;
     padding: 6px 4px 16px;
@@ -606,17 +591,17 @@
 }
 
 .landing .stlp-chat-card {
-    flex: 0 0 var(--stlp-chat-card-w);
+    flex: 0 0 var(--lw-chat-card-w);
     scroll-snap-align: start;
     display: flex;
     flex-direction: column;
     position: relative;
-    border: 1px solid var(--stlp-card-border);
-    border-radius: var(--stlp-radius);
-    background: var(--stlp-card-bg);
-    box-shadow: var(--stlp-card-shadow);
-    backdrop-filter: blur(var(--stlp-card-blur));
-    -webkit-backdrop-filter: blur(var(--stlp-card-blur));
+    border: 1px solid var(--lw-card-border);
+    border-radius: var(--lw-radius);
+    background: var(--lw-card-bg);
+    box-shadow: var(--lw-card-shadow);
+    backdrop-filter: blur(var(--lw-card-blur));
+    -webkit-backdrop-filter: blur(var(--lw-card-blur));
     cursor: pointer;
     overflow: hidden;
     transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
@@ -630,15 +615,15 @@
     position: absolute;
     inset: 0 0 auto;
     height: 3px;
-    background: var(--stlp-grad);
+    background: var(--lw-grad);
     opacity: 0.55;
     transition: opacity 0.2s ease;
 }
 
 .landing .stlp-chat-card:hover {
-    border-color: var(--stlp-accent-line);
+    border-color: var(--lw-accent-line);
     transform: translateY(-3px);
-    box-shadow: var(--stlp-hover-glow);
+    box-shadow: var(--lw-hover-glow);
 }
 
 .landing .stlp-chat-card:hover::before {
@@ -646,7 +631,7 @@
 }
 
 .landing .stlp-chat-header {
-    padding: calc(var(--stlp-pad) - 1px) var(--stlp-pad) 8px;
+    padding: calc(var(--lw-pad) - 1px) var(--lw-pad) 8px;
 }
 
 .landing .stlp-chat-name {
@@ -660,7 +645,7 @@
 .landing .stlp-chat-content-row {
     display: flex;
     gap: 12px;
-    padding: 0 var(--stlp-pad);
+    padding: 0 var(--lw-pad);
     flex: 1;
     min-height: 0;
 }
@@ -669,16 +654,16 @@
     flex-shrink: 0;
     width: 64px;
     height: 64px;
-    border-radius: var(--stlp-radius-sm);
+    border-radius: var(--lw-radius-sm);
     overflow: hidden;
-    border: 1px solid var(--stlp-border);
-    background: color-mix(in srgb, var(--stlp-text) 5%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stlp-accent) 0%, transparent);
+    border: 1px solid var(--lw-border);
+    background: color-mix(in srgb, var(--lw-text) 5%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--lw-accent) 0%, transparent);
     transition: box-shadow 0.2s ease;
 }
 
 .landing .stlp-chat-card:hover .stlp-chat-avatar-wrap {
-    box-shadow: 0 0 0 2px var(--stlp-accent-line);
+    box-shadow: 0 0 0 2px var(--lw-accent-line);
 }
 
 .landing .stlp-chat-avatar {
@@ -697,7 +682,7 @@
 .landing .stlp-chat-desc {
     font-size: 0.82em;
     line-height: 1.45;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -715,7 +700,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px 10px;
-    padding: 10px var(--stlp-pad) var(--stlp-pad);
+    padding: 10px var(--lw-pad) var(--lw-pad);
     margin-top: 8px;
 }
 
@@ -733,7 +718,7 @@
     align-items: center;
     gap: 5px;
     font-size: 0.78em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     white-space: nowrap;
 }
 
@@ -741,7 +726,7 @@
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--stlp-accent);
+    color: var(--lw-accent);
 }
 
 .landing .stlp-chat-continue {
@@ -756,9 +741,9 @@
     padding: 10px 22px;
     font-size: 0.85em;
     font-weight: 600;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    border: 1px solid var(--stlp-border-strong);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    border: 1px solid var(--lw-border-strong);
     border-radius: 999px;
     cursor: pointer;
     white-space: nowrap;
@@ -772,10 +757,10 @@
 
 .landing .stlp-chat-more:hover,
 .landing .stlp-load-more:hover {
-    background: var(--stlp-accent-soft);
-    border-color: var(--stlp-accent);
-    color: var(--stlp-accent-hover);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 25%, transparent);
+    background: var(--lw-accent-soft);
+    border-color: var(--lw-accent);
+    color: var(--lw-accent-hover);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--lw-accent) 25%, transparent);
 }
 
 .landing .stlp-chat-group-badge {
@@ -783,9 +768,9 @@
     margin-left: 8px;
     padding: 1px 8px;
     border-radius: 999px;
-    border: 1px solid var(--stlp-accent-line);
-    background: var(--stlp-accent-soft);
-    color: var(--stlp-accent-hover);
+    border: 1px solid var(--lw-accent-line);
+    background: var(--lw-accent-soft);
+    color: var(--lw-accent-hover);
     font-size: 0.68em;
     font-weight: 700;
     text-transform: uppercase;
@@ -801,8 +786,8 @@
     justify-content: center;
     font-size: 1.4em;
     font-weight: 700;
-    color: var(--stlp-on-accent);
-    background: var(--stlp-grad);
+    color: var(--lw-on-accent);
+    background: var(--lw-grad);
 }
 
 /* ==========================================================================
@@ -816,7 +801,7 @@
     align-items: center;
     justify-content: center;
     padding: 32px;
-    background: color-mix(in srgb, var(--stlp-bg) 70%, rgba(0, 0, 0, 0.6));
+    background: color-mix(in srgb, var(--lw-bg) 70%, rgba(0, 0, 0, 0.6));
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     animation: stlp-fade 0.2s ease both;
@@ -825,12 +810,12 @@
 .landing .stlp-modal,
 .landing .stlp-details,
 .landing .stlp-settings {
-    border: 1px solid var(--stlp-border-strong);
-    border-radius: calc(var(--stlp-radius) * 1.3);
+    border: 1px solid var(--lw-border-strong);
+    border-radius: calc(var(--lw-radius) * 1.3);
     background:
-        radial-gradient(90% 60% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 9%, transparent), transparent 60%),
-        var(--stlp-surface);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 8%, transparent);
+        radial-gradient(90% 60% at 0% 0%, color-mix(in srgb, var(--lw-accent) 9%, transparent), transparent 60%),
+        var(--lw-surface);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--lw-accent) 8%, transparent);
     overflow: hidden;
     animation: stlp-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
@@ -848,7 +833,7 @@
     justify-content: space-between;
     gap: 16px;
     padding: 16px 20px;
-    border-bottom: 1px solid var(--stlp-border);
+    border-bottom: 1px solid var(--lw-border);
     flex-shrink: 0;
 }
 
@@ -864,7 +849,7 @@
 
 .landing .stlp-modal-count {
     font-size: 0.8em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 .landing .stlp-modal-tools {
@@ -893,18 +878,18 @@
     width: 100%;
     box-sizing: border-box;
     padding: 8px 12px 8px 32px;
-    border: 1px solid var(--stlp-border);
+    border: 1px solid var(--lw-border);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    color: var(--stlp-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    color: var(--lw-text);
     font-size: 0.9em;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .landing .stlp-modal-search:focus {
-    border-color: var(--stlp-accent);
-    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+    border-color: var(--lw-accent);
+    box-shadow: 0 0 0 3px var(--lw-accent-soft);
 }
 
 .landing .stlp-modal-body {
@@ -935,16 +920,16 @@
     display: flex;
     gap: 4px;
     padding: 4px;
-    border: 1px solid var(--stlp-border);
+    border: 1px solid var(--lw-border);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-bg) 50%, transparent);
+    background: color-mix(in srgb, var(--lw-bg) 50%, transparent);
 }
 
 .landing .stlp-char-pill {
     padding: 6px 16px;
     font-size: 0.85em;
     font-weight: 600;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     background: transparent;
     border: none;
     border-radius: 999px;
@@ -953,22 +938,22 @@
 }
 
 .landing .stlp-char-pill:hover {
-    color: var(--stlp-text);
+    color: var(--lw-text);
 }
 
 .landing .stlp-char-pill.active {
-    color: var(--stlp-on-accent);
-    background: var(--stlp-grad);
-    box-shadow: 0 2px 12px color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+    color: var(--lw-on-accent);
+    background: var(--lw-grad);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--lw-accent) 35%, transparent);
 }
 
 .landing .stlp-char-sort,
 .landing .stlp-settings select {
     padding: 7px 12px;
     font-size: 0.85em;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    border: 1px solid var(--stlp-border);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    border: 1px solid var(--lw-border);
     border-radius: 999px;
     cursor: pointer;
     outline: none;
@@ -976,24 +961,24 @@
 
 .landing .stlp-char-sort:focus,
 .landing .stlp-settings select:focus {
-    border-color: var(--stlp-accent);
+    border-color: var(--lw-accent);
 }
 
 .landing select option {
-    background: var(--stlp-surface);
-    color: var(--stlp-text);
+    background: var(--lw-surface);
+    color: var(--lw-text);
 }
 
 .landing .stlp-char-count {
     font-size: 0.8em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     margin-left: auto;
 }
 
 .landing .stlp-char-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(var(--stlp-card-min), 100%), 1fr));
-    gap: var(--stlp-gap);
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--lw-card-min), 100%), 1fr));
+    gap: var(--lw-gap);
 }
 
 .landing .stlp-char-grid .stlp-placeholder {
@@ -1003,12 +988,12 @@
 .landing .stlp-char-card {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--stlp-card-border);
-    border-radius: var(--stlp-radius);
-    background: var(--stlp-card-bg);
-    box-shadow: var(--stlp-card-shadow);
-    backdrop-filter: blur(var(--stlp-card-blur));
-    -webkit-backdrop-filter: blur(var(--stlp-card-blur));
+    border: 1px solid var(--lw-card-border);
+    border-radius: var(--lw-radius);
+    background: var(--lw-card-bg);
+    box-shadow: var(--lw-card-shadow);
+    backdrop-filter: blur(var(--lw-card-blur));
+    -webkit-backdrop-filter: blur(var(--lw-card-blur));
     overflow: hidden;
     cursor: pointer;
     transition: border-color 0.2s ease, transform 0.25s ease, box-shadow 0.25s ease;
@@ -1017,15 +1002,15 @@
 }
 
 .landing .stlp-char-card:hover {
-    border-color: var(--stlp-accent-line);
+    border-color: var(--lw-accent-line);
     transform: translateY(-4px);
-    box-shadow: var(--stlp-hover-glow);
+    box-shadow: var(--lw-hover-glow);
 }
 
 .landing .stlp-char-art {
     position: relative;
-    height: var(--stlp-card-art-height);
-    background: color-mix(in srgb, var(--stlp-text) 4%, transparent);
+    height: var(--lw-card-art-height);
+    background: color-mix(in srgb, var(--lw-text) 4%, transparent);
     overflow: hidden;
 }
 
@@ -1046,9 +1031,9 @@
     position: absolute;
     inset: 0;
     background: linear-gradient(180deg,
-        color-mix(in srgb, var(--stlp-bg) 30%, transparent) 0%,
+        color-mix(in srgb, var(--lw-bg) 30%, transparent) 0%,
         transparent 32%,
-        color-mix(in srgb, var(--stlp-bg) 92%, transparent) 100%);
+        color-mix(in srgb, var(--lw-bg) 92%, transparent) 100%);
     pointer-events: none;
 }
 
@@ -1057,7 +1042,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(0deg, color-mix(in srgb, var(--stlp-accent) 28%, transparent), transparent 55%);
+    background: linear-gradient(0deg, color-mix(in srgb, var(--lw-accent) 28%, transparent), transparent 55%);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -1074,8 +1059,8 @@
     font-size: 0.72em;
     font-weight: 700;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
-    border: 1px solid var(--stlp-border-strong);
+    background: color-mix(in srgb, var(--lw-bg) 70%, transparent);
+    border: 1px solid var(--lw-border-strong);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
 }
@@ -1091,9 +1076,9 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    border: 1px solid var(--stlp-border-strong);
-    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
-    color: color-mix(in srgb, var(--stlp-text) 75%, transparent);
+    border: 1px solid var(--lw-border-strong);
+    background: color-mix(in srgb, var(--lw-bg) 60%, transparent);
+    color: color-mix(in srgb, var(--lw-text) 75%, transparent);
     cursor: pointer;
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
@@ -1109,21 +1094,21 @@
 }
 
 .landing .stlp-char-fav:hover {
-    color: var(--stlp-text);
-    border-color: var(--stlp-accent-line);
+    color: var(--lw-text);
+    border-color: var(--lw-accent-line);
     transform: scale(1.1);
 }
 
 .landing .stlp-char-fav.active {
-    color: var(--stlp-accent);
-    border-color: var(--stlp-accent-line);
-    background: color-mix(in srgb, var(--stlp-accent) 22%, transparent);
+    color: var(--lw-accent);
+    border-color: var(--lw-accent-line);
+    background: color-mix(in srgb, var(--lw-accent) 22%, transparent);
 }
 
 .landing .stlp-char-fav.active svg {
-    fill: var(--stlp-accent);
-    stroke: var(--stlp-accent);
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--stlp-accent) 70%, transparent));
+    fill: var(--lw-accent);
+    stroke: var(--lw-accent);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--lw-accent) 70%, transparent));
 }
 
 .landing .stlp-char-name {
@@ -1140,7 +1125,7 @@
 }
 
 .landing .stlp-char-body {
-    padding: 12px var(--stlp-pad) var(--stlp-pad);
+    padding: 12px var(--lw-pad) var(--lw-pad);
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1149,7 +1134,7 @@
 .landing .stlp-char-desc {
     font-size: 0.82em;
     line-height: 1.45;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -1166,7 +1151,7 @@
 
 .landing .stlp-char-tokens {
     font-size: 0.72em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     white-space: nowrap;
     margin-left: auto;
     flex-shrink: 0;
@@ -1195,7 +1180,7 @@
     top: 12px;
     right: 12px;
     z-index: 2;
-    background: color-mix(in srgb, var(--stlp-bg) 70%, transparent);
+    background: color-mix(in srgb, var(--lw-bg) 70%, transparent);
 }
 
 .landing .stlp-details-left {
@@ -1203,17 +1188,17 @@
     flex-direction: column;
     gap: 12px;
     padding: 20px;
-    border-right: 1px solid var(--stlp-border);
+    border-right: 1px solid var(--lw-border);
     overflow-y: auto;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--stlp-accent) 10%, transparent), transparent 50%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--lw-accent) 10%, transparent), transparent 50%);
 }
 
 .landing .stlp-details-art {
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius);
     overflow: hidden;
-    background: color-mix(in srgb, var(--stlp-text) 4%, transparent);
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--stlp-accent) 15%, transparent);
+    background: color-mix(in srgb, var(--lw-text) 4%, transparent);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4), 0 0 0 1px color-mix(in srgb, var(--lw-accent) 15%, transparent);
 }
 
 .landing .stlp-details-art img {
@@ -1233,7 +1218,7 @@
 
 .landing .stlp-details-date {
     font-size: 0.82em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 .landing .stlp-details-actions {
@@ -1246,24 +1231,24 @@
 .landing .stlp-details-resume,
 .landing .stlp-details-newchat {
     padding: 11px 16px;
-    border-radius: var(--stlp-radius-sm);
+    border-radius: var(--lw-radius-sm);
     font-size: 0.9em;
 }
 
 .landing .stlp-details-newchat {
     font-weight: 600;
     cursor: pointer;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    border: 1px solid var(--stlp-border-strong);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    border: 1px solid var(--lw-border-strong);
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
 .landing .stlp-details-newchat:hover {
-    background: var(--stlp-accent-soft);
-    border-color: var(--stlp-accent);
-    color: var(--stlp-accent-hover);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--stlp-accent) 25%, transparent);
+    background: var(--lw-accent-soft);
+    border-color: var(--lw-accent);
+    color: var(--lw-accent-hover);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--lw-accent) 25%, transparent);
 }
 
 .landing .stlp-details-right {
@@ -1284,19 +1269,19 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--stlp-accent-hover);
+    color: var(--lw-accent-hover);
 }
 
 .landing .stlp-details-section-title::after {
     content: "";
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, var(--stlp-accent-line), transparent);
+    background: linear-gradient(90deg, var(--lw-accent-line), transparent);
 }
 
 .landing .stlp-details-empty {
     font-size: 0.85em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 .landing .stlp-lb-list {
@@ -1306,17 +1291,17 @@
 }
 
 .landing .stlp-lb-card {
-    --stlp-lb-color: #a78bfa;
+    --lw-lb-color: #a78bfa;
     padding: 12px 14px;
-    border: 1px solid color-mix(in srgb, var(--stlp-lb-color) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--lw-lb-color) 60%, transparent);
     border-left-width: 4px;
-    border-radius: var(--stlp-radius-sm);
-    background: color-mix(in srgb, var(--stlp-lb-color) 6%, transparent);
+    border-radius: var(--lw-radius-sm);
+    background: color-mix(in srgb, var(--lw-lb-color) 6%, transparent);
     transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
 .landing .stlp-lb-card:hover {
-    background: color-mix(in srgb, var(--stlp-lb-color) 11%, transparent);
+    background: color-mix(in srgb, var(--lw-lb-color) 11%, transparent);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
@@ -1346,9 +1331,9 @@
     font-weight: 500;
     text-transform: capitalize;
     white-space: nowrap;
-    color: var(--stlp-lb-color);
-    background: color-mix(in srgb, var(--stlp-lb-color) 14%, transparent);
-    border: 1px solid color-mix(in srgb, var(--stlp-lb-color) 30%, transparent);
+    color: var(--lw-lb-color);
+    background: color-mix(in srgb, var(--lw-lb-color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--lw-lb-color) 30%, transparent);
 }
 
 .landing .stlp-lb-meta {
@@ -1357,9 +1342,9 @@
     gap: 6px;
     margin-top: 10px;
     padding-top: 8px;
-    border-top: 1px solid var(--stlp-border);
+    border-top: 1px solid var(--lw-border);
     font-size: 0.75em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1368,7 +1353,7 @@
 .landing .stlp-details-notes {
     font-size: 0.88em;
     line-height: 1.65;
-    color: color-mix(in srgb, var(--stlp-text) 85%, transparent);
+    color: color-mix(in srgb, var(--lw-text) 85%, transparent);
     overflow-y: auto;
     flex: 1 1 auto;
     min-height: 0;
@@ -1386,11 +1371,11 @@
 
 .landing .stlp-details-notes img {
     max-width: 100%;
-    border-radius: var(--stlp-radius-sm);
+    border-radius: var(--lw-radius-sm);
 }
 
 .landing .stlp-details-notes a {
-    color: var(--stlp-accent-hover);
+    color: var(--lw-accent-hover);
 }
 
 /* ==========================================================================
@@ -1420,7 +1405,7 @@
 
 .landing .stlp-settings-subtitle {
     font-size: 0.78em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 .landing .stlp-tabs {
@@ -1428,9 +1413,9 @@
     gap: 4px;
     margin: 0 22px;
     padding: 4px;
-    border: 1px solid var(--stlp-border);
+    border: 1px solid var(--lw-border);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
+    background: color-mix(in srgb, var(--lw-bg) 60%, transparent);
     overflow-x: auto;
     flex-shrink: 0;
 }
@@ -1441,7 +1426,7 @@
     font-size: 0.84em;
     font-weight: 600;
     white-space: nowrap;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     background: transparent;
     border: none;
     border-radius: 999px;
@@ -1450,13 +1435,13 @@
 }
 
 .landing .stlp-tabs button:hover {
-    color: var(--stlp-text);
+    color: var(--lw-text);
 }
 
 .landing .stlp-tabs button.active {
-    color: var(--stlp-on-accent);
-    background: var(--stlp-grad);
-    box-shadow: 0 2px 12px color-mix(in srgb, var(--stlp-accent) 35%, transparent);
+    color: var(--lw-on-accent);
+    background: var(--lw-grad);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--lw-accent) 35%, transparent);
 }
 
 .landing .stlp-settings-body {
@@ -1487,7 +1472,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.09em;
-    color: var(--stlp-accent-hover);
+    color: var(--lw-accent-hover);
 }
 
 .landing .stlp-settings-row {
@@ -1496,15 +1481,15 @@
     justify-content: space-between;
     gap: 14px;
     padding: 10px 12px;
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
-    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
+    background: color-mix(in srgb, var(--lw-text) 3%, transparent);
     transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .landing .stlp-settings-row:hover {
-    border-color: var(--stlp-border-strong);
-    background: color-mix(in srgb, var(--stlp-text) 5%, transparent);
+    border-color: var(--lw-border-strong);
+    background: color-mix(in srgb, var(--lw-text) 5%, transparent);
 }
 
 .landing .stlp-settings-row[hidden] {
@@ -1527,18 +1512,18 @@
 .landing .stlp-settings-label small,
 .landing .stlp-settings-hint {
     font-size: 0.82em;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     line-height: 1.4;
 }
 
 .landing .stlp-settings-hint code {
     padding: 0 4px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--stlp-text) 8%, transparent);
+    background: color-mix(in srgb, var(--lw-text) 8%, transparent);
 }
 
 .landing .stlp-settings select {
-    border-radius: var(--stlp-radius-sm);
+    border-radius: var(--lw-radius-sm);
     min-width: 160px;
 }
 
@@ -1546,9 +1531,9 @@
     width: 48px;
     height: 32px;
     padding: 2px;
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    border: 1px solid var(--stlp-border-strong);
-    border-radius: var(--stlp-radius-sm);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    border: 1px solid var(--lw-border-strong);
+    border-radius: var(--lw-radius-sm);
     cursor: pointer;
 }
 
@@ -1561,7 +1546,7 @@
 
 .landing .stlp-range input[type="range"] {
     width: 170px;
-    accent-color: var(--stlp-accent);
+    accent-color: var(--lw-accent);
     cursor: pointer;
 }
 
@@ -1570,7 +1555,7 @@
     text-align: right;
     font-size: 0.82em;
     font-variant-numeric: tabular-nums;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
 }
 
 /* Switch */
@@ -1590,7 +1575,7 @@
     width: 40px;
     height: 22px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--stlp-text) 16%, transparent);
+    background: color-mix(in srgb, var(--lw-text) 16%, transparent);
     transition: background 0.2s ease;
 }
 
@@ -1607,7 +1592,7 @@
 }
 
 .landing .stlp-switch input:checked + .stlp-switch-track {
-    background: var(--stlp-grad);
+    background: var(--lw-grad);
 }
 
 .landing .stlp-switch input:checked + .stlp-switch-track .stlp-switch-thumb {
@@ -1615,7 +1600,7 @@
 }
 
 .landing .stlp-switch input:focus-visible + .stlp-switch-track {
-    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+    box-shadow: 0 0 0 3px var(--lw-accent-soft);
 }
 
 /* Segmented control */
@@ -1624,9 +1609,9 @@
     flex-wrap: wrap;
     gap: 4px;
     padding: 4px;
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
-    background: color-mix(in srgb, var(--stlp-bg) 55%, transparent);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
+    background: color-mix(in srgb, var(--lw-bg) 55%, transparent);
 }
 
 .landing .stlp-segmented button {
@@ -1635,22 +1620,22 @@
     font-size: 0.82em;
     font-weight: 600;
     white-space: nowrap;
-    color: var(--stlp-text-muted);
+    color: var(--lw-text-muted);
     background: transparent;
     border: 1px solid transparent;
-    border-radius: calc(var(--stlp-radius-sm) * 0.75);
+    border-radius: calc(var(--lw-radius-sm) * 0.75);
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .landing .stlp-segmented button:hover {
-    color: var(--stlp-text);
+    color: var(--lw-text);
 }
 
 .landing .stlp-segmented button.active {
-    color: var(--stlp-accent-hover);
-    background: var(--stlp-accent-soft);
-    border-color: var(--stlp-accent-line);
+    color: var(--lw-accent-hover);
+    background: var(--lw-accent-soft);
+    border-color: var(--lw-accent-line);
 }
 
 /* Theme swatches */
@@ -1666,10 +1651,10 @@
     align-items: stretch;
     gap: 6px;
     padding: 6px;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-text) 3%, transparent);
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-text) 3%, transparent);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
     cursor: pointer;
     transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1688,7 +1673,7 @@
     position: relative;
     display: block;
     height: 44px;
-    border-radius: calc(var(--stlp-radius-sm) * 0.7);
+    border-radius: calc(var(--lw-radius-sm) * 0.7);
     background:
         radial-gradient(circle at 25% 30%, color-mix(in srgb, var(--sw-a) 55%, transparent), transparent 60%),
         var(--sw-bg);
@@ -1718,18 +1703,18 @@
     box-sizing: border-box;
     padding: 8px 10px;
     font-size: 0.86em;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-bg) 60%, transparent);
-    border: 1px solid var(--stlp-border);
-    border-radius: var(--stlp-radius-sm);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-bg) 60%, transparent);
+    border: 1px solid var(--lw-border);
+    border-radius: var(--lw-radius-sm);
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .landing .stlp-text-input:focus,
 .landing .stlp-textarea:focus {
-    border-color: var(--stlp-accent);
-    box-shadow: 0 0 0 3px var(--stlp-accent-soft);
+    border-color: var(--lw-accent);
+    box-shadow: 0 0 0 3px var(--lw-accent-soft);
 }
 
 .landing .stlp-textarea {
@@ -1756,18 +1741,18 @@
     font-weight: 600;
     letter-spacing: normal;
     text-transform: none;
-    color: var(--stlp-text);
-    background: color-mix(in srgb, var(--stlp-text) 6%, transparent);
-    border: 1px solid var(--stlp-border-strong);
+    color: var(--lw-text);
+    background: color-mix(in srgb, var(--lw-text) 6%, transparent);
+    border: 1px solid var(--lw-border-strong);
     border-radius: 999px;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .landing .stlp-chip-btn:hover {
-    background: var(--stlp-accent-soft);
-    border-color: var(--stlp-accent);
-    color: var(--stlp-accent-hover);
+    background: var(--lw-accent-soft);
+    border-color: var(--lw-accent);
+    color: var(--lw-accent-hover);
 }
 
 .landing .stlp-chip-btn.stlp-danger:hover {
@@ -1817,7 +1802,7 @@
 
     .landing .stlp-details-left {
         border-right: none;
-        border-bottom: 1px solid var(--stlp-border);
+        border-bottom: 1px solid var(--lw-border);
     }
 
     .landing .stlp-details-art img {
@@ -1860,20 +1845,20 @@
     }
 
     /* Without blur the translucent surfaces would smear the photo — firm them */
-    .landing.stlp-style-glass {
-        --stlp-card-bg: color-mix(in srgb, var(--stlp-surface-2) 90%, transparent);
-        --stlp-card-blur: 0px;
+    :root.stlp-style-glass .landing {
+        --lw-card-bg: color-mix(in srgb, var(--lw-surface-2) 90%, transparent);
+        --lw-card-blur: 0px;
     }
 
     .landing .stlp-topbar {
-        background: color-mix(in srgb, var(--stlp-bg) 88%, transparent);
+        background: color-mix(in srgb, var(--lw-bg) 88%, transparent);
     }
 
     .landing .stlp-hero {
         background:
-            radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--stlp-accent) 20%, transparent), transparent 55%),
-            radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--stlp-accent2) 16%, transparent), transparent 55%),
-            color-mix(in srgb, var(--stlp-bg) 85%, transparent);
+            radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--lw-accent) 20%, transparent), transparent 55%),
+            radial-gradient(100% 140% at 100% 100%, color-mix(in srgb, var(--lw-accent2) 16%, transparent), transparent 55%),
+            color-mix(in srgb, var(--lw-bg) 85%, transparent);
     }
 }
 /* Initial-letter art for characters without a portrait */
@@ -1885,8 +1870,8 @@
     justify-content: center;
     font-size: 4.2em;
     font-weight: 800;
-    color: var(--stlp-on-accent);
-    background: var(--stlp-grad);
+    color: var(--lw-on-accent);
+    background: var(--lw-grad);
     opacity: 0.85;
 }
 

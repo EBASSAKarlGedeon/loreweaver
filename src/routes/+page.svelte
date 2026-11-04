@@ -8,7 +8,7 @@
 	import AllChatsModal from '$lib/landing/AllChatsModal.svelte';
 	import AppearancePanel from '$lib/landing/AppearancePanel.svelte';
 	import { library, startLibrary, type ChatEntry } from '$lib/landing/library.svelte';
-	import { rootClasses, themeStyle } from '$lib/landing/appearance';
+	import { backgroundStyle } from '$lib/landing/appearance';
 	import { greeting, plural } from '$lib/landing/format';
 	import { settings } from '$lib/state/settings.svelte';
 	import type { Character } from '$lib/types';
@@ -107,7 +107,7 @@
 
 <svelte:window onkeydown={onWindowKey} />
 
-<div class="landing {rootClasses(a)}" style={themeStyle(a)}>
+<div class="landing" style={backgroundStyle(a)}>
 	<div class="stlp-bg-overlay"></div>
 	<div class="stlp-ambient" aria-hidden="true">
 		<span class="stlp-orb stlp-orb-1"></span>

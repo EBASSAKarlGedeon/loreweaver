@@ -359,7 +359,7 @@
 						oninput={(e) => set('customCss', e.currentTarget.value)}
 					></textarea>
 					<small class="stlp-settings-hint">
-						Applied live. Variables: <code>--stlp-accent</code>, <code>--stlp-accent2</code>, <code>--stlp-bg</code>, <code>--stlp-radius</code>…
+						Applied live. Variables: <code>--lw-accent</code>, <code>--lw-accent2</code>, <code>--lw-bg</code>, <code>--lw-radius</code>…
 					</small>
 				</div>
 				<div class="stlp-settings-group">

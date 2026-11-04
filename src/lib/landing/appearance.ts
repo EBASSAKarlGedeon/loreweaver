@@ -62,32 +62,33 @@ function onAccentColor(a: string, b: string): string {
 	return (lum(a) + lum(b)) / 2 > 0.4 ? '#111318' : '#ffffff';
 }
 
-// Inline style for the root: CSS custom properties plus the background image
-export function themeStyle(a: Appearance): string {
+// CSS custom properties for the whole app. The layout writes these on <html>.
+export function themeVars(a: Appearance): Record<string, string> {
 	const { accent, accent2, bg } = effectiveColors(a);
 	const density = DENSITIES[a.density] ?? DENSITIES.comfortable;
-	const vars: Record<string, string> = {
-		'--stlp-accent': accent,
-		'--stlp-accent2': accent2,
-		'--stlp-bg': bg,
-		'--stlp-on-accent': onAccentColor(accent, accent2),
-		'--stlp-overlay': String(clamp(a.overlayOpacity, 0, 100, 85) / 100),
-		'--stlp-blur': `${clamp(a.blur, 0, 40, 12)}px`,
-		'--stlp-radius': `${clamp(a.radius, 0, 32, 14)}px`,
-		'--stlp-card-art-height': `${clamp(a.cardHeight, 140, 520, 260)}px`,
-		'--stlp-card-min': `${clamp(a.cardMinWidth, 150, 400, 230)}px`,
-		'--stlp-chat-card-w': `${clamp(a.chatCardWidth, 240, 520, 340)}px`,
-		'--stlp-font': FONTS[a.font] ?? FONTS.system,
-		'--stlp-font-scale': String(clamp(a.fontScale, 75, 140, 100) / 100),
-		'--stlp-gap': `${density.gap}px`,
-		'--stlp-pad': `${density.pad}px`
+	return {
+		'--lw-accent': accent,
+		'--lw-accent2': accent2,
+		'--lw-bg': bg,
+		'--lw-on-accent': onAccentColor(accent, accent2),
+		'--lw-overlay': String(clamp(a.overlayOpacity, 0, 100, 85) / 100),
+		'--lw-blur': `${clamp(a.blur, 0, 40, 12)}px`,
+		'--lw-radius': `${clamp(a.radius, 0, 32, 14)}px`,
+		'--lw-card-art-height': `${clamp(a.cardHeight, 140, 520, 260)}px`,
+		'--lw-card-min': `${clamp(a.cardMinWidth, 150, 400, 230)}px`,
+		'--lw-chat-card-w': `${clamp(a.chatCardWidth, 240, 520, 340)}px`,
+		'--lw-font': FONTS[a.font] ?? FONTS.system,
+		'--lw-font-scale': String(clamp(a.fontScale, 75, 140, 100) / 100),
+		'--lw-gap': `${density.gap}px`,
+		'--lw-pad': `${density.pad}px`
 	};
-	const parts = Object.entries(vars).map(([k, v]) => `${k}: ${v}`);
-	if (a.bgMode === 'image' && a.bgImageUrl) {
-		const safe = a.bgImageUrl.replace(/["\\\n\r]/g, '');
-		parts.push(`background-image: url("${safe}")`);
-	}
-	return parts.join('; ');
+}
+
+// Landing-only background image, applied as an inline style on .landing
+export function backgroundStyle(a: Appearance): string {
+	if (a.bgMode !== 'image' || !a.bgImageUrl) return '';
+	const safe = a.bgImageUrl.replace(/["\\\n\r]/g, '');
+	return `background-image: url("${safe}")`;
 }
 
 // Classes that switch whole families of styles on the root

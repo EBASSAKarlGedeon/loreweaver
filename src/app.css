@@ -13,6 +13,22 @@
 	--danger: #e06c6c;
 	--ok: #6ccf8e;
 	font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+
+	/* Theme defaults. The layout overwrites these on <html> from the settings. */
+	--lw-accent: #ff4d5e;
+	--lw-accent2: #d92c42;
+	--lw-bg: #16181d;
+	--lw-on-accent: #fff;
+	--lw-overlay: 0.85;
+	--lw-blur: 12px;
+	--lw-radius: 14px;
+	--lw-gap: 16px;
+	--lw-pad: 14px;
+	--lw-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+	--lw-font-scale: 1;
+	--lw-card-min: 230px;
+	--lw-chat-card-w: 340px;
+	--lw-card-art-height: 260px;
 }
 
 * {

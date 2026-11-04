@@ -5,6 +5,19 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="LoreWeaver — immersive AI character roleplay & storytelling" />
+		<script>
+			// Apply the cached theme before first paint so there is no color flash.
+			// Runs before the app loads; if the cache is missing, app.css defaults apply.
+			(function () {
+				try {
+					var c = JSON.parse(localStorage.getItem('lw-theme') || 'null');
+					if (!c) return;
+					var r = document.documentElement;
+					for (var k in c.vars) r.style.setProperty(k, c.vars[k]);
+					for (var i = 0; i < c.classes.length; i++) r.classList.add(c.classes[i]);
+				} catch (e) {}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
