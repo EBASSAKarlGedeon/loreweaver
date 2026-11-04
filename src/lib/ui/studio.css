@@ -1,0 +1,45 @@
+/* Studio is a non-blocking right-side drawer: no backdrop, so the page stays usable
+   while theme changes are visible. Esc or the close button dismisses it. */
+.landing.lw-studio {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 60;
+	width: min(440px, 100vw);
+	height: 100dvh;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--lw-surface);
+	border-left: 1px solid var(--lw-border);
+	box-shadow: -18px 0 48px rgb(0 0 0 / 0.35);
+	animation: lw-drawer-in var(--duration-lw) var(--ease-lw) both;
+}
+
+.landing.lw-studio .stlp-settings {
+	width: 100%;
+	max-height: none;
+	flex: 1;
+	min-height: 0;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	background: none;
+	animation: none;
+}
+
+@keyframes lw-drawer-in {
+	from {
+		transform: translateX(100%);
+	}
+	to {
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.landing.lw-studio {
+		animation: none;
+	}
+}

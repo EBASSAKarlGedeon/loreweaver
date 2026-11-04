@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { beforeNavigate } from '$app/navigation';
 	import { loadSettings, settings } from '$lib/state/settings.svelte';
+	import { resetAppbar } from '$lib/state/appbar.svelte';
+	import { ui } from '$lib/state/ui.svelte';
 	import { rootClasses, themeVars } from '$lib/landing/appearance';
+	import AppBar from '$lib/ui/AppBar.svelte';
+	import Studio from '$lib/ui/Studio.svelte';
 	import '@fontsource-variable/fraunces';
 	import '@fontsource-variable/manrope';
 	import '../styles/tailwind.css';
@@ -28,9 +32,9 @@
 		}
 	});
 
-	// The landing page (/) draws its own full-screen top bar, so the app nav is
-	// only shown on the other routes.
-	let isHome = $derived($page.url.pathname === '/');
+	// Each page fills the bar in its own $effect, so clear the previous page's
+	// contribution before navigating.
+	beforeNavigate(() => resetAppbar());
 
 	// IndexedDB only exists in the browser. onMount never runs during SSR, so
 	// the Dexie call here can't reject inside Node.
@@ -39,18 +43,13 @@
 	});
 </script>
 
-{#if isHome}
-	{@render children()}
-{:else}
-	<div class="app">
-		<nav class="nav">
-			<div class="brand">Lore<span class="dot">Weaver</span></div>
-			<a href="/" class:active={$page.url.pathname === '/'}>Home</a>
-			<a href="/characters" class:active={$page.url.pathname.startsWith('/characters')}>Characters</a>
-			<a href="/settings" class:active={$page.url.pathname.startsWith('/settings')}>Settings</a>
-		</nav>
-		<div class="main">
-			{@render children()}
-		</div>
-	</div>
+<div class="flex h-dvh flex-col">
+	<AppBar />
+	<main class="min-h-0 flex-1 overflow-y-auto">
+		{@render children()}
+	</main>
+</div>
+
+{#if ui.studioOpen}
+	<Studio />
 {/if}

@@ -6,11 +6,11 @@
 	import CharacterCard from '$lib/landing/CharacterCard.svelte';
 	import CharacterDetails from '$lib/landing/CharacterDetails.svelte';
 	import AllChatsModal from '$lib/landing/AllChatsModal.svelte';
-	import AppearancePanel from '$lib/landing/AppearancePanel.svelte';
 	import { library, startLibrary, type ChatEntry } from '$lib/landing/library.svelte';
 	import { backgroundStyle } from '$lib/landing/appearance';
 	import { greeting, plural } from '$lib/landing/format';
 	import { settings } from '$lib/state/settings.svelte';
+	import { appbar, setAppbar } from '$lib/state/appbar.svelte';
 	import type { Character } from '$lib/types';
 	import '$lib/landing/landing.css';
 
@@ -25,13 +25,12 @@
 	let a = $derived(settings.appearance);
 
 	// Ephemeral UI state (not persisted)
-	let query = $state('');
+	setAppbar({ title: "", subtitle: "", avatar: "", search: true, actions: [] });
 	let favoritesOnly = $state(false);
 	let sortOverride = $state<Sort | null>(null);
 	let shown = $state(PAGE_SIZE);
 	let openCharacter = $state<Character | null>(null);
 	let showAllChats = $state(false);
-	let showAppearance = $state(false);
 
 	$effect(() => startLibrary());
 
@@ -64,7 +63,7 @@
 	let filtered = $derived.by(() => {
 		let list = library.characters;
 		if (favoritesOnly) list = list.filter((c) => c.favorite);
-		const q = query.trim().toLowerCase();
+		const q = appbar.query.trim().toLowerCase();
 		if (q) list = list.filter((c) => c.name.toLowerCase().includes(q));
 		const copy = [...list];
 		switch (sort) {
@@ -89,17 +88,22 @@
 	}
 
 	function setQuery(value: string) {
-		query = value;
+		appbar.query = value;
 		shown = PAGE_SIZE;
 	}
 
 	function onWindowKey(e: KeyboardEvent) {
+		if (e.key === '/' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+			e.preventDefault();
+			document.querySelector<HTMLInputElement>('#lw-search')?.focus();
+			return;
+		}
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			// While "View all" is open, Ctrl+K targets its filter instead
 			const target = showAllChats
 				? document.querySelector<HTMLInputElement>('.stlp-modal-search')
-				: document.querySelector<HTMLInputElement>('.stlp-search');
+				: document.querySelector<HTMLInputElement>('#lw-search');
 			target?.focus();
 		}
 	}
@@ -116,36 +120,6 @@
 	</div>
 
 	<div class="stlp-page">
-		<header class="stlp-topbar">
-			<div class="stlp-brand" title="LoreWeaver">
-				<span class="stlp-brand-mark"></span>
-			</div>
-			<div class="stlp-search-wrap">
-				<Icon name="search" class="stlp-search-icon" />
-				<input
-					class="stlp-search"
-					type="text"
-					placeholder="Search characters... (Ctrl+K)"
-					autocomplete="off"
-					value={query}
-					oninput={(e) => setQuery(e.currentTarget.value)}
-					onkeydown={(e) => {
-						if (e.key === 'Escape') e.currentTarget.blur();
-					}}
-				/>
-			</div>
-			<div class="stlp-topbar-actions">
-				<a class="stlp-icon-btn" href="/characters" title="Create or edit characters">
-					<Icon name="userPlus" />
-				</a>
-				<a class="stlp-icon-btn" href="/settings" title="Connection settings">
-					<Icon name="sliders" />
-				</a>
-				<button class="stlp-icon-btn stlp-settings-btn" type="button" title="Appearance" onclick={() => (showAppearance = true)}>
-					<Icon name="gear" />
-				</button>
-			</div>
-		</header>
 
 		<main class="stlp-content">
 			{#if a.showHero}
@@ -185,7 +159,7 @@
 				</section>
 			{/if}
 
-			<section class="stlp-section stlp-section-chats">
+			<section class="stlp-section stlp-section-chats" id="chats">
 				<h2 class="stlp-section-title">
 					<span class="stlp-section-icon"><Icon name="chat" /></span>
 					My Chats
@@ -265,7 +239,4 @@
 		/>
 	{/if}
 
-	{#if showAppearance}
-		<AppearancePanel onclose={() => (showAppearance = false)} />
-	{/if}
 </div>

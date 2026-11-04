@@ -1,10 +1,14 @@
 <script lang="ts">
-	import Icon from './Icon.svelte';
+	import Icon from '../landing/Icon.svelte';
+	import { openStudio, closeStudio, ui } from '../state/ui.svelte';
+	import './studio.css';
 	import { DEFAULT_APPEARANCE, settings, updateAppearance } from '../state/settings.svelte';
-	import { THEMES, effectiveColors, randomPalette } from './appearance';
+	import { THEMES, effectiveColors, randomPalette } from '../landing/appearance';
 	import type { Appearance } from '../types';
 
-	let { onclose }: { onclose: () => void } = $props();
+	function onclose() {
+		closeStudio();
+	}
 
 	type Tab = 'theme' | 'background' | 'layout' | 'cards' | 'advanced';
 	const TABS: { id: Tab; label: string }[] = [
@@ -15,7 +19,7 @@
 		{ id: 'advanced', label: 'Advanced' }
 	];
 
-	let tab = $state<Tab>('theme');
+	let tab = $derived(ui.studioTab);
 	let a = $derived(settings.appearance);
 	let colors = $derived(effectiveColors(a));
 	let themeJson = $state('');
@@ -76,18 +80,13 @@
 
 <svelte:window onkeydown={onWindowKey} />
 
-<div
-	class="stlp-modal-overlay stlp-settings-overlay"
-	role="presentation"
-	onclick={(e) => {
-		if (e.target === e.currentTarget) onclose();
-	}}
+<aside class="landing lw-studio" aria-label="Studio">
 >
-	<div class="stlp-settings" role="dialog" aria-modal="true" aria-label="Landing page settings">
+	<div class="stlp-settings" role="dialog" aria-label="Studio">
 		<div class="stlp-settings-head">
 			<div>
-				<h3 class="stlp-settings-title">Appearance</h3>
-				<span class="stlp-settings-subtitle">Changes apply live and are saved automatically</span>
+				<h3 class="stlp-settings-title">Studio</h3>
+				<span class="stlp-settings-subtitle">Look, layout and model. Changes save automatically.</span>
 			</div>
 			<button class="stlp-icon-btn stlp-settings-close" type="button" title="Close" onclick={onclose}>
 				<Icon name="close" />
@@ -101,7 +100,7 @@
 					role="tab"
 					class:active={tab === t.id}
 					aria-selected={tab === t.id}
-					onclick={() => (tab = t.id)}
+					onclick={() => openStudio(t.id)}
 				>
 					{t.label}
 				</button>
@@ -386,4 +385,4 @@
 			{/if}
 		</div>
 	</div>
-</div>
+</aside>

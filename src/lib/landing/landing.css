@@ -24,9 +24,9 @@
     --lw-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
     --lw-card-blur: var(--lw-blur);
 
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
+    position: relative;
+    height: 100%;
+    z-index: 0;
     background-color: var(--lw-bg);
     background-size: cover;
     background-position: center;

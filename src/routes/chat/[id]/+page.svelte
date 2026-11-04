@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { setAppbar } from '$lib/state/appbar.svelte';
 	import { db } from '$lib/db';
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
@@ -9,6 +10,10 @@
 
 	let chat = $state<Chat | null>(null);
 	let character = $state<Character | null>(null);
+
+	$effect(() => {
+		if (character) setAppbar({ title: character.name, subtitle: '', avatar: character.image ?? '', search: false, actions: [] });
+	});
 	let messages = $state<ChatMessage[]>([]);
 	let loadError = $state('');
 	let input = $state('');

@@ -1,10 +1,15 @@
 <script lang="ts">
+	import { setAppbar } from '$lib/state/appbar.svelte';
 	import { db } from '$lib/db';
 	import type { Character } from '$lib/types';
 
 	let characters = $state<Character[]>([]);
 	let editing = $state<Character | null>(null);
 	let form = $state<Character>(blank());
+
+	$effect(() => {
+		setAppbar({ title: '', subtitle: '', avatar: '', search: false, actions: [{ label: 'New character', onclick: startNew }] });
+	});
 
 	function blank(): Character {
 		return {
