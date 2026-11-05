@@ -15,7 +15,6 @@
 	// Filters
 	let query = $state('');
 	let sort = $state<'recent' | 'name' | 'tokens'>('recent');
-	let privacy = $state<'all' | 'private' | 'public'>('all');
 	let activeTags = $state<string[]>([]);
 
 	// Rough estimate (about 4 characters per token) of what the card adds to the prompt
@@ -27,7 +26,6 @@
 		const list = characters.filter(
 			(c) =>
 				(!q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)) &&
-				(privacy === 'all' || (privacy === 'private') === !!c.private) &&
 				activeTags.every((t) => c.tags?.includes(t))
 		);
 		if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
@@ -143,13 +141,6 @@
 			<option value="tokens">Token count</option>
 		</select>
 
-		<label class="cd-label" for="cd-privacy">Privacy</label>
-		<select id="cd-privacy" class="cd-field" bind:value={privacy}>
-			<option value="all">All</option>
-			<option value="private">Private</option>
-			<option value="public">Public</option>
-		</select>
-
 		<span class="cd-label">Tags</span>
 		<div class="flex flex-wrap gap-1.5">
 			{#each allTags as t (t)}
@@ -180,10 +171,6 @@
 				{#each visible as c (c.id)}
 					<article class="cd-card" role="listitem" data-active={editing?.id === c.id}>
 						<div class="cd-top">
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label={c.private ? 'Private' : 'Public'}>
-								<rect x="4" y="11" width="16" height="10" rx="2" />
-								<path d={c.private ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'} />
-							</svg>
 							<span class="cd-mono">{tokens(c).toLocaleString()} tok</span>
 						</div>
 						<h2 class="cd-name" title={c.name}>{c.name}</h2>
@@ -267,10 +254,6 @@
 				<label class="flex flex-col gap-1 text-sm text-dim">
 					Tags (comma separated)
 					<input bind:value={tagsText} placeholder="fantasy, noir, slow-burn" autocomplete="off" />
-				</label>
-				<label class="flex items-center gap-2 text-sm text-dim">
-					<input type="checkbox" bind:checked={form.private} style="width:auto" />
-					Private (shows a closed lock on the card)
 				</label>
 				<label class="flex flex-col gap-1 text-sm text-dim">
 					Description

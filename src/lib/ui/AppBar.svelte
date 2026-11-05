@@ -67,14 +67,14 @@
 		></span>
 	</nav>
 
-	<div class="flex min-w-0 flex-1 items-center gap-3">
+	<div class="flex min-w-0 flex-1 items-center gap-3 md:ml-2 md:border-l md:border-hairline md:pl-4">
 		{#if appbar.title}
 			{#if appbar.avatar}
 				<img src={appbar.avatar} alt="" class="size-8 shrink-0 rounded-full object-cover" />
 			{/if}
 			<div class="min-w-0">
-				<p class="truncate font-display text-base leading-tight">{appbar.title}</p>
-				{#if appbar.subtitle}<p class="truncate text-xs text-dim">{appbar.subtitle}</p>{/if}
+				<p class="m-0 truncate font-display text-base leading-tight">{appbar.title}</p>
+				{#if appbar.subtitle}<p class="m-0 truncate text-xs text-dim">{appbar.subtitle}</p>{/if}
 			</div>
 		{/if}
 
@@ -133,6 +133,15 @@
 				<span class="hidden sm:inline">{action.label}</span>
 			</button>
 		{/each}
+		<button
+			type="button"
+			onclick={() => openStudio('model')}
+			title="Model connection"
+			aria-label="Model connection"
+			class="grid size-10 place-items-center rounded-md border-0 bg-transparent text-dim transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-5"
+		>
+			<Icon name="plug" />
+		</button>
 		<button
 			type="button"
 			onclick={() => openStudio()}

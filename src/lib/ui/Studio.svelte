@@ -141,6 +141,7 @@
 			onclose();
 		}
 	}
+	const BACKGROUNDS = ['_black.jpg','_white.jpg','bedroom clean.jpg','bedroom cyberpunk.jpg','bedroom red.jpg','bedroom tatami.jpg','cityscape medieval market.jpg','cityscape medieval night.jpg','cityscape postapoc.jpg','forest treehouse fireworks air baloons (by kallmeflocc).jpg','japan classroom side.jpg','japan classroom.jpg','japan path cherry blossom.jpg','japan university.jpg','landscape autumn great tree.jpg','landscape beach day.png','landscape beach night.jpg','landscape mountain lake.jpg','landscape postapoc.jpg','landscape winter lake house.jpg','royal.jpg','tavern day.jpg'];
 </script>
 
 <svelte:window onkeydown={onWindowKey} />
@@ -239,7 +240,7 @@
 				<div class="stlp-settings-group">
 					<div class="stlp-settings-group-title">Source</div>
 					<div class="stlp-segmented">
-						{#each [['gradient', 'Aurora'], ['solid', 'Solid'], ['image', 'Image URL']] as [id, label] (id)}
+						{#each [['gradient', 'Aurora'], ['solid', 'Solid'], ['image', 'Image']] as [id, label] (id)}
 							<button type="button" class:active={a.bgMode === id} onclick={() => set('bgMode', id as Appearance['bgMode'])}>{label}</button>
 						{/each}
 					</div>

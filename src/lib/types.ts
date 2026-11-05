@@ -11,7 +11,6 @@ export interface Character {
 	model?: string; // optional per-character model; empty uses the default model in Studio
 	image?: string; // optional portrait (URL or data URL) shown on landing cards
 	tags?: string[]; // free-form labels, filterable on the Characters page
-	private?: boolean; // shows a closed lock and drives the Privacy filter
 	favorite?: boolean; // pinned to the "Favorites" filter on the landing page
 	createdAt: number;
 	updatedAt: number;
