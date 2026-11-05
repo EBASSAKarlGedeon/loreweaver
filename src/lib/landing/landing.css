@@ -30,7 +30,7 @@
     background-color: var(--lw-bg);
     color: var(--lw-text);
     font-family: var(--lw-font);
-    font-size: calc(1rem * var(--lw-font-scale));
+    font-size: calc(1em * var(--lw-font-scale));
     overflow: hidden;
     transition: top 0.2s ease;
 }

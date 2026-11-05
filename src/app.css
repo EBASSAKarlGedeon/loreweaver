@@ -1,9 +1,9 @@
 :root {
 	color-scheme: dark;
-	/* Global 80% scale — the whole UI (text, spacing, radii, cards) renders
-	   at 80%, matching the preferred browser zoom level. Backgrounds still
-	   fill the viewport since html's background propagates unscaled. */
-	zoom: 0.8;
+	/* Global 80% scale — browsers change the root font-size when you zoom,
+	   and every size in the app is rem-based, so 0.8rem on :root shrinks
+	   text and spacing together, matching the preferred zoom level. */
+	font-size: 0.8rem;
 	/* Legacy names kept as aliases so pages not yet migrated inherit the theme. */
 	--bg: var(--lw-bg);
 	--bg-panel: var(--lw-surface);
