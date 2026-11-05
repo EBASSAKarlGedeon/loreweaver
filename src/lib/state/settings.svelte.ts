@@ -45,6 +45,12 @@ const DEFAULT: Settings = {
 	personaAutoLock: true,
 	personaAllowMulti: false,
 	personaNotifications: true,
+	lorebookIds: [],
+	lorebookStrategy: 'character_first',
+	lorebookDepth: 2,
+	lorebookIncludeNames: true,
+	lorebookCaseSensitive: false,
+	lorebookMatchWholeWords: false,
 	appearance: { ...DEFAULT_APPEARANCE }
 };
 
@@ -68,6 +74,16 @@ export async function loadSettings(): Promise<void> {
 	if (settings.personaPosition == null) settings.personaPosition = DEFAULT.personaPosition;
 	if (settings.personaDepth == null) settings.personaDepth = DEFAULT.personaDepth;
 	if (settings.personaDepthRole == null) settings.personaDepthRole = DEFAULT.personaDepthRole;
+	// Rows saved before lorebooks existed have no lorebook settings
+	if (!Array.isArray(settings.lorebookIds)) settings.lorebookIds = [];
+	if (settings.lorebookStrategy == null) settings.lorebookStrategy = DEFAULT.lorebookStrategy;
+	if (settings.lorebookDepth == null) settings.lorebookDepth = DEFAULT.lorebookDepth;
+	if (settings.lorebookIncludeNames == null)
+		settings.lorebookIncludeNames = DEFAULT.lorebookIncludeNames;
+	if (settings.lorebookCaseSensitive == null)
+		settings.lorebookCaseSensitive = DEFAULT.lorebookCaseSensitive;
+	if (settings.lorebookMatchWholeWords == null)
+		settings.lorebookMatchWholeWords = DEFAULT.lorebookMatchWholeWords;
 	loaded = true;
 }
 

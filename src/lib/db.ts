@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Character, Chat, ChatMessage, Persona, Settings } from './types';
+import type { Character, Chat, ChatMessage, Lorebook, LorebookEntryRow, Persona, Settings } from './types';
 
 // IndexedDB-backed local store. This is the offline-first foundation: everything
 // you create (characters, chats, settings) lives in the browser and survives
@@ -10,6 +10,8 @@ export class LoreDB extends Dexie {
 	chats!: Table<Chat, number>;
 	messages!: Table<ChatMessage, number>;
 	settings!: Table<Settings, number>;
+	lorebooks!: Table<Lorebook, number>;
+	lorebookEntries!: Table<LorebookEntryRow, [number, number]>;
 
 	constructor() {
 		super('loreweaver');
@@ -42,6 +44,18 @@ export class LoreDB extends Dexie {
 			chats: '++id, characterId, personaId, updatedAt',
 			messages: '++id, chatId, createdAt',
 			settings: 'id'
+		});
+		// v5: lorebooks (World Info). Book metadata plus per-entry rows keyed by
+		// the compound [lorebookId+uid] — mirrors SillyTavern's world.uid identity,
+		// and keeps monster books out of the lorebooks row itself.
+		this.version(5).stores({
+			characters: '++id, name, updatedAt',
+			personas: '++id, name, updatedAt, lockToCharacterId',
+			chats: '++id, characterId, personaId, updatedAt',
+			messages: '++id, chatId, createdAt',
+			settings: 'id',
+			lorebooks: '++id, name, updatedAt',
+			lorebookEntries: '[lorebookId+uid], lorebookId'
 		});
 	}
 }
