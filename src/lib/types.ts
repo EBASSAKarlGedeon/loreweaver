@@ -16,9 +16,22 @@ export interface Character {
 	updatedAt: number;
 }
 
+// The user's own character in the story (SillyTavern "persona").
+// The active one is injected into every prompt so the model knows who it
+// is talking to and can address the user by name.
+export interface Persona {
+	id?: number;
+	name: string;
+	description: string; // who the user is in the fiction
+	avatar?: string; // optional image (URL or data URL)
+	createdAt: number;
+	updatedAt: number;
+}
+
 export interface Chat {
 	id?: number;
 	characterId: number;
+	personaId?: number; // persona in use when the chat started/last switched; empty = none
 	title: string;
 	createdAt: number;
 	updatedAt: number;

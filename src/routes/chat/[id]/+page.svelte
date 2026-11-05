@@ -6,12 +6,14 @@
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
 	import { settings } from '$lib/state/settings.svelte';
-	import type { Character, Chat, ChatMessage } from '$lib/types';
+	import type { Character, Chat, ChatMessage, Persona } from '$lib/types';
 
 	let { data } = $props();
 
 	let chat = $state<Chat | null>(null);
 	let character = $state<Character | null>(null);
+	let persona = $state<Persona | null>(null);
+	let personas = $state<Persona[]>([]);
 	let messages = $state<ChatMessage[]>([]);
 	let loadError = $state('');
 	let input = $state('');
@@ -58,7 +60,20 @@
 		}
 		chat = c;
 		character = ch;
+		personas = await db.personas.orderBy('updatedAt').reverse().toArray();
+		persona = c.personaId != null ? ((await db.personas.get(c.personaId)) ?? null) : null;
 		messages = await db.messages.where('chatId').equals(id).toArray();
+	}
+
+	// Switching the persona mid-chat rewrites the context the model gets on
+	// the next turn; past messages stay as they were written.
+	async function switchPersona(id: number | undefined) {
+		if (!chat) return;
+		persona = id == null ? null : ((await db.personas.get(id)) ?? null);
+		if (id == null || persona) {
+			await db.chats.update(chat.id!, { personaId: id });
+			chat = { ...chat, personaId: id };
+		}
 	}
 
 	function scrollToBottom() {
@@ -99,7 +114,7 @@
 		controller = new AbortController();
 		scrollToBottom();
 
-		const prompt = buildPromptMessages(character, messages);
+		const prompt = buildPromptMessages(character, messages, persona);
 
 		streamChat(
 			prompt,
@@ -218,6 +233,19 @@
 				class="mx-auto flex max-w-[70ch] items-end gap-2 rounded-2xl border border-border bg-surface/80 p-2 shadow-lw-2"
 				style="backdrop-filter: blur(var(--lw-blur)); -webkit-backdrop-filter: blur(var(--lw-blur));"
 			>
+				<label class="shrink-0" title="Persona injected into the prompt as your identity">
+					<span class="sr-only">Persona</span>
+					<select
+						class="max-w-28 cursor-pointer rounded-md border border-border bg-surface-2 px-2 py-2 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
+						value={chat?.personaId ?? ''}
+						onchange={(e) => switchPersona(e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
+					>
+						<option value="">No persona</option>
+						{#each personas as p (p.id)}
+							<option value={p.id}>{p.name}</option>
+						{/each}
+					</select>
+				</label>
 				<textarea
 					bind:this={composerEl}
 					bind:value={input}

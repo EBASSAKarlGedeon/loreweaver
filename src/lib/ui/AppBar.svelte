@@ -10,12 +10,19 @@
 	const NAV = [
 		{ href: '/', label: 'Home', icon: 'home' },
 		{ href: '/#chats', label: 'Chats', icon: 'chat' },
-		{ href: '/characters', label: 'Characters', icon: 'users' }
+		{ href: '/characters', label: 'Characters', icon: 'users' },
+		{ href: '/personas', label: 'Personas', icon: 'userPlus' }
 	] as const;
 
 	let path = $derived($page.url.pathname);
 	let isActive = (href: string) =>
-		href === '/characters' ? path.startsWith('/characters') : href === '/' ? path === '/' : false;
+		href.startsWith('/characters')
+			? path.startsWith('/characters')
+			: href.startsWith('/personas')
+				? path.startsWith('/personas')
+				: href === '/'
+					? path === '/'
+					: false;
 	let activeIndex = $derived(NAV.findIndex((n) => isActive(n.href)));
 
 	// Sliding brass underline under the active link (desktop nav)
