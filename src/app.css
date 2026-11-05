@@ -110,7 +110,7 @@
 	}
 	button {
 		background: var(--accent);
-		color: #fff;
+		color: var(--lw-on-accent, #fff);
 		border: none;
 		border-radius: 8px;
 		padding: 0.6rem 1rem;

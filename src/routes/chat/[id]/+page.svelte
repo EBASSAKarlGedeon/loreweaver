@@ -163,7 +163,7 @@
 		</div>
 	</div>
 {:else if character}
-	<div class="relative flex h-full min-h-0 flex-col">
+	<div class="relative flex h-full min-h-0 flex-col bg-bg">
 		<div bind:this={scroller} onscroll={onScroll} class="min-h-0 flex-1 overflow-y-auto">
 			<div class="mx-auto flex max-w-[70ch] flex-col gap-6 px-4 pt-6 pb-8 md:px-0">
 				{#if needsConfig && messages.length === 0}

@@ -28,9 +28,6 @@
     height: 100%;
     z-index: 0;
     background-color: var(--lw-bg);
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
     color: var(--lw-text);
     font-family: var(--lw-font);
     font-size: calc(1rem * var(--lw-font-scale));
@@ -103,6 +100,18 @@
 /* ==========================================================================
    Background layers
    ========================================================================== */
+/* Full-viewport background image layer for the landing page only. */
+.lw-bg-image {
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+.landing > :not(.lw-bg-image) {
+	position: relative;
+	z-index: 1;
+}
+
 .landing .stlp-bg-overlay {
     position: absolute;
     inset: 0;

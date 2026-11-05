@@ -57,7 +57,9 @@
 /* Background picker (Studio > Background > Image) */
 .stlp-bg-picker-tools { display: flex; gap: 8px; margin-bottom: 10px; }
 .stlp-bg-picker-tools .stlp-text-input { flex: 1; min-width: 0; }
-.stlp-bg-grid {
+/* landing.css styles .landing's direct div children as backdrop layers,
+   which would break this grid's layout — reset it explicitly. */
+.landing.lw-studio .stlp-bg-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
 	gap: 8px;
@@ -67,7 +69,8 @@
 }
 .stlp-bg-thumb {
 	position: relative;
-	aspect-ratio: 16 / 10;
+	display: block;
+	height: 72px;
 	border: 2px solid transparent;
 	border-radius: 8px;
 	background-size: cover;

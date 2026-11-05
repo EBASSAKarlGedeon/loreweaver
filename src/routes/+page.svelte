@@ -116,7 +116,10 @@
 
 <svelte:window onkeydown={onWindowKey} />
 
-<div class="landing" class:lw-enter={entering} style={backgroundStyle(a)}>
+<div class="landing" class:lw-enter={entering}>
+	{#if a.bgMode === 'image' && a.bgImageUrl}
+		<div class="lw-bg-image" style={backgroundStyle(a)} aria-hidden="true"></div>
+	{/if}
 	<div class="stlp-bg-overlay"></div>
 	<div class="stlp-ambient" aria-hidden="true">
 		<span class="stlp-orb stlp-orb-1"></span>
