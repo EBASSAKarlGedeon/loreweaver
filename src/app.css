@@ -1,5 +1,9 @@
 :root {
 	color-scheme: dark;
+	/* Global 80% scale — the whole UI (text, spacing, radii, cards) renders
+	   at 80%, matching the preferred browser zoom level. Backgrounds still
+	   fill the viewport since html's background propagates unscaled. */
+	zoom: 0.8;
 	/* Legacy names kept as aliases so pages not yet migrated inherit the theme. */
 	--bg: var(--lw-bg);
 	--bg-panel: var(--lw-surface);
