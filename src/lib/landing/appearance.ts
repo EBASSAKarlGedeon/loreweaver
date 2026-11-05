@@ -113,7 +113,13 @@ export function themeVars(a: Appearance): Record<string, string> {
 export function backgroundStyle(a: Appearance): string {
 	if (a.bgMode !== 'image' || !a.bgImageUrl) return '';
 	const safe = a.bgImageUrl.replace(/["\\\n\r]/g, '');
-	return `background-image: url("${safe}")`;
+	// Fit → CSS: cover/contain/fill map directly; "center" shows the
+	// image at native size, centered, without tiling.
+	const size =
+		a.bgFit === 'center'
+			? 'background-repeat: no-repeat; background-position: center'
+			: `background-size: ${a.bgFit}`;
+	return `background-image: url("${safe}"); ${size}`;
 }
 
 // Classes that switch whole families of styles on the root
