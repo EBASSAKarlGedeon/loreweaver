@@ -1,15 +1,16 @@
-import type { Character, ChatMessage, Persona, PersonaPosition } from './types';
+import type { Character, ChatMessage, LorebookInjection, Persona, PersonaPosition, Role } from './types';
 import type { ApiMessage } from './llm';
 import { settings } from './state/settings.svelte';
 
 // Assembles the prompt sent to the LLM from a character card + chat history.
-// This is the embryo of SillyTavern's "prompt manager": for now it's
-// system(character) + optional persona block + history. Phase 2 adds
-// lorebooks, presets.
+// This is the embryo of SillyTavern's "prompt manager": system(character) +
+// lorebook buckets + optional persona block + history + in-chat injections.
+// Phase 2 adds presets.
 export function buildPromptMessages(
 	character: Character,
 	history: ChatMessage[],
-	persona?: Persona | null
+	persona?: Persona | null,
+	lore?: LorebookInjection | null
 ): ApiMessage[] {
 	const system = [
 		character.description,
@@ -38,7 +39,13 @@ export function buildPromptMessages(
 			: 'system';
 
 	const messages: ApiMessage[] = [];
+	// Lorebook buckets: ST's "Before Char Defs" sits ahead of the character
+	// card, "After Char Defs" follows it (positions 0/1; AN top/bottom 2/3
+	// fold in for Phase 1). Both are system messages in ST's chat-completion
+	// mapping (openai.js:1365-1368).
+	if (lore?.before) messages.push({ role: 'system', content: lore.before });
 	if (system) messages.push({ role: 'system', content: system });
+	if (lore?.after) messages.push({ role: 'system', content: lore.after });
 
 	if (personaBlock && position === 'system') {
 		// A separate system message, so providers that emphasize system prompts
@@ -53,6 +60,33 @@ export function buildPromptMessages(
 	for (const m of history) {
 		if (m.role === 'system') continue; // we never store system turns in history
 		messages.push({ role: m.role, content: m.content });
+	}
+
+	// Lorebook in-chat @ depth (position 4). ST injects depth N immediately
+	// before the Nth most recent message, depth 0 after the last one, and
+	// within a slot lands assistant → user → system (openai.js:801-866 splices
+	// roles system→user→assistant from the newest end, then reverses). Anchors
+	// to the end of history so persona injections below don't shift depths.
+	if (lore?.atDepth.length) {
+		const historyEnd = messages.length;
+		const historyStart = historyEnd - history.length; // clamps beyond-history depths
+		// Blocks splice at descending indices (depth ascending), so each insert
+		// sits below every earlier one and never moves its target.
+		const roleRank: Record<Role, number> = { assistant: 0, user: 1, system: 2 };
+		const byDepth = new Map<number, typeof lore.atDepth>();
+		for (const group of lore.atDepth) {
+			const key = Number.isFinite(group.depth) ? group.depth : 4;
+			const bucket = byDepth.get(key);
+			if (bucket) bucket.push(group);
+			else byDepth.set(key, [group]);
+		}
+		for (const depth of [...byDepth.keys()].sort((a, b) => a - b)) {
+			const groups = byDepth.get(depth)!;
+			groups.sort((a, b) => roleRank[a.role] - roleRank[b.role]);
+			const d = Math.max(0, Math.min(9999, Math.floor(depth)));
+			const target = Math.max(historyStart, historyEnd - d);
+			messages.splice(target, 0, ...groups.map((g) => ({ role: g.role, content: g.content })));
+		}
 	}
 
 	// Bottom of Author's Note: right after the last turn, so it is the

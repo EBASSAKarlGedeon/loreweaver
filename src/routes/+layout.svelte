@@ -5,6 +5,10 @@
 	import { resetAppbar } from '$lib/state/appbar.svelte';
 	import { ui, closePersona } from '$lib/state/ui.svelte';
 	import { rootClasses, themeVars } from '$lib/landing/appearance';
+	import { db } from '$lib/db';
+	import { parseLorebook, saveLorebook, serializeLorebook } from '$lib/lorebook-import';
+	import { buildLoreInjection } from '$lib/lorebook-sources';
+	import { buildPromptMessages } from '$lib/prompt';
 	import AppBar from '$lib/ui/AppBar.svelte';
 	import Studio from '$lib/ui/Studio.svelte';
 	import ModelDrawer from '$lib/ui/ModelDrawer.svelte';
@@ -52,6 +56,29 @@
 	// the Dexie call here can't reject inside Node.
 	onMount(() => {
 		loadSettings().catch((err) => console.error('Failed to load settings', err));
+		// Phase 1 ships no import UI (it arrives with the Phase 3 frontend), so
+		// dev builds keep the raw tools on the console:
+		//   await __lw.importLorebook(json, 'My Book')  — parse + persist a book
+		//   await __lw.previewPrompt(charId, chatId)     — the exact prompt next turn
+		// The guard is a structural cast so no vite/client types are required.
+		if ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) {
+			(window as unknown as { __lw?: unknown }).__lw = {
+				parseLorebook,
+				saveLorebook,
+				serializeLorebook,
+				importLorebook: (json: unknown, name: string) => saveLorebook(parseLorebook(json, name)),
+				previewPrompt: async (characterId: number, chatId: number) => {
+					const chat = await db.chats.get(chatId);
+					const character = await db.characters.get(characterId);
+					if (!chat || !character) throw new Error('Unknown chat or character id');
+					const persona =
+						chat.personaId != null ? ((await db.personas.get(chat.personaId)) ?? null) : null;
+					const history = await db.messages.where('chatId').equals(chatId).toArray();
+					const lore = await buildLoreInjection({ character, chat, persona, history });
+					return buildPromptMessages(character, history, persona, lore);
+				}
+			};
+		}
 	});
 </script>
 

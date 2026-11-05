@@ -5,6 +5,7 @@
 	import { db } from '$lib/db';
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
+	import { buildLoreInjection } from '$lib/lorebook-sources';
 	import { settings } from '$lib/state/settings.svelte';
 	import type { Character, Chat, ChatMessage, Persona } from '$lib/types';
 
@@ -144,7 +145,8 @@
 		controller = new AbortController();
 		scrollToBottom();
 
-		const prompt = buildPromptMessages(character, messages, persona);
+		const lore = await buildLoreInjection({ character, chat, persona, history: messages });
+		const prompt = buildPromptMessages(character, messages, persona, lore);
 
 		streamChat(
 			prompt,
