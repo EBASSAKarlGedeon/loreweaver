@@ -24,9 +24,14 @@ export interface Persona {
 	name: string;
 	description: string; // who the user is in the fiction
 	avatar?: string; // optional image (URL or data URL)
+	// Locks (SillyTavern connections): the persona pinned for...
+	lockToCharacterId?: number; // ...every new chat with this character
 	createdAt: number;
 	updatedAt: number;
 }
+
+// Where the persona description goes in the prompt (SillyTavern position).
+export type PersonaPosition = 'system' | 'top' | 'bottom' | 'depth';
 
 export interface Chat {
 	id?: number;
@@ -94,5 +99,12 @@ export interface Settings {
 	apiKey: string;
 	baseUrl: string; // OpenAI-compatible base, e.g. https://api.openai.com/v1 or http://localhost:11434/v1
 	model: string; // e.g. gpt-4o-mini, or a local model name
+	defaultPersonaId?: number; // persona stamped on new chats; empty = none
+	personaPosition: PersonaPosition; // where the persona description goes in the prompt
+	personaDepth: number; // messages from the end, when position = 'depth'
+	personaDepthRole: 'system' | 'user' | 'assistant'; // role of the depth message
+	personaAutoLock: boolean; // picking a persona locks it to the chat
+	personaAllowMulti: boolean; // multiple persona locks per character
+	personaNotifications: boolean; // toast when the persona switches
 	appearance: Appearance;
 }

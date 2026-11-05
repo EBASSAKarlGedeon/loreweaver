@@ -61,7 +61,20 @@
 		}
 		chat = c;
 		character = ch;
-		persona = c.personaId != null ? ((await db.personas.get(c.personaId)) ?? null) : null;
+		// Persona priority: the chat's own (auto-locked) choice, then a
+		// persona locked to this character, then the global default.
+		let pid: number | undefined = c.personaId;
+		if (pid == null && settings.personaAllowMulti !== true) {
+			const locked = await db.personas.where('lockToCharacterId').equals(ch.id!).first();
+			if (locked) pid = locked.id;
+		}
+		if (pid == null) pid = settings.defaultPersonaId;
+		persona = pid != null ? ((await db.personas.get(pid)) ?? null) : null;
+		if (persona && c.personaId == null) {
+			// Stamp the resolved persona on the chat so it stays sticky
+			await db.chats.update(c.id!, { personaId: persona.id });
+			chat = { ...c, personaId: persona.id };
+		}
 		messages = await db.messages.where('chatId').equals(id).toArray();
 	}
 
@@ -73,6 +86,14 @@
 		if (id == null || persona) {
 			await db.chats.update(chat.id!, { personaId: id });
 			chat = { ...chat, personaId: id };
+			if (settings.personaNotifications) {
+				// Lightweight toast; no framework needed for one line.
+				const el = document.createElement('div');
+				el.textContent = `Persona: ${persona ? persona.name : 'none'}`;
+				el.className = 'fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border border-border bg-surface/90 px-4 py-2 text-xs text-text shadow-lw-2';
+				document.body.append(el);
+				setTimeout(() => el.remove(), 2200);
+			}
 		}
 	}
 
@@ -283,6 +304,7 @@
 <PersonaManager
 	open={personaOpen}
 	activeId={chat?.personaId}
+	characterId={character?.id}
 	onselect={(id) => switchPersona(id)}
 	onclose={() => (personaOpen = false)}
 />

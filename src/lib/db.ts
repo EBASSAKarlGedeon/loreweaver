@@ -19,10 +19,17 @@ export class LoreDB extends Dexie {
 			messages: '++id, chatId, createdAt',
 			settings: 'id'
 		});
-		// v2: personas table. Non-indexed fields (chat.personaId) need no bump.
+		// v2: personas table. v3 indexes lockToCharacterId for lookups.
 		this.version(2).stores({
 			characters: '++id, name, updatedAt',
 			personas: '++id, name, updatedAt',
+			chats: '++id, characterId, updatedAt',
+			messages: '++id, chatId, createdAt',
+			settings: 'id'
+		});
+		this.version(3).stores({
+			characters: '++id, name, updatedAt',
+			personas: '++id, name, updatedAt, lockToCharacterId',
 			chats: '++id, characterId, updatedAt',
 			messages: '++id, chatId, createdAt',
 			settings: 'id'

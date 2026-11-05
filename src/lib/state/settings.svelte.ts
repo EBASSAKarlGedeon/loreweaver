@@ -38,6 +38,13 @@ const DEFAULT: Settings = {
 	apiKey: '',
 	baseUrl: 'https://api.openai.com/v1',
 	model: 'gpt-4o-mini',
+	defaultPersonaId: undefined,
+	personaPosition: 'system',
+	personaDepth: 4,
+	personaDepthRole: 'system',
+	personaAutoLock: true,
+	personaAllowMulti: false,
+	personaNotifications: true,
 	appearance: { ...DEFAULT_APPEARANCE }
 };
 
@@ -57,6 +64,10 @@ export async function loadSettings(): Promise<void> {
 	} else {
 		await db.settings.put(structuredClone(DEFAULT));
 	}
+	// Rows saved before personas existed have no persona settings
+	if (settings.personaPosition == null) settings.personaPosition = DEFAULT.personaPosition;
+	if (settings.personaDepth == null) settings.personaDepth = DEFAULT.personaDepth;
+	if (settings.personaDepthRole == null) settings.personaDepthRole = DEFAULT.personaDepthRole;
 	loaded = true;
 }
 

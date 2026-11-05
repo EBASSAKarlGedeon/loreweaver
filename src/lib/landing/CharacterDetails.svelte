@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { createChat } from '../chats';
+	import { settings } from '../state/settings.svelte';
 	import Icon from './Icon.svelte';
 	import type { Character } from '../types';
 	import type { ChatEntry } from './library.svelte';
@@ -39,7 +40,7 @@
 		if (busy || character.id == null) return;
 		busy = true;
 		try {
-			const chatId = await createChat(character);
+			const chatId = await createChat(character, settings.defaultPersonaId);
 			await goto(`/chat/${chatId}`);
 		} catch (err) {
 			console.error('Failed to start new chat', err);

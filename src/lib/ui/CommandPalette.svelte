@@ -3,7 +3,7 @@
 	import { db } from '$lib/db';
 	import { createChat } from '$lib/chats';
 	import { THEMES } from '$lib/landing/appearance';
-	import { updateAppearance } from '$lib/state/settings.svelte';
+	import { settings, updateAppearance } from '$lib/state/settings.svelte';
 	import { closePalette, openModel, openPalette, openStudio, ui } from '$lib/state/ui.svelte';
 	import type { Character, Chat } from '$lib/types';
 
@@ -55,7 +55,7 @@
 				hint: c.description.slice(0, 60),
 				run: async () => {
 					if (c.id === undefined) return;
-					goto(`/chat/${await createChat(c)}`);
+					goto(`/chat/${await createChat(c, settings.defaultPersonaId)}`);
 				}
 			}))
 		];
