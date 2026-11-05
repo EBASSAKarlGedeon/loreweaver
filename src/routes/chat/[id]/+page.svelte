@@ -1,20 +1,18 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { setAppbar } from '$lib/state/appbar.svelte';
-	import { openModel, openStudio } from '$lib/state/ui.svelte';
+	import { openModel, openPersona, openStudio, setPersonaContext, ui } from '$lib/state/ui.svelte';
 	import { db } from '$lib/db';
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
 	import { settings } from '$lib/state/settings.svelte';
 	import type { Character, Chat, ChatMessage, Persona } from '$lib/types';
-	import PersonaManager from '$lib/ui/PersonaManager.svelte';
 
 	let { data } = $props();
 
 	let chat = $state<Chat | null>(null);
 	let character = $state<Character | null>(null);
 	let persona = $state<Persona | null>(null);
-	let personaOpen = $state(false);
 	let messages = $state<ChatMessage[]>([]);
 	let loadError = $state('');
 	let input = $state('');
@@ -41,6 +39,17 @@
 
 	$effect(() => {
 		loadChat(data.chatId);
+	});
+
+	// Register this chat with the app-wide PersonaManager overlay (mounted in
+	// the layout): switching personas there must stamp chat.personaId here.
+	$effect(() => {
+		setPersonaContext({
+			activeId: chat?.personaId,
+			characterId: character?.id,
+			onselect: (id) => switchPersona(id)
+		});
+		return () => setPersonaContext(null);
 	});
 
 	async function loadChat(id: number) {
@@ -263,8 +272,8 @@
 					<button
 						type="button"
 						aria-haspopup="dialog"
-						aria-expanded={personaOpen}
-						onclick={() => (personaOpen = true)}
+						aria-expanded={ui.personaOpen}
+						onclick={() => openPersona()}
 						class="flex max-w-36 items-center gap-1.5 rounded-full border border-border bg-surface-2 py-1 pr-2 pl-1 text-xs text-text transition-colors duration-lw-fast hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
 					>
 						<span class="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-surface text-dim">
@@ -300,11 +309,3 @@
 {:else}
 	<div class="empty"><p>Loading chat…</p></div>
 {/if}
-
-<PersonaManager
-	open={personaOpen}
-	activeId={chat?.personaId}
-	characterId={character?.id}
-	onselect={(id) => switchPersona(id)}
-	onclose={() => (personaOpen = false)}
-/>

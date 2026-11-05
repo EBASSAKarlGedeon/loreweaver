@@ -3,11 +3,12 @@
 	import { beforeNavigate } from '$app/navigation';
 	import { loadSettings, settings } from '$lib/state/settings.svelte';
 	import { resetAppbar } from '$lib/state/appbar.svelte';
-	import { ui } from '$lib/state/ui.svelte';
+	import { ui, closePersona } from '$lib/state/ui.svelte';
 	import { rootClasses, themeVars } from '$lib/landing/appearance';
 	import AppBar from '$lib/ui/AppBar.svelte';
 	import Studio from '$lib/ui/Studio.svelte';
 	import ModelDrawer from '$lib/ui/ModelDrawer.svelte';
+	import PersonaManager from '$lib/ui/PersonaManager.svelte';
 	import CommandPalette from '$lib/ui/CommandPalette.svelte';
 	import '@fontsource-variable/fraunces';
 	import '@fontsource-variable/manrope';
@@ -67,5 +68,15 @@
 {#if ui.modelOpen}
 	<ModelDrawer />
 {/if}
+<!-- One PersonaManager for the whole app. A chat page registers its
+     context (active persona, character, switch handler) via setPersonaContext;
+     outside a chat the overlay edits personas without stamping anything. -->
+<PersonaManager
+	open={ui.personaOpen}
+	activeId={ui.personaContext?.activeId}
+	characterId={ui.personaContext?.characterId}
+	onselect={(id) => ui.personaContext?.onselect(id)}
+	onclose={() => closePersona()}
+/>
 
 <CommandPalette />

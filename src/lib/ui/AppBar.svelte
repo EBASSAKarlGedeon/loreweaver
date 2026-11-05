@@ -4,7 +4,7 @@
 	import { appbar } from '../state/appbar.svelte';
 	import { settings } from '../state/settings.svelte';
 	import { connection } from '../state/connection.svelte';
-	import { openModel, openStudio } from '../state/ui.svelte';
+	import { openModel, openPersona, openStudio } from '../state/ui.svelte';
 
 	// Chats links to the chats section on the landing page
 	const NAV = [
@@ -133,6 +133,15 @@
 				<span class="hidden sm:inline">{action.label}</span>
 			</button>
 		{/each}
+		<button
+			type="button"
+			onclick={() => openPersona()}
+			title="Personas"
+			aria-label="Persona Management"
+			class="grid size-10 place-items-center rounded-md border-0 bg-transparent text-dim transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-5"
+		>
+			<Icon name="user" />
+		</button>
 		<button
 			type="button"
 			onclick={() => openModel()}

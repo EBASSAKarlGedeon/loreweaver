@@ -21,7 +21,8 @@
 		| 'skull'
 		| 'grid'
 		| 'crown'
-		| 'lock';
+		| 'lock'
+		| 'user';
 
 	let { name, class: className = '' }: { name: IconName; class?: string } = $props();
 </script>
@@ -78,5 +79,7 @@
 		<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z" />
 	{:else if name === 'lock'}
 		<rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+	{:else if name === 'user'}
+		<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
 	{/if}
 </svg>
