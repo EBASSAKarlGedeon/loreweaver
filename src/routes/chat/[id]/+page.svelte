@@ -7,13 +7,14 @@
 	import { buildPromptMessages } from '$lib/prompt';
 	import { settings } from '$lib/state/settings.svelte';
 	import type { Character, Chat, ChatMessage, Persona } from '$lib/types';
+	import PersonaManager from '$lib/ui/PersonaManager.svelte';
 
 	let { data } = $props();
 
 	let chat = $state<Chat | null>(null);
 	let character = $state<Character | null>(null);
 	let persona = $state<Persona | null>(null);
-	let personas = $state<Persona[]>([]);
+	let personaOpen = $state(false);
 	let messages = $state<ChatMessage[]>([]);
 	let loadError = $state('');
 	let input = $state('');
@@ -60,7 +61,6 @@
 		}
 		chat = c;
 		character = ch;
-		personas = await db.personas.orderBy('updatedAt').reverse().toArray();
 		persona = c.personaId != null ? ((await db.personas.get(c.personaId)) ?? null) : null;
 		messages = await db.messages.where('chatId').equals(id).toArray();
 	}
@@ -168,6 +168,10 @@
 
 	let canSend = $derived(!!character && input.trim().length > 0 && !streaming);
 	let needsConfig = $derived(!settings.baseUrl || !settings.model);
+
+	function initial(n: string): string {
+		return n.trim().charAt(0).toUpperCase() || '?';
+	}
 </script>
 
 {#if loadError}
@@ -233,18 +237,25 @@
 				class="mx-auto flex max-w-[70ch] items-end gap-2 rounded-2xl border border-border bg-surface/80 p-2 shadow-lw-2"
 				style="backdrop-filter: blur(var(--lw-blur)); -webkit-backdrop-filter: blur(var(--lw-blur));"
 			>
-				<label class="shrink-0" title="Persona injected into the prompt as your identity">
+				<label class="shrink-0" title="Persona Management — who you are in this story">
 					<span class="sr-only">Persona</span>
-					<select
-						class="max-w-28 cursor-pointer rounded-md border border-border bg-surface-2 px-2 py-2 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
-						value={chat?.personaId ?? ''}
-						onchange={(e) => switchPersona(e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
+					<button
+						type="button"
+						aria-haspopup="dialog"
+						aria-expanded={personaOpen}
+						onclick={() => (personaOpen = true)}
+						class="flex max-w-36 items-center gap-1.5 rounded-full border border-border bg-surface-2 py-1 pr-2 pl-1 text-xs text-text transition-colors duration-lw-fast hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
 					>
-						<option value="">No persona</option>
-						{#each personas as p (p.id)}
-							<option value={p.id}>{p.name}</option>
-						{/each}
-					</select>
+						<span class="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-surface text-dim">
+							{#if persona?.avatar}
+								<img src={persona.avatar} alt="" class="size-full object-cover" />
+							{:else}
+								<span class="font-display">{persona ? initial(persona.name) : '?'}</span>
+							{/if}
+						</span>
+						<span class="max-w-24 truncate">{persona ? persona.name : 'No persona'}</span>
+						<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="size-3 shrink-0" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+					</button>
 				</label>
 				<textarea
 					bind:this={composerEl}
@@ -268,3 +279,10 @@
 {:else}
 	<div class="empty"><p>Loading chat…</p></div>
 {/if}
+
+<PersonaManager
+	open={personaOpen}
+	activeId={chat?.personaId}
+	onselect={(id) => switchPersona(id)}
+	onclose={() => (personaOpen = false)}
+/>
