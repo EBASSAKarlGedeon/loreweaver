@@ -4,7 +4,7 @@
 	import { createChat } from '$lib/chats';
 	import { THEMES } from '$lib/landing/appearance';
 	import { updateAppearance } from '$lib/state/settings.svelte';
-	import { closePalette, openPalette, openStudio, ui } from '$lib/state/ui.svelte';
+	import { closePalette, openModel, openPalette, openStudio, ui } from '$lib/state/ui.svelte';
 	import type { Character, Chat } from '$lib/types';
 
 	type Item = { key: string; group: string; label: string; hint?: string; run: () => void | Promise<void> };
@@ -33,7 +33,7 @@
 		const byId = new Map(characters.map((c) => [c.id, c.name]));
 		return [
 			{ key: 'studio', group: 'Action', label: 'Open Studio', run: () => openStudio() },
-			{ key: 'studio-model', group: 'Action', label: 'Open Studio → Model', run: () => openStudio('model') },
+			{ key: 'model', group: 'Action', label: 'Open Model settings', run: () => openModel() },
 			{ key: 'new-character', group: 'Action', label: 'New character', run: () => goto('/characters') },
 			...THEMES.map((t) => ({
 				key: `theme-${t.id}`,

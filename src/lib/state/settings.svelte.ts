@@ -8,6 +8,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
 	bgColor: null,
 	bgMode: 'gradient',
 	bgImageUrl: '',
+	bgFit: 'cover',
 	overlayOpacity: 85,
 	ambient: true,
 	blur: 12,

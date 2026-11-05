@@ -44,6 +44,7 @@ export interface Appearance {
 	// Background
 	bgMode: 'gradient' | 'solid' | 'image';
 	bgImageUrl: string;
+	bgFit: 'cover' | 'contain' | 'fill' | 'center';
 	overlayOpacity: number; // 0–100
 	ambient: boolean; // drifting glow orbs
 	blur: number; // glass blur, px

@@ -53,3 +53,45 @@
 :root.stlp-no-anim .landing.lw-studio {
 	animation: none;
 }
+
+/* Background picker (Studio > Background > Image) */
+.stlp-bg-picker-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+.stlp-bg-picker-tools .stlp-text-input { flex: 1; min-width: 0; }
+.stlp-bg-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+	gap: 8px;
+	margin-bottom: 10px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+.stlp-bg-thumb {
+	position: relative;
+	aspect-ratio: 16 / 10;
+	border: 2px solid transparent;
+	border-radius: 8px;
+	background-size: cover;
+	background-position: center;
+	background-color: var(--lw-surface-2);
+	cursor: pointer;
+	overflow: hidden;
+	padding: 0;
+}
+.stlp-bg-thumb.active {
+	border-color: var(--lw-accent);
+	box-shadow: 0 0 14px color-mix(in oklab, var(--lw-accent) 45%, transparent);
+}
+.stlp-bg-thumb-name {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 0;
+	padding: 4px 6px;
+	font-size: 11px;
+	line-height: 1.2;
+	color: #fff;
+	text-align: left;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	background: linear-gradient(transparent, rgb(0 0 0 / 0.75));
+}

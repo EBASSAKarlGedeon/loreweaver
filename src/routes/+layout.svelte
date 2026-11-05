@@ -7,6 +7,7 @@
 	import { rootClasses, themeVars } from '$lib/landing/appearance';
 	import AppBar from '$lib/ui/AppBar.svelte';
 	import Studio from '$lib/ui/Studio.svelte';
+	import ModelDrawer from '$lib/ui/ModelDrawer.svelte';
 	import CommandPalette from '$lib/ui/CommandPalette.svelte';
 	import '@fontsource-variable/fraunces';
 	import '@fontsource-variable/manrope';
@@ -62,6 +63,9 @@
 
 {#if ui.studioOpen}
 	<Studio />
+{/if}
+{#if ui.modelOpen}
+	<ModelDrawer />
 {/if}
 
 <CommandPalette />

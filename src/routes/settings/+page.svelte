@@ -3,10 +3,10 @@
 	// tab, so this route opens Studio there and goes home.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { openStudio } from '$lib/state/ui.svelte';
+	import { openModel, openStudio } from '$lib/state/ui.svelte';
 
 	onMount(() => {
-		openStudio('model');
+		openModel();
 		goto('/', { replaceState: true });
 	});
 </script>

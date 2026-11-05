@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { setAppbar } from '$lib/state/appbar.svelte';
-	import { openStudio } from '$lib/state/ui.svelte';
+	import { openModel, openStudio } from '$lib/state/ui.svelte';
 	import { db } from '$lib/db';
 	import { streamChat } from '$lib/llm';
 	import { buildPromptMessages } from '$lib/prompt';
@@ -169,7 +169,7 @@
 				{#if needsConfig && messages.length === 0}
 					<p class="text-sm text-dim">
 						Add a model to start chatting.
-						<button type="button" class="ghost" onclick={() => openStudio('model')}>Set up model</button>
+						<button type="button" class="ghost" onclick={() => openModel()}>Set up model</button>
 					</p>
 				{/if}
 
@@ -196,7 +196,7 @@
 				{#if error}
 					<p class="text-sm text-danger">
 						{error}
-						<button type="button" class="ghost" onclick={() => openStudio('model')}>Check connection</button>
+						<button type="button" class="ghost" onclick={() => openModel()}>Check connection</button>
 					</p>
 				{/if}
 			</div>

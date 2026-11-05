@@ -1,15 +1,24 @@
 // Global UI state that more than one component reads: the Studio drawer.
-export type StudioTab = 'theme' | 'background' | 'layout' | 'cards' | 'advanced' | 'model';
+export type StudioTab = 'theme' | 'background' | 'layout' | 'cards' | 'advanced';
 
 export const ui = $state({
 	studioOpen: false,
 	paletteOpen: false,
+	modelOpen: false,
 	studioTab: 'theme' as StudioTab
 });
 
 export function openStudio(tab?: StudioTab): void {
 	if (tab) ui.studioTab = tab;
 	ui.studioOpen = true;
+}
+
+export function openModel(): void {
+	ui.modelOpen = true;
+}
+
+export function closeModel(): void {
+	ui.modelOpen = false;
 }
 
 export function closeStudio(): void {

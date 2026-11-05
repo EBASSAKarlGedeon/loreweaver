@@ -4,7 +4,7 @@
 	import { appbar } from '../state/appbar.svelte';
 	import { settings } from '../state/settings.svelte';
 	import { connection } from '../state/connection.svelte';
-	import { openStudio } from '../state/ui.svelte';
+	import { openModel, openStudio } from '../state/ui.svelte';
 
 	// Chats links to the chats section on the landing page
 	const NAV = [
@@ -103,7 +103,7 @@
 		{#if settings.model}
 			<button
 				type="button"
-				onclick={() => openStudio('model')}
+				onclick={() => openModel()}
 				title="Model: {settings.model}"
 				class="flex min-w-0 max-w-28 items-center gap-2 rounded-md sm:max-w-40 border border-border bg-surface px-2.5 py-1.5 text-xs text-text focus-visible:outline-2 focus-visible:outline-accent"
 			>
@@ -116,7 +116,7 @@
 		{:else}
 			<button
 				type="button"
-				onclick={() => openStudio('model')}
+				onclick={() => openModel()}
 				class="rounded-md border border-accent px-2.5 py-1.5 text-xs text-accent focus-visible:outline-2 focus-visible:outline-accent"
 			>
 				Set up model
@@ -135,7 +135,7 @@
 		{/each}
 		<button
 			type="button"
-			onclick={() => openStudio('model')}
+			onclick={() => openModel()}
 			title="Model connection"
 			aria-label="Model connection"
 			class="grid size-10 place-items-center rounded-md border-0 bg-transparent text-dim transition-colors duration-lw-fast hover:text-text focus-visible:outline-2 focus-visible:outline-accent [&_svg]:size-5"
