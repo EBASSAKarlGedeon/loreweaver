@@ -1,4 +1,4 @@
-import type { Character, ChatMessage, Persona } from './types';
+import type { Character, ChatMessage, Persona, PersonaPosition } from './types';
 import type { ApiMessage } from './llm';
 import { settings } from './state/settings.svelte';
 
@@ -23,48 +23,56 @@ export function buildPromptMessages(
 		? [`[The human user is ${persona.name}.]`, persona.description].filter(Boolean).join('\n')
 		: '';
 
+	// Placement lives on the persona itself (persona-exclusive, like
+	// SillyTavern's persona description position); settings only back-fill
+	// personas saved before these fields existed. Invalid values (restored
+	// from a hand-edited backup) fall back instead of dropping the persona.
+	const rawPosition = persona?.position ?? settings.personaPosition;
+	const position: PersonaPosition =
+		rawPosition === 'none' ||
+		rawPosition === 'system' ||
+		rawPosition === 'top' ||
+		rawPosition === 'bottom' ||
+		rawPosition === 'depth'
+			? rawPosition
+			: 'system';
+
 	const messages: ApiMessage[] = [];
 	if (system) messages.push({ role: 'system', content: system });
 
-	if (personaBlock) {
-		const position = settings.personaPosition ?? 'system';
-		if (position === 'system') {
-			// A separate system message, so providers that emphasize system prompts
-			// keep the user identity distinct from the character definition.
-			messages.push({ role: 'system', content: personaBlock });
-		} else if (position === 'top' || position === 'bottom') {
-			// Wrapped as an author's-note-style system message around the history
-			const note = `[Author's note: ${personaBlock}]`;
-			messages.push({
-				role: 'system',
-				content: position === 'top' ? note : ''
-			});
-			if (position === 'bottom') {
-				messages.pop();
-				messages.push({ role: 'system', content: historyNote(note, history) });
-			}
-		}
-		// 'depth': injected in the loop below
+	if (personaBlock && position === 'system') {
+		// A separate system message, so providers that emphasize system prompts
+		// keep the user identity distinct from the character definition.
+		messages.push({ role: 'system', content: personaBlock });
+	} else if (personaBlock && position === 'top') {
+		// Wrapped as an author's-note-style system message above the history
+		messages.push({ role: 'system', content: `[Author's note: ${personaBlock}]` });
 	}
+	// 'bottom' lands after the history; 'depth' splices into it; 'none' skips.
 
 	for (const m of history) {
 		if (m.role === 'system') continue; // we never store system turns in history
 		messages.push({ role: m.role, content: m.content });
 	}
 
+	// Bottom of Author's Note: right after the last turn, so it is the
+	// freshest instruction the model sees.
+	if (personaBlock && position === 'bottom') {
+		messages.push({ role: 'system', content: `[Author's note: ${personaBlock}]` });
+	}
+
 	// In-chat @ depth: insert the persona block N messages from the end,
 	// with the configured role (SillyTavern depth injection).
-	if (personaBlock && settings.personaPosition === 'depth') {
-		const depth = Math.max(0, settings.personaDepth ?? 4);
-		const role = settings.personaDepthRole ?? 'system';
+	if (personaBlock && position === 'depth') {
+		const rawDepth = persona?.depth ?? settings.personaDepth ?? 4;
+		// Guard: a non-finite depth would splice the block at NaN (index 0).
+		const depth = Number.isFinite(rawDepth)
+			? Math.max(0, Math.min(9999, Math.floor(rawDepth)))
+			: 4;
+		const rawRole = persona?.depthRole ?? settings.personaDepthRole ?? 'system';
+		const role = rawRole === 'user' || rawRole === 'assistant' ? rawRole : 'system';
 		const insertAt = Math.max(1, messages.length - depth);
 		messages.splice(insertAt, 0, { role, content: personaBlock });
 	}
 	return messages;
-}
-
-// For 'bottom' position we do not have an author's note field yet, so the
-// persona rides in a system message right before the last turn.
-function historyNote(note: string, _history: ChatMessage[]): string {
-	return note;
 }

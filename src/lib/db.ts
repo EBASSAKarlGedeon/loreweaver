@@ -34,6 +34,15 @@ export class LoreDB extends Dexie {
 			messages: '++id, chatId, createdAt',
 			settings: 'id'
 		});
+		// v4: index chats.personaId — persona→chat lookups (connections list,
+		// detaching a deleted persona) throw "KeyPath … is not indexed" without it.
+		this.version(4).stores({
+			characters: '++id, name, updatedAt',
+			personas: '++id, name, updatedAt, lockToCharacterId',
+			chats: '++id, characterId, personaId, updatedAt',
+			messages: '++id, chatId, createdAt',
+			settings: 'id'
+		});
 	}
 }
 

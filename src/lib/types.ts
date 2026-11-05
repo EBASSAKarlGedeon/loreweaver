@@ -26,12 +26,18 @@ export interface Persona {
 	avatar?: string; // optional image (URL or data URL)
 	// Locks (SillyTavern connections): the persona pinned for...
 	lockToCharacterId?: number; // ...every new chat with this character
+	// Per-persona prompt placement (SillyTavern stores position/depth/role on
+	// the persona, not globally). Older rows without these fields fall back to
+	// the settings.persona* values.
+	position?: PersonaPosition;
+	depth?: number;
+	depthRole?: 'system' | 'user' | 'assistant';
 	createdAt: number;
 	updatedAt: number;
 }
 
 // Where the persona description goes in the prompt (SillyTavern position).
-export type PersonaPosition = 'system' | 'top' | 'bottom' | 'depth';
+export type PersonaPosition = 'none' | 'system' | 'top' | 'bottom' | 'depth';
 
 export interface Chat {
 	id?: number;

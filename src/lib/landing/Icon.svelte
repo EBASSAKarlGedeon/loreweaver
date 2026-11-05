@@ -14,7 +14,14 @@
 		| 'sliders'
 		| 'userPlus'
 		| 'plus'
-		| 'back';
+		| 'back'
+		| 'pencil'
+		| 'image'
+		| 'copy'
+		| 'skull'
+		| 'grid'
+		| 'crown'
+		| 'lock';
 
 	let { name, class: className = '' }: { name: IconName; class?: string } = $props();
 </script>
@@ -57,5 +64,19 @@
 		<line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
 	{:else if name === 'back'}
 		<polyline points="15 18 9 12 15 6" />
+	{:else if name === 'pencil'}
+		<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+	{:else if name === 'image'}
+		<rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+	{:else if name === 'copy'}
+		<rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+	{:else if name === 'skull'}
+		<path d="M12 2a8 8 0 0 0-8 8c0 2.6 1.2 4.4 2.5 5.6.3.3.5.7.5 1.1V19a1 1 0 0 0 1 1h1.5v-2h1.5v2H12v-2h1.5v2H15a1 1 0 0 0 1-1v-2.3c0-.4.2-.8.5-1.1C17.8 14.4 19 12.6 19 10a7 7 0 0 0-7-8z" /><circle cx="9" cy="11" r="1.5" /><circle cx="15" cy="11" r="1.5" />
+	{:else if name === 'grid'}
+		<rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+	{:else if name === 'crown'}
+		<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z" />
+	{:else if name === 'lock'}
+		<rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
 	{/if}
 </svg>
