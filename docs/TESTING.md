@@ -6,9 +6,10 @@ this repo actually has, not what a generic SvelteKit project would have.
 
 ## 1. Current state
 
-- **No test runner is installed.** There is no Vitest, Jest or Playwright in `package.json`.
-- **The gate is `npm run check`.** It runs `svelte-kit sync` and `svelte-check`. It must report
-  `0 ERRORS 0 WARNINGS`. Run it after every change, before you commit.
+- **Unit tests: Vitest.** `npm test` runs `vitest run` over `src/**/*.test.ts` using the standalone
+  `vitest.config.ts` (node environment, no SvelteKit plugin — details in section 3).
+- **The type gate is `npm run check`.** It runs `svelte-kit sync` and `svelte-check`. It must report
+  `0 ERRORS 0 WARNINGS`. Run it and `npm test` after every change, before you commit.
 - **UI work also needs a browser check.** Type checks do not prove that a page renders or that a
   click does the right thing. Use the browser checks in `scripts/` (section 4).
 
@@ -20,24 +21,27 @@ for anything visual or interactive.
 | Layer | When to use it | How |
 | --- | --- | --- |
 | Type check | Every change | `npm run check` |
-| Pure logic | Pure functions with no DOM and no IndexedDB (`src/lib/landing/format.ts`, `src/lib/landing/appearance.ts`, `src/lib/prompt.ts`) | Unit tests, once a runner exists (section 3) |
-| Database | Code that reads or writes Dexie tables (`src/lib/chats.ts`, `src/lib/state/settings.svelte.ts`) | Browser check (section 4), or fake-indexeddb once a runner exists |
+| Pure logic | Pure functions with no DOM and no IndexedDB (`src/lib/lorebook.ts`, `src/lib/lorebook-import.ts`, `src/lib/landing/format.ts`) | Unit tests (section 3) |
+| Database | Code that reads or writes Dexie tables (`src/lib/chats.ts`, `src/lib/state/settings.svelte.ts`, `src/lib/lorebook-sources.ts`) | Browser check (section 4) |
 | UI and flows | Routes and components | Browser check (section 4) |
 | Network | `src/lib/llm.ts` streaming | Not automated yet. Check by hand against a local server, or mock `fetch` in a unit test |
 
 Do not write a test that only mirrors the implementation. A useful test fails when the behaviour
 it describes breaks.
 
-## 3. Adding a unit-test runner (when the repo needs one)
+## 3. Unit tests (Vitest)
 
-No runner exists yet. If you add one, keep it minimal and say so in the commit message:
+The runner is installed: Vitest 3 (pinned to v3 because the project is on Vite 5 — Vitest 5 needs
+Vite ≥ 6) with a standalone config.
 
-1. Use **Vitest**. It shares Vite's config, so it adds no second build setup.
-2. Add `"test": "vitest run"` to `package.json` scripts, and keep `check` as the type gate.
-3. Put unit tests next to the module as `name.test.ts`. Keep browser checks out of that glob.
-4. Import from `$lib/...` only if the Vitest config includes the `$lib` alias. SvelteKit's Vite plugin
-   usually provides it. Check before you rely on it.
-5. Update section 1 and CLAUDE.md's Commands section when you add the runner.
+1. `npm test` runs `vitest run`; `npm run check` stays the type gate and type-checks test files too.
+2. Tests live next to the module as `name.test.ts`, matched by the `src/**/*.test.ts` glob in
+   `vitest.config.ts`. Keep browser checks out of that glob (they are `.mjs` in `scripts/`).
+3. `vitest.config.ts` intentionally ignores `vite.config.ts`: node environment, no SvelteKit plugin,
+   no `$lib` alias. Import the module under test by relative path (`./prompt`, `./lorebook`).
+4. Only pure modules qualify — no Dexie, no DOM, no runes (`$state` in `.svelte.ts` imports the
+   compiler). Database and UI behaviour still go through browser checks (section 4).
+5. Never send real API requests from a test, and never import from `reference/`.
 
 ## 4. Browser checks
 
