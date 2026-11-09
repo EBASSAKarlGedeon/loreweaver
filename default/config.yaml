@@ -416,6 +416,14 @@ sync:
   # per-key settings merge, on every device. Empty = the hub version wins.
   # Set it only in the authoritative device's config (e.g. your PC).
   settingsAuthoritativeDevice: ''
+  # Opt-ins that widen the default sync deny list (hub and client can have
+  # different values; the hub enforces its own on uploads).
+  # Sync the extensions/ folder (spec open question Q2). Default no.
+  syncExtensions: false
+  # Sync secrets.json (API keys) between devices. Default no — keys are
+  # per-device secrets. Enable only when you accept that a compromised
+  # device exposes every synced key.
+  syncSecrets: false
   # User handles to sync.
   handles:
     - default-user

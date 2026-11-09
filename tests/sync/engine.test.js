@@ -16,6 +16,10 @@ let hubPort = 0;
 
 process.env.SILLYTAVERN_SYNC_MAXFILEMB = '256';
 process.env.SILLYTAVERN_SYNC_RETENTIONDAYS = '30';
+// Opt-in keys must exist as env vars: getConfigValue falls through to
+// getConfig() (which process.exits in tests) when no env var is set.
+process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = '';
+process.env.SILLYTAVERN_SYNC_SYNCSECRETS = '';
 
 beforeEach(async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-engine-'));

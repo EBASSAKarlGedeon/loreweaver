@@ -15,7 +15,7 @@ Offline-capable two-way sync of user data between Windows, Linux and Android dev
 | Who syncs | The **local Node backend** of each device runs the sync engine (not the browser). This keeps it identical on Windows, Linux, Electron and Android (nodejs-mobile). |
 | Granularity | **File-level** sync with content hashes. Chats get one smarter merge rule (section 6). No record-level CRDTs. |
 | Conflict policy | **Never lose data.** The loser is always preserved as a conflict copy. |
-| Secrets | `secrets.json` is **never** synced. API keys are per-device. |
+| Secrets | `secrets.json` is **not synced by default** (API keys are per-device). Opt-in via `sync.syncSecrets: true` — see the addendum at the end. |
 | Cloud drives | Not used. The transport is behind an interface (section 9) so WebDAV/OneDrive could be added later. Out of scope now. |
 
 Expected usage (drives the design): one person, one device active at a time (Windows evenings, Linux work hours, phone away from home). Real concurrent edits of the same file are rare. Optimise for fast-forward syncs being trivial and correct, and for conflicts being safe rather than clever.
@@ -27,17 +27,17 @@ Per user handle (start with `default-user` only; the handle is part of every pat
 Synced (directory names come from `USER_DIRECTORY_TEMPLATE` in `src/constants.js`):
 `chats`, `group chats`, `characters`, `groups`, `worlds`, `User Avatars`, `backgrounds`, `themes`, `movingUI`, `QuickReplies`, `instruct`, `context`, `sysprompt`, `reasoning`, `NovelAI Settings`, `KoboldAI Settings`, `OpenAI Settings`, `TextGen Settings`, `user/files`, `user/images`, `user/workflows`, plus the root file `settings.json`.
 
-NOT synced (hard-coded deny list, not overridable by config):
-- `secrets.json` (API keys), and anything matching `**/secrets*`.
+NOT synced (hard-coded deny list; two items are opt-in-able, see the addendum):
+- `secrets.json` (API keys) and anything matching `**/secrets*` — **except** the exact root file `secrets.json` when `sync.syncSecrets: true` (opt-in; nested `secrets*` copies stay denied always).
 - `thumbnails/**` (regenerable cache), `vectors/**` (regenerable, large), `backups/**` (local safety net).
-- `extensions/**` (third-party code; revisit later, open question Q2).
+- `extensions/**` (third-party code) — **except** when `sync.syncExtensions: true` (opt-in; open question Q2, resolved).
 - `assets/**` (large downloadable media; revisit later, open question Q3).
 - Account/auth data: `data/_storage`, `data/_uploads`, cookie secret, user account records. These live outside `data/<handle>/` anyway.
-- Temp and partial files: `*.tmp`, `*.partial`, `.git*`, `Thumbs.db`, `desktop.ini`, and the sync engine's own state files.
+- Temp and partial files: `*.tmp`, `*.partial`, `.git*`, `Thumbs.db`, `desktop.ini`, and the sync engine's own state files. These can never be opted in.
 
-`config.yaml` sync allow-list may only *narrow* the synced set, never widen it past the deny list.
+`config.yaml` sync allow-list may only *narrow* the synced set, except for the two opt-ins above, which are bounded and explicit.
 
-Known wrinkle: `settings.json` mixes UI preferences with a few device-specific values (API server URLs, last selected API/model). v1 syncs the whole file with last-writer-wins. Later improvement: a per-key device-local blacklist (open question Q1).
+Known wrinkle, RESOLVED: `settings.json` mixes UI preferences with a few device-specific values. It now syncs via a **per-key 3-way merge** (see section 8.1) with a small device-local key list, not whole-file last-writer-wins.
 
 ## 3. Identity and state
 
@@ -127,6 +127,20 @@ A conflict means both sides changed the same path since the last common state an
 
 **Retention:** `sync-trash/` and `sync-conflicts/` are pruned after 30 days (configurable). They are excluded from sync.
 
+### 7.1 settings.json: per-key 3-way merge (Rule C, replaces whole-file Rule B for this file)
+
+Whole-file last-writer-wins made `settings.json` a perpetual conflict: each device's running UI rewrites the whole file, so every sync round tripped Rule B and "reset" the other device's theme, extension settings and backgrounds. Resolved with a per-key merge:
+
+- Each device keeps an ancestor snapshot of `settings.json` at `data/_sync/settings-base-<handle>.json` (never synced). It is updated whenever the device pushes or pulls a settings version, so it always reflects the last state both sides agreed on.
+- Merge rules per key (objects recurse, arrays and leaves are atomic):
+  - Only one side changed since the base → that side's value wins.
+  - Both changed identically → trivial.
+  - Both changed differently → the configured winner takes the key and it is logged as a conflict key (no file-level conflict copy for settings).
+  - One side deleted, other unchanged → deletion wins.
+- Device-local keys are excluded from merging entirely; the local value always stays: `api_server`, `active_character`, `active_group`, `selected_button`.
+- Winner for key clashes: `sync.settingsAuthoritativeDevice` (default: empty → hub wins). Set it to this device's `sync.deviceName` **only on the authoritative device** to make it win every key clash (e.g. the PC).
+- If either version fails to parse as JSON, fall back to Rule B whole-file handling.
+
 ## 8. Triggers
 
 - On backend startup (after a short delay).
@@ -189,18 +203,32 @@ Follow the existing test setup in `tests/`. Keep commits small, one milestone pe
 - Continue the same chat on A, sync; continue on B (after syncing) and sync again: no conflict, full history everywhere.
 - Edit the same chat on A and B offline (appending different messages), then sync both: both A-side and B-side messages are preserved (one as the main file, the other as a `(conflict ...)` chat plus a `.conflict` copy). Nothing lost.
 - Delete a lorebook on A: it disappears on B after sync and sits in `sync-trash/` on both.
-- `secrets.json` is never uploaded, downloaded, listed or overwritten, even if a client requests it directly (hub returns 403).
+- With `sync.syncSecrets` off (default), `secrets.json` is never uploaded, downloaded, listed or overwritten, even if a client requests it directly (hub returns 400/403). Nested `secrets*` files stay denied even with the opt-in.
 - A request with `path=../../x`, an absolute path, or a denied path is rejected with 400/403.
 - Killing the process mid-sync never leaves a half-written file at a real path.
 - With the hub unreachable, the app works normally and the next successful run converges.
 
 ## 13. Open questions (defaults chosen; change only if the user says so)
 
-- Q1. `settings.json` device-local keys (API URL, selected model): default is to sync everything, last writer wins.
-- Q2. Sync `extensions/`: default no.
+- Q1. ~~`settings.json` device-local keys~~ **RESOLVED** (2026-11): per-key 3-way merge with device-local keys (section 7.1) plus optional `sync.settingsAuthoritativeDevice` for the user's PC.
+- Q2. ~~Sync `extensions/`: default no.~~ **RESOLVED** (2026-11): opt-in via `sync.syncExtensions: true` (default stays no).
 - Q3. Sync `assets/` (large media): default no.
 - Q4. Multi-user (`handle`s other than `default-user`): default only `default-user`.
 - Q5. Encryption at rest on the hub: default none (Tailscale is the boundary).
+
+## 14. Non-goals
+
+Real-time collaboration, per-message CRDT merges, peer-to-peer between clients, cloud-drive backends, and any change to ST's on-disk formats. (API-key syncing was a non-goal until the user explicitly opted in via `sync.syncSecrets`; it stays off by default. See the addendum.)
+
+## 15. Addendum (2026-11): user decisions on settings, extensions and secrets
+
+The defaults above were revisited after real two-device use hit the problems they predict. Decisions, made by the user:
+
+1. **settings.json**: per-key 3-way merge (section 7.1) instead of whole-file last-writer-wins, because the running UI on each device kept rewriting the whole file and "resetting" themes/extension settings on the other device. The user's PC is configured as `settingsAuthoritativeDevice` so it wins key clashes.
+2. **extensions/**: the user wants installed extension code and their settings synced. Opt-in flag `sync.syncExtensions` (default `false`); hub enforces its own flag on uploads regardless of what a client requests.
+3. **secrets.json**: the user wants connection profiles including API keys to follow devices. Opt-in flag `sync.syncSecrets` (default `false`), documented warning: enabling it means any compromised device exposes every synced key, and the hub holds all of them. Only the exact root file is allowed; nested `secrets*` paths stay denied unconditionally.
+
+Both flags must be enabled on the hub **and** on each client that should sync them; the hub never accepts an upload its own config forbids.
 
 ## 14. Non-goals
 

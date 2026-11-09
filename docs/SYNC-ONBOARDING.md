@@ -81,7 +81,11 @@ sync:
 ```
 
 Everything else in the file can stay at defaults. API keys (`secrets.json`)
-are never synced — set them per device.
+are not synced by default — set them per device. If you opt in with
+`sync.syncSecrets: true` (also on the hub), connection profiles including their
+API keys travel with the sync; nested `secrets*` files stay excluded either way.
+Extensions code/settings can also be synced with `sync.syncExtensions: true`
+(hub + client). See SYNC-SPEC.md section 15 for the trade-offs.
 
 ## 4. Start and verify
 

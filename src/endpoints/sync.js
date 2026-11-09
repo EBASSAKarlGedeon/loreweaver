@@ -6,6 +6,7 @@ import path from 'node:path';
 import express from 'express';
 
 import { getConfigValue } from '../util.js';
+import { USER_DIRECTORY_TEMPLATE } from '../constants.js';
 import {
     SYNCED_DIRS,
     SYNCED_ROOT_FILES,
@@ -35,6 +36,13 @@ const SYNC_CONFIG = {
     get retentionDays() {
         return Number(readConfig('sync.retentionDays', 30));
     },
+    get syncOptions() {
+        return {
+            // Opt-ins that widen the default deny list (spec Q1/Q2 revisited).
+            allowExtensions: readBool('sync.syncExtensions'),
+            allowSecrets: readBool('sync.syncSecrets'),
+        };
+    },
 };
 
 /**
@@ -49,6 +57,17 @@ function readConfig(key, fallback) {
     } catch {
         return fallback;
     }
+}
+
+/**
+ * Read a boolean config flag. Accepts the real boolean from config.yaml and
+ * the string 'true' from env-var overrides (getConfigValue returns env values
+ * as strings, so a strict === true comparison would miss them).
+ * @param {string} key
+ */
+function readBool(key) {
+    const value = readConfig(key, false);
+    return value === true || value === 'true';
 }
 
 /** Per-handle hub state, created lazily. @type {Map<string, object>} */
@@ -106,11 +125,16 @@ async function getHandleState(handle, dataRoot) {
  * @param {HashCache} cache
  * @returns {Promise<Map<string, {hash: string, size: number, mtimeMs: number}>>}
  */
-async function scanHandleFiles(handle, dataRoot, cache) {
+async function scanHandleFiles(handle, dataRoot, cache, options) {
     const root = path.join(dataRoot, handle);
     const current = new Map();
     const skip = ['sync-trash', 'sync-conflicts', '_sync', 'node_modules'];
-    for (const dir of SYNCED_DIRS) {
+    // Opt-in dirs (extensions) are scanned in addition to the standard set.
+    const dirs = [...SYNCED_DIRS];
+    if (options?.allowExtensions && !dirs.includes(USER_DIRECTORY_TEMPLATE.extensions)) {
+        dirs.push(USER_DIRECTORY_TEMPLATE.extensions);
+    }
+    for (const dir of dirs) {
         const absDir = path.join(root, dir);
         if (!fs.existsSync(absDir)) {
             continue;
@@ -124,6 +148,13 @@ async function scanHandleFiles(handle, dataRoot, cache) {
         const stable = await readStableFile(path.join(root, file), 0);
         if (stable) {
             current.set(file, { hash: hashBuffer(stable.buffer), size: stable.size, mtimeMs: stable.mtimeMs });
+        }
+    }
+    // Opt-in root files (secrets.json) are scanned like settings.json.
+    if (options?.allowSecrets) {
+        const stable = await readStableFile(path.join(root, 'secrets.json'), 0);
+        if (stable) {
+            current.set('secrets.json', { hash: hashBuffer(stable.buffer), size: stable.size, mtimeMs: stable.mtimeMs });
         }
     }
     return current;
@@ -160,7 +191,7 @@ async function ensureIndex(state, deviceId = 'hub') {
  * @param {string} deviceId
  */
 async function applyLocalDrift(state, deviceId) {
-    const current = await scanHandleFiles(state.handle, state.dataRoot, state.cache);
+    const current = await scanHandleFiles(state.handle, state.dataRoot, state.cache, SYNC_CONFIG.syncOptions);
     const seen = new Set();
     /** @type {{path: string, op: 'put'|'delete', hash: string|null, size: number|null, deviceId: string}[]} */
     const changes = [];
@@ -316,7 +347,7 @@ export function createSyncRouter(dataRoot, options = {}) {
         }
         let relPath;
         try {
-            relPath = validateSyncPath(String(request.query.path ?? ''));
+            relPath = validateSyncPath(String(request.query.path ?? ''), undefined, SYNC_CONFIG.syncOptions);
         } catch (err) {
             response.status(400).json({ error: err.message });
             return;
@@ -358,7 +389,7 @@ export function createSyncRouter(dataRoot, options = {}) {
         }
         let relPath;
         try {
-            relPath = validateSyncPath(String(request.query.path ?? ''));
+            relPath = validateSyncPath(String(request.query.path ?? ''), undefined, SYNC_CONFIG.syncOptions);
         } catch (err) {
             response.status(400).json({ error: err.message });
             return;
@@ -447,7 +478,7 @@ export function createSyncRouter(dataRoot, options = {}) {
         }
         let relPath;
         try {
-            relPath = validateSyncPath(String(request.query.path ?? ''));
+            relPath = validateSyncPath(String(request.query.path ?? ''), undefined, SYNC_CONFIG.syncOptions);
         } catch (err) {
             response.status(400).json({ error: err.message });
             return;

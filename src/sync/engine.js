@@ -7,6 +7,7 @@ import {
     SYNCED_ROOT_FILES,
     resolveSyncPath,
 } from './paths.js';
+import { USER_DIRECTORY_TEMPLATE } from '../constants.js';
 import {
     HashCache,
     scanDirectory,
@@ -48,6 +49,8 @@ export function createSyncEngine(options) {
         deviceName = '',
         quietMs = 0,
         settingsWinner = 'hub',
+        allowExtensions = false,
+        allowSecrets = false,
     } = options;
     const transport = options.transport ?? createHttpTransport({ hubUrl, token });
     const root = path.join(dataRoot, handle);
@@ -60,13 +63,22 @@ export function createSyncEngine(options) {
         const cache = new HashCache();
         const current = new Map();
         const skip = ['sync-trash', 'sync-conflicts', '_sync', 'node_modules'];
-        for (const dir of SYNCED_DIRS) {
+        // Opt-in dirs/files extend the standard synced set.
+        const dirs = [...SYNCED_DIRS];
+        if (allowExtensions && !dirs.includes(USER_DIRECTORY_TEMPLATE.extensions)) {
+            dirs.push(USER_DIRECTORY_TEMPLATE.extensions);
+        }
+        const rootFiles = [...SYNCED_ROOT_FILES];
+        if (allowSecrets) {
+            rootFiles.push('secrets.json');
+        }
+        for (const dir of dirs) {
             const scanned = await scanDirectory(path.join(root, dir), cache, skip);
             for (const [rel, entry] of scanned) {
                 current.set(`${dir}/${rel}`, entry);
             }
         }
-        for (const file of SYNCED_ROOT_FILES) {
+        for (const file of rootFiles) {
             const stable = await readStableFile(path.join(root, file), 0);
             if (stable) {
                 current.set(file, { hash: hashBuffer(stable.buffer), size: stable.size, mtimeMs: stable.mtimeMs });

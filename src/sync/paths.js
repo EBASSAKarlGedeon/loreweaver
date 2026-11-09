@@ -51,6 +51,9 @@ export const DENY_DIRS = [
 /** Never synced regardless of location. Paths are normalised to '/' separators. */
 export const DENY_FILE_PATTERNS = [/(^|\/)secrets/i, /(^|\/)\.git/, /(^|\/)Thumbs\.db$/i, /(^|\/)desktop\.ini$/i, /\.tmp$/i, /\.partial$/i];
 
+/** The secrets pattern; only matched when secrets syncing is not opted in. */
+export const SECRETS_PATTERN = DENY_FILE_PATTERNS[0];
+
 /**
  * Normalise a sync-relative path. Accepts '/' or '\' separators.
  * @param {string} relPath Path relative to data/<handle>/, e.g. 'chats/foo.jsonl'
@@ -98,29 +101,44 @@ export function normalizeSyncPath(relPath) {
  * Assumes the input already passed normalizeSyncPath.
  * @param {string} relPath Normalised sync path
  * @param {(string[]) => boolean} [isAllowedDir] Optional extra allow-list filter (receives the first segment)
+ * @param {{allowExtensions?: boolean, allowSecrets?: boolean}} [options] Opt-ins that widen the deny list:
+ *   allowExtensions lets 'extensions/**' sync (spec Q2), allowSecrets lets 'secrets.json'
+ *   sync (explicitly opt-in; the spec default keeps API keys per-device).
  * @returns {boolean}
  */
-export function isSyncPathAllowed(relPath, isAllowedDir) {
+export function isSyncPathAllowed(relPath, isAllowedDir, options) {
+    const opts = options ?? {};
     const first = relPath.split('/')[0];
     // Files with '/' are inside a synced dir; files without are root-level.
     // SYNCED_DIRS contains multi-segment dirs (e.g. 'user/files'), so match by prefix.
+    const extensionsAllowed = opts.allowExtensions === true;
     if (relPath.includes('/')) {
         const inSyncedDir = SYNCED_DIRS.some(dir => relPath.startsWith(dir + '/'));
-        if (!inSyncedDir) {
+        if (!inSyncedDir && !(extensionsAllowed && first === USER_DIRECTORY_TEMPLATE.extensions)) {
             return false;
         }
     } else {
-        if (!SYNCED_ROOT_FILES.includes(relPath)) {
+        const rootOk = SYNCED_ROOT_FILES.includes(relPath)
+            || (opts.allowSecrets === true && relPath === 'secrets.json');
+        if (!rootOk) {
             return false;
         }
     }
     if (isAllowedDir && !isAllowedDir(first)) {
         return false;
     }
-    if (DENY_DIRS.includes(first)) {
+    if (DENY_DIRS.includes(first) && !(extensionsAllowed && first === USER_DIRECTORY_TEMPLATE.extensions)) {
         return false;
     }
     for (const re of DENY_FILE_PATTERNS) {
+        // The secrets opt-in only widens the exact root file, never nested
+        // secrets* copies and never other junk patterns.
+        const secretsExempt = opts.allowSecrets === true
+            && relPath === 'secrets.json'
+            && re.source === SECRETS_PATTERN.source;
+        if (secretsExempt) {
+            continue;
+        }
         if (re.test(relPath)) {
             return false;
         }
@@ -132,12 +150,13 @@ export function isSyncPathAllowed(relPath, isAllowedDir) {
  * Validate and normalise a raw sync path, checking the allow/deny lists.
  * @param {string} relPath Raw path as received over the wire
  * @param {(string[]) => boolean} [isAllowedDir] Optional extra allow-list filter
+ * @param {{allowExtensions?: boolean, allowSecrets?: boolean}} [options] Opt-ins widening the deny list
  * @returns {string} Normalised path
  * @throws {Error} If the path is malformed or not allowed
  */
-export function validateSyncPath(relPath, isAllowedDir) {
+export function validateSyncPath(relPath, isAllowedDir, options) {
     const normalized = normalizeSyncPath(relPath);
-    if (!isSyncPathAllowed(normalized, isAllowedDir)) {
+    if (!isSyncPathAllowed(normalized, isAllowedDir, options)) {
         throw new Error('path not allowed');
     }
     return normalized;

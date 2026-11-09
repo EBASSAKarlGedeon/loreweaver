@@ -15,6 +15,11 @@ const CLI = path.join(__dirname, '..', '..', 'sync-token.js');
 
 const tmpRoots = [];
 
+// Opt-in keys must exist as env vars: getConfigValue falls through to
+// getConfig() (which process.exits in tests) when no env var is set.
+process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = '';
+process.env.SILLYTAVERN_SYNC_SYNCSECRETS = '';
+
 beforeEach(() => {
     tmpRoots.push(fs.mkdtempSync(path.join(os.tmpdir(), 'lw-token-')));
 });

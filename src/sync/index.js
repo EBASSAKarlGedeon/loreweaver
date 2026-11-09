@@ -37,6 +37,11 @@ function readSyncConfig() {
         // Device name whose settings.json wins leaf conflicts on every device.
         // Empty = default (hub wins). E.g. set to 'pc' on the PC config only.
         settingsAuthoritativeDevice: String(get('sync.settingsAuthoritativeDevice', '')),
+        // Opt-ins widening the deny list on this device (hub also enforces its
+        // own). Accept the string 'true' from env-var overrides as well as the
+        // real boolean from config.yaml.
+        syncExtensions: get('sync.syncExtensions', false) === true || get('sync.syncExtensions', false) === 'true',
+        syncSecrets: get('sync.syncSecrets', false) === true || get('sync.syncSecrets', false) === 'true',
     };
 }
 
@@ -58,10 +63,12 @@ export async function runSyncOnce() {
         }
         // Prune trash and conflict copies on every role; these dirs are
         // excluded from sync so this never touches synced data.
-        try {
-            await pruneRetention(globalThis.DATA_ROOT, config.handles, config.retentionDays);
-        } catch (err) {
-            console.error('Sync retention failed:', err?.message ?? err);
+        if (typeof globalThis.DATA_ROOT === 'string') {
+            try {
+                await pruneRetention(globalThis.DATA_ROOT, config.handles, config.retentionDays);
+            } catch (err) {
+                console.error('Sync retention failed:', err?.message ?? err);
+            }
         }
         if (config.role !== 'client' || !config.hubUrl || !config.token) {
             return lastRunResult;
@@ -76,6 +83,8 @@ export async function runSyncOnce() {
                     token: config.token,
                     deviceName: config.deviceName,
                     settingsWinner: config.deviceName && config.settingsAuthoritativeDevice === config.deviceName ? 'local' : 'hub',
+                    allowExtensions: config.syncExtensions,
+                    allowSecrets: config.syncSecrets,
                 });
                 const result = await engine();
                 aggregated = aggregated ?? {

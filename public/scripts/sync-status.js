@@ -1,11 +1,17 @@
 // Loreweaver sync: UI status block in the User Settings panel.
 // Injects itself; hidden entirely when sync is disabled on this instance.
-import { getRequestHeaders } from '../script.js';
+import { getRequestHeaders, getSettings, is_send_press } from '../script.js';
 
 const MODULE_NAME = 'loreweaver-sync-status';
 
-/** Cached template injected once. */
+/** Injected once. */
 let injected = false;
+
+/** settings.json hash as last seen; a change means sync replaced the file. */
+let lastSettingsHash = null;
+
+/** Re-applying settings concurrently with this flag would loop; guards it. */
+let reloadingSettings = false;
 
 /**
  * Format the last-run result into a short human line.
@@ -68,6 +74,32 @@ function buildBlock() {
     return block;
 }
 
+/**
+ * Sync replaced settings.json on disk: re-fetch and re-apply it so the
+ * running UI stops overwriting the synced file with a stale copy (the
+ * old silent ping-pong). Skipped during an active generation.
+ */
+async function maybeReloadSettings(newHash) {
+    if (!newHash || reloadingSettings || newHash === lastSettingsHash) {
+        return;
+    }
+    const firstObservation = lastSettingsHash === null;
+    lastSettingsHash = newHash;
+    // First observation is just the baseline, not a change.
+    if (firstObservation || is_send_press) {
+        return;
+    }
+    reloadingSettings = true;
+    try {
+        await getSettings();
+        console.info('[' + MODULE_NAME + '] Synced settings changed on disk; settings re-applied.');
+    } catch (err) {
+        console.warn('[' + MODULE_NAME + '] Failed to re-apply synced settings:', err);
+    } finally {
+        reloadingSettings = false;
+    }
+}
+
 /** Update the status icon and text from a status response. */
 function renderStatus(data) {
     const icon = document.querySelector('#lw-sync-status-icon');
@@ -85,6 +117,7 @@ function renderStatus(data) {
     }
     const lastRun = data.lastRun ?? null;
     text.textContent = describeLastRun(lastRun);
+    void maybeReloadSettings(data.settingsHash);
     if (!lastRun) {
         icon.className = 'fa-fw fa-solid fa-circle-question';
     } else if (lastRun.offline) {

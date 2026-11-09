@@ -15,6 +15,10 @@ const tmpRoots = [];
 // config file is set. Provide them through the env-var config path instead.
 process.env.SILLYTAVERN_SYNC_MAXFILEMB = '256';
 process.env.SILLYTAVERN_SYNC_RETENTIONDAYS = '30';
+// Opt-in keys must exist as env vars: getConfigValue falls through to
+// getConfig() (which process.exits in tests) when no env var is set.
+process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = '';
+process.env.SILLYTAVERN_SYNC_SYNCSECRETS = '';
 
 beforeEach(() => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-hub-'));
@@ -145,6 +149,36 @@ describe('sync hub router', () => {
         for (const bad of ['../../x', 'thumbnails/t.png', 'chats/secrets.json', 'C:/x']) {
             const res = await request(app).get(`/api/sync/file?handle=default-user&path=${H(bad)}`).set(AUTH(token));
             expect([400, 403]).toContain(res.status);
+        }
+    });
+
+    test('secrets.json is denied by default even when requested directly', async () => {
+        const { app, token } = makeHub({ files: { 'secrets.json': '{"key":"k"}' } });
+        await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+        const res = await request(app).get(`/api/sync/file?handle=default-user&path=${H('secrets.json')}`).set(AUTH(token));
+        expect([400, 403]).toContain(res.status);
+        expect(res.body.toString?.() ?? '').not.toContain('"key"');
+    });
+
+    test('allowSecrets opt-in lets secrets.json sync, allowExtensions lets extensions sync', async () => {
+        process.env.SILLYTAVERN_SYNC_SYNCSECRETS = 'true';
+        process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = 'true';
+        try {
+            const { app, token } = makeHub({ files: { 'secrets.json': '{"key":"k"}', 'extensions/e.js': 'export {}' } });
+            await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+            const sec = await request(app).get(`/api/sync/file?handle=default-user&path=${H('secrets.json')}`).set(AUTH(token));
+            expect(sec.status).toBe(200);
+            expect(sec.body.toString()).toBe('{"key":"k"}');
+            const ext = await request(app).get(`/api/sync/file?handle=default-user&path=${H('extensions/e.js')}`).set(AUTH(token));
+            expect(ext.status).toBe(200);
+            // Junk patterns still denied even when opted in.
+            const junk = await request(app).get(`/api/sync/file?handle=default-user&path=${H('secrets.json.tmp')}`).set(AUTH(token));
+            expect([400, 403]).toContain(junk.status);
+        } finally {
+            // Reset to the disabled defaults rather than deleting: a missing
+            // env var would send getConfigValue into getConfig() → process.exit.
+            process.env.SILLYTAVERN_SYNC_SYNCSECRETS = '';
+            process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = '';
         }
     });
 

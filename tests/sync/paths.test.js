@@ -89,6 +89,27 @@ describe('isSyncPathAllowed', () => {
         expect(isSyncPathAllowed('chats/a.jsonl', onlyChats)).toBe(true);
         expect(isSyncPathAllowed('worlds/w.json', onlyChats)).toBe(false);
     });
+
+    test('opt-in allowExtensions widens only the extensions dir', () => {
+        const opts = { allowExtensions: true };
+        expect(isSyncPathAllowed('extensions/e.js')).toBe(false);
+        expect(isSyncPathAllowed('extensions/e.js', undefined, opts)).toBe(true);
+        expect(isSyncPathAllowed('extensions/third-party/x', undefined, opts)).toBe(true);
+        // Other deny-list entries stay denied, secrets stay denied.
+        expect(isSyncPathAllowed('thumbnails/t.png', undefined, opts)).toBe(false);
+        expect(isSyncPathAllowed('extensions/secrets.json', undefined, opts)).toBe(false);
+    });
+
+    test('opt-in allowSecrets widens only root secrets.json', () => {
+        const opts = { allowSecrets: true };
+        expect(isSyncPathAllowed('secrets.json', undefined, opts)).toBe(true);
+        // Anywhere else (e.g. a synced dir) stays denied: the secrets rule
+        // is matched anywhere by the (root-anchored) pattern.
+        expect(isSyncPathAllowed('chats/secrets.json', undefined, opts)).toBe(false);
+        expect(isSyncPathAllowed('chats/SecretsBackup.json', undefined, opts)).toBe(false);
+        // Junk files stay denied even with secrets opted in.
+        expect(isSyncPathAllowed('secrets.json.tmp', undefined, opts)).toBe(false);
+    });
 });
 
 describe('validateSyncPath', () => {

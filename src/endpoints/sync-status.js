@@ -1,6 +1,7 @@
 // Loreweaver sync: browser-facing status endpoints (login-protected).
 // Mounted at /api/sync-status. These are for the UI status block only;
 // device-to-hub traffic stays on /api/sync with bearer tokens.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -29,6 +30,22 @@ function readSyncConfig() {
 }
 
 /**
+ * Hash of the local settings.json, so the browser can notice when sync
+ * replaced it and re-apply settings (see public/scripts/sync-status.js).
+ * @param {string} handle
+ * @returns {string|null}
+ */
+function settingsHash(handle) {
+    try {
+        const file = path.join(globalThis.DATA_ROOT, handle, 'settings.json');
+        const buf = fs.readFileSync(file);
+        return crypto.createHash('sha256').update(buf).digest('hex');
+    } catch {
+        return null;
+    }
+}
+
+/**
  * GET /api/sync-status — current scheduler state for the logged-in user.
  * Returns 200 with { enabled: false } when sync is off, so the UI can hide.
  */
@@ -39,12 +56,14 @@ router.get('/', requireLoginMiddleware, async (_request, response) => {
         return;
     }
     const { lastRunResult } = await import('../sync/index.js');
+    const handle = _request.user?.handle ?? 'default-user';
     response.json({
         enabled: true,
         role: config.role,
         hubUrl: config.hubUrl,
         intervalSeconds: config.intervalSeconds,
         lastRun: lastRunResult,
+        settingsHash: settingsHash(handle),
     });
 });
 
