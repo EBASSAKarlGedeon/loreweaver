@@ -28,7 +28,8 @@ Tier 3, legal (never change):
 ### Phase 2: Offline-capable two-way sync (next)
 - Syncs: chats, characters, lorebooks, settings (everything under `data/`).
 - Does NOT sync: API keys (per-device secrets).
-- Needs a design decision: file-level vs. record-level merge, conflict resolution, change log/versioning.
+- Design DECIDED, full spec in `docs/SYNC-SPEC.md` (read it before touching sync). Summary: hub-and-spoke over Tailscale (personal server = hub running the same Loreweaver backend), file-level sync with SHA-256 hashes, hub-assigned change-log `seq` for ordering, chats fast-forward by message prefix, any other conflict keeps the loser as a conflict copy (never lose data). Cloud drives not used.
+- Status: spec written, nothing implemented. Implement milestone by milestone (spec section 11), one small commit each.
 - ST stores everything as files, so a per-file change log with timestamps/hashes is the likely starting point.
 
 ### Phase 3: Packaging
