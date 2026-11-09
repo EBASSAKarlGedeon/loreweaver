@@ -419,7 +419,7 @@ export let isChatSaving = false;
 let firstRun = false;
 export let settingsReady = false;
 let currentVersion = '0.0.0';
-export let displayVersion = 'SillyTavern';
+export let displayVersion = 'Loreweaver';
 
 let generation_started = new Date();
 /** @type {Character[]} */
@@ -503,7 +503,7 @@ async function getClientVersion() {
         const response = await fetch('/version');
         const data = await response.json();
         CLIENT_VERSION = data.agent;
-        displayVersion = `SillyTavern ${data.pkgVersion}`;
+        displayVersion = `Loreweaver ${data.pkgVersion}`;
         currentVersion = data.pkgVersion;
 
         if (data.gitRevision && data.gitBranch) {
