@@ -1,6 +1,7 @@
 // Loreweaver sync: scheduler — start/stop, config, mutex, debounce.
 import { getConfigValue } from '../util.js';
 import { createSyncEngine } from './engine.js';
+import { pruneRetention } from './retention.js';
 
 /** @type {{running: boolean, dirty: boolean, timer: NodeJS.Timeout | null, initialTimer: NodeJS.Timeout | null, rerunTimer: NodeJS.Timeout | null}} */
 const state = {
@@ -32,6 +33,7 @@ function readSyncConfig() {
         deviceName: String(get('sync.deviceName', '')),
         intervalSeconds: Math.max(10, Number(get('sync.intervalSeconds', 60))),
         handles: Array.isArray(handles) ? handles.map(String) : ['default-user'],
+        retentionDays: Number(get('sync.retentionDays', 30)),
     };
 }
 
@@ -48,7 +50,17 @@ export async function runSyncOnce() {
     state.running = true;
     try {
         const config = readSyncConfig();
-        if (!config.enabled || config.role !== 'client' || !config.hubUrl || !config.token) {
+        if (!config.enabled) {
+            return lastRunResult;
+        }
+        // Prune trash and conflict copies on every role; these dirs are
+        // excluded from sync so this never touches synced data.
+        try {
+            await pruneRetention(globalThis.DATA_ROOT, config.handles, config.retentionDays);
+        } catch (err) {
+            console.error('Sync retention failed:', err?.message ?? err);
+        }
+        if (config.role !== 'client' || !config.hubUrl || !config.token) {
             return lastRunResult;
         }
         let aggregated = null;
@@ -101,11 +113,12 @@ export async function runSyncOnce() {
 
 /**
  * Start the scheduler: an initial run shortly after startup, then a
- * debounced interval. No-op when sync is disabled or not a client.
+ * debounced interval. Runs on the client (sync engine) and on the hub
+ * (retention pruning only — the hub syncs via its request-time rescan).
  */
 export function start() {
     const config = readSyncConfig();
-    if (!config.enabled || config.role !== 'client') {
+    if (!config.enabled) {
         return;
     }
     if (state.timer) {
