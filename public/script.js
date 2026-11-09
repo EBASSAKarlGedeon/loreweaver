@@ -704,9 +704,9 @@ async function firstLoadInit() {
 
     const splashLogo = document.createElement('img');
     splashLogo.src = '/img/logo.png';
-    splashLogo.alt = 'SillyTavern';
+    splashLogo.alt = 'Loreweaver';
     splashLogo.className = 'splash-logo';
-    splashLogo.ariaLabel = t`SillyTavern Logo`;
+    splashLogo.ariaLabel = t`Loreweaver Logo`;
 
     const splashMessage = document.createElement('h2');
     splashMessage.className = 'splash-message';
