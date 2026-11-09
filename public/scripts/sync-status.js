@@ -58,8 +58,12 @@ function buildBlock() {
             <i id="lw-sync-status-icon" class="fa-fw fa-solid fa-circle-question"></i>
             <span id="lw-sync-status-text" class="flex1">Checking…</span>
         </div>
-        <div id="lw-sync-conflict-list" class="flex-container flexFlowColumn" style="display: none;"></div>
+        <details id="lw-sync-conflicts" style="display: none;">
+            <summary id="lw-sync-conflicts-summary" style="cursor: pointer;"></summary>
+            <div id="lw-sync-conflict-list" class="flex-container flexFlowColumn" style="max-height: 12em; overflow-y: auto; font-size: 0.85em; opacity: 0.85; gap: 2px; padding-top: 4px; word-break: break-all;"></div>
+        </details>
     `;
+    block.style.marginBottom = '10px';
     block.querySelector('#lw-sync-now').addEventListener('click', onSyncNow);
     return block;
 }
@@ -69,6 +73,8 @@ function renderStatus(data) {
     const icon = document.querySelector('#lw-sync-status-icon');
     const text = document.querySelector('#lw-sync-status-text');
     const conflictList = document.querySelector('#lw-sync-conflict-list');
+    const conflictBox = document.querySelector('#lw-sync-conflicts');
+    const conflictSummary = document.querySelector('#lw-sync-conflicts-summary');
     if (!icon || !text) {
         return;
     }
@@ -95,12 +101,18 @@ function renderStatus(data) {
         fetch('/api/sync-status/conflicts', { headers: getRequestHeaders() })
             .then(r => (r.ok ? r.json() : { conflicts: [] }))
             .then(({ conflicts }) => {
-                conflictList.style.display = conflicts.length ? '' : 'none';
+                if (conflictBox) {
+                    conflictBox.style.display = conflicts.length ? '' : 'none';
+                }
+                if (conflictSummary) {
+                    conflictSummary.textContent = `${conflicts.length} conflict cop${conflicts.length === 1 ? 'y' : 'ies'} kept`;
+                }
                 conflictList.textContent = '';
-                for (const conflict of conflicts.slice(0, 10)) {
+                for (const conflict of conflicts) {
                     const row = document.createElement('div');
-                    row.textContent = conflict.path;
-                    row.title = new Date(conflict.mtime).toLocaleString();
+                    // Show the original file path; strip ".<device>.<timestamp>.conflict".
+                    row.textContent = conflict.path.replace(/\.[^./]+\.\d{4}-\d{2}-\d{2}T[\d-]+\.\d+Z\.conflict$/, '');
+                    row.title = `${conflict.path}\n${new Date(conflict.mtime).toLocaleString()}`;
                     conflictList.appendChild(row);
                 }
             })
@@ -148,7 +160,8 @@ export function initSyncStatus() {
             if (!data || data.enabled === false) {
                 return;
             }
-            panel.prepend(buildBlock());
+            // Full-width row above the settings columns, not a column inside them.
+            panel.parentElement.insertBefore(buildBlock(), panel);
             injected = true;
             renderStatus(data);
         })
