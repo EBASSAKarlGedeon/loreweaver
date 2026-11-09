@@ -16,15 +16,17 @@ Standalone apps for **Windows, Linux and Android**, with **offline-capable two-w
 
 ## Plan
 
-### Phase 1: Rebrand (current)
-Tier 1, user-visible (do first):
-- Page titles, UI text, README, Start.bat, package.json name, logos/favicons.
+### Phase 1: Rebrand (COMPLETE — on `rebrand` branch, pushed)
+Tier 1, user-visible (done):
+- Page titles, UI text, README, package.json name, manifest.json, logo (`public/img/logo.png`), apple-touch icons, favicon.ico (5-frame multi-size), welcome/login/splash screens, all 16 locale files. Old `logo.svg` deleted.
 
-Tier 2, internal identifiers (DO NOT rename yet; it breaks extensions and existing data):
+Tier 2, internal identifiers (NOT renamed; renaming breaks extensions and existing data):
 - `SillyTavern` global, localStorage keys, `data/` layout, `st-` CSS prefixes.
 
 Tier 3, legal (never change):
 - AGPL license text and upstream attribution.
+
+Commits: 1d56850c9 (rebrand), 44361669a (Start.bat), 134ab6328 (locales), 70730b81c (favicon + remove logo.svg).
 
 ### Phase 2: Offline-capable two-way sync
 - Syncs: chats, characters, lorebooks, settings (everything under `data/`).
@@ -40,6 +42,6 @@ Tier 3, legal (never change):
 - LLM provider will be switched later; keep provider config swappable. Cost per token was the reason the earlier project (original Loreweaver rewrite) was abandoned, so prefer adapting what exists over rebuilding.
 
 ## Working agreements
-- Small, focused commits, ideally on a `rebrand` branch rather than directly on `release`.
+- Small, focused commits, currently on the `rebrand` branch rather than directly on `release`.
 - Never push without asking.
 - Prefer minimal changes to the existing SillyTavern code; adapt rather than rewrite.
