@@ -276,4 +276,62 @@ describe('sync engine', () => {
         expect(rf(client.dataRoot, 'chats/b.jsonl')).toBe('two');
         expect(rf(client.dataRoot, 'chats/a.jsonl')).toBe('one');
     });
+
+    test('chat continued on A then on B fast-forwards without losing messages', async () => {
+        const a = makeClientDir('a');
+        const b = makeClientDir('b');
+        const META = '{"chat_metadata":{"integrity":"x"}}';
+        const m = (i) => `{"name":"Char","is_user":${i % 2 === 0},"mes":"msg ${i}"}`;
+        const chatOf = (...msgs) => [META, ...msgs].join('\n') + '\n';
+
+        wf(a.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0), m(1)));
+        const engineA = makeEngine({ deviceId: 'device-a', client: a });
+        const engineB = makeEngine({ deviceId: 'device-b', client: b });
+        await engineA();
+        await engineB();
+        expect(rf(b.dataRoot, 'chats/r/chat.jsonl')).toBe(chatOf(m(0), m(1)));
+
+        // B continues the chat offline: adds msg 2 and 3.
+        wf(b.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0), m(1), m(2), m(3)));
+        // A also continues offline: adds msg 2 (identical) — both append the same prefix.
+        wf(a.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0), m(1), m(2), m(3), m(4)));
+
+        const r1 = await engineA();
+        expect(r1.ok).toBe(true);
+        const r2 = await engineB();
+        expect(r2.ok).toBe(true);
+        // B's shorter history fast-forwards to the hub's longer one; no messages lost.
+        expect(rf(b.dataRoot, 'chats/r/chat.jsonl')).toBe(chatOf(m(0), m(1), m(2), m(3), m(4)));
+        expect(r2.conflicts.some(c => c.kind === 'diverged')).toBe(false);
+    });
+
+    test('diverged chats keep both versions (conflict copy) and converge on hub content', async () => {
+        const a = makeClientDir('a');
+        const b = makeClientDir('b');
+        const META = '{"chat_metadata":{"integrity":"x"}}';
+        const m = (i, swipe = '') => `{"name":"Char","is_user":false,"mes":"msg ${i}${swipe}"}`;
+        const chatOf = (...msgs) => [META, ...msgs].join('\n') + '\n';
+
+        wf(a.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0)));
+        const engineA = makeEngine({ deviceId: 'device-a', client: a });
+        const engineB = makeEngine({ deviceId: 'device-b', client: b });
+        await engineA();
+        await engineB();
+
+        // Divergent swipes on the same message.
+        wf(a.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0), m(1, ' A')));
+        wf(b.dataRoot, 'chats/r/chat.jsonl', chatOf(m(0), m(1, ' B')));
+
+        const r1 = await engineA();
+        expect(r1.ok).toBe(true);
+        const r2 = await engineB();
+        expect(r2.ok).toBe(true);
+        expect(r2.conflicts.some(c => c.path === 'chats/r/chat.jsonl')).toBe(true);
+        // B now holds A's version (hub), and B's version is preserved in sync-conflicts.
+        expect(rf(b.dataRoot, 'chats/r/chat.jsonl')).toBe(chatOf(m(0), m(1, ' A')));
+        const conflictDir = path.join(b.dataRoot, 'default-user', 'sync-conflicts', 'chats', 'r');
+        const copies = fs.readdirSync(conflictDir).filter(n => n.endsWith('.conflict'));
+        expect(copies).toHaveLength(1);
+        expect(fs.readFileSync(path.join(conflictDir, copies[0]), 'utf-8')).toBe(chatOf(m(0), m(1, ' B')));
+    });
 });

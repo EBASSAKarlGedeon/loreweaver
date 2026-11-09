@@ -17,6 +17,7 @@ import {
 } from './scan.js';
 import { BaseTable, loadOrCreateDevice, syncStateDir } from './state.js';
 import { createHttpTransport } from './transport-http.js';
+import { planMerge } from './merge.js';
 
 /**
  * @typedef {Object} SyncRunResult
@@ -179,7 +180,7 @@ export function createSyncEngine(options) {
                     base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
                     result.pushed++;
                 } else if (put.status === 409) {
-                    await handleConflict(relPath, L, change ?? null, base, result);
+                    await handleConflict(relPath, L, syntheticChange(put.json), base, result);
                 } else {
                     result.errors.push(`${relPath}: put failed (${put.status})`);
                     result.ok = false;
@@ -191,7 +192,7 @@ export function createSyncEngine(options) {
                     result.deleted++;
                 } else if (del.status === 409) {
                     // Remote edited since our base: pull their version instead of deleting.
-                    await handleConflict(relPath, null, change ?? null, base, result);
+                    await handleConflict(relPath, null, syntheticChange(del.json), base, result);
                 } else {
                     result.errors.push(`${relPath}: delete failed (${del.status})`);
                     result.ok = false;
@@ -223,7 +224,24 @@ export function createSyncEngine(options) {
             base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: change.seq });
             return;
         }
-        await handleConflict(relPath, L, change ?? null, base, result);
+        await handleConflict(relPath, L, change, base, result);
+    }
+
+    /**
+     * Build a hub-change-shaped object from the 409 response body
+     * ({currentHash, currentRev, deleted?}) so handleConflict always has
+     * real hub state to work with.
+     * @param {any} json
+     * @returns {object|null}
+     */
+    function syntheticChange(json) {
+        if (!json || typeof json !== 'object') {
+            return null;
+        }
+        if (json.deleted) {
+            return { seq: json.currentRev, op: 'delete', hash: null, size: null, path: '' };
+        }
+        return { seq: json.currentRev, op: 'put', hash: json.currentHash, size: null, path: '' };
     }
 
     /**
@@ -251,9 +269,8 @@ export function createSyncEngine(options) {
     }
 
     /**
-     * Conflict fallback (Rule B): the hub version wins, the local loser is
-     * preserved as a conflict copy. Delete-vs-edit: the edit wins.
-     * Milestone 4 adds chat prefix merging via onConflict.
+     * Conflict resolution entry point. Tries planMerge (chat prefix
+     * fast-forward, delete-vs-edit rules) before falling back to Rule B.
      * @param {string} relPath
      * @param {{hash: string, size: number, mtimeMs: number}|null} L Local entry (null = deleted locally)
      * @param {object|null} change Latest hub change for the path (null = unchanged since base)
@@ -263,47 +280,64 @@ export function createSyncEngine(options) {
     async function handleConflict(relPath, L, change, base, result) {
         const hubDeleted = change ? change.op === 'delete' : false;
         try {
-            // Preserve the local version before it is overwritten or kept.
-            let localBuffer = null;
-            if (L) {
-                localBuffer = await readFileForPush(root, relPath);
+            const localBuffer = L ? await readFileForPush(root, relPath) : null;
+
+            // Fetch the hub version when the hub has content.
+            let hubBuffer = null;
+            if (!hubDeleted && change) {
+                const got = await transport.getFile(handle, relPath);
+                if (!got.ok) {
+                    result.errors.push(`${relPath}: conflict get failed (${got.status})`);
+                    result.ok = false;
+                    return;
+                }
+                hubBuffer = got.body;
             }
 
-            if (hubDeleted) {
-                // Edit vs delete: the edit wins. Push local back with baseRev = delete seq.
-                if (localBuffer && L) {
-                    const put = await transport.putFile(handle, relPath, localBuffer, change.seq);
-                    if (put.ok) {
-                        base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
-                        result.pushed++;
-                    } else {
-                        result.errors.push(`${relPath}: conflict put failed (${put.status})`);
-                        result.ok = false;
-                        return;
-                    }
-                } else {
-                    // Both deleted: settle the tombstone.
-                    base.delete(relPath);
-                    result.deleted++;
+            const plan = planMerge(relPath, localBuffer, hubBuffer);
+
+            if (plan.action === 'fast-forward' && plan.winner === 'local') {
+                // Local continuation wins: push it.
+                const put = await transport.putFile(handle, relPath, plan.content, change?.seq ?? 0);
+                if (!put.ok) {
+                    result.errors.push(`${relPath}: fast-forward push failed (${put.status})`);
+                    result.ok = false;
+                    return;
                 }
-            } else if (change) {
-                // Hub has content: pull it, saving the local version first.
-                if (localBuffer) {
-                    const copyPath = conflictCopyPath(relPath);
-                    await atomicWriteFile(copyPath, localBuffer);
-                }
-                const R = { hash: change.hash, size: change.size, rev: change.seq };
-                await pullRemote(relPath, R, change, base, result);
-            } else {
-                // Hub state unknown (409 on push): fetch current hub version via changes? Not available;
-                // simplest correct fallback: refetch full changes is out of scope here, so report an error
-                // and retry next run (the run does not advance the watermark).
-                result.errors.push(`${relPath}: unresolvable conflict (no hub change info)`);
-                result.ok = false;
+                base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
+                result.pushed++;
+                result.conflicts.push({ path: relPath, kind: 'fast-forward-local' });
                 return;
             }
 
-            result.conflicts.push({ path: relPath, kind: hubDeleted ? 'delete-edit' : 'diverged' });
+            if (plan.action === 'fast-forward' || plan.action === 'hub') {
+                if (plan.action === 'hub' && localBuffer && hubBuffer) {
+                    // Real Rule B conflict: preserve the local loser before overwriting.
+                    await atomicWriteFile(conflictCopyPath(relPath), localBuffer);
+                }
+                const R = { hash: change.hash, size: change.size, rev: change.seq };
+                await pullRemote(relPath, R, change, base, result);
+                result.conflicts.push({ path: relPath, kind: plan.action === 'fast-forward' ? 'fast-forward-hub' : (hubDeleted ? 'delete-edit' : 'diverged') });
+                return;
+            }
+
+            if (plan.action === 'local') {
+                // Edit-vs-delete: push the local version back.
+                const put = await transport.putFile(handle, relPath, localBuffer, change?.seq ?? 0);
+                if (put.ok) {
+                    base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
+                    result.pushed++;
+                    result.conflicts.push({ path: relPath, kind: 'delete-edit' });
+                } else {
+                    result.errors.push(`${relPath}: conflict put failed (${put.status})`);
+                    result.ok = false;
+                }
+                return;
+            }
+
+            // 'manual': both sides deleted — settle the tombstone.
+            base.delete(relPath);
+            result.deleted++;
         } catch (err) {
             result.errors.push(`${relPath}: conflict handling failed: ${err?.message ?? String(err)}`);
             result.ok = false;
