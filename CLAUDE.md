@@ -25,12 +25,12 @@ Tier 2, internal identifiers (NOT renamed; renaming breaks extensions and existi
 Tier 3, legal (never change):
 - AGPL license text and upstream attribution.
 
-### Phase 2: Offline-capable two-way sync (next)
+### Phase 2: Offline-capable two-way sync (mostly done, in use)
 - Syncs: chats, characters, lorebooks, settings (everything under `data/`).
 - Does NOT sync: API keys (per-device secrets).
 - Design DECIDED, full spec in `docs/SYNC-SPEC.md` (read it before touching sync). Summary: hub-and-spoke over Tailscale (personal server = hub running the same Loreweaver backend), file-level sync with SHA-256 hashes, hub-assigned change-log `seq` for ordering, chats fast-forward by message prefix, any other conflict keeps the loser as a conflict copy (never lose data). Cloud drives not used.
-- Status: milestones 1-7 IMPLEMENTED (paths/scan/state, hub router, client engine+transport, chat merge, scheduler, token CLI `sync-token.js`, UI status block), 411 tests in `tests/sync/`. Milestone 8 (manual multi-device test over Tailscale) is the last step — see spec section 12 for the acceptance checklist.
-- ST stores everything as files, so a per-file change log with timestamps/hashes is the likely starting point.
+- Status: milestones 1-7 IMPLEMENTED (paths/scan/state, hub router, client engine+transport, chat merge, scheduler, token CLI `sync-token.js`, UI status block), 411 tests in `tests/sync/`. VERIFIED END-TO-END in real use: hub on `thinkpad-srv` (Debian 13, over Tailscale) syncing with the Windows client. Key setup detail: the hub router must be mounted BEFORE session/CSRF/login middleware (bearer-token device traffic) — already done in `src/server-main.js`.
+- Remaining: milestone 8 — onboarding the Linux and Android devices, running the acceptance checklist in spec section 12. Known gap: `sync.retentionDays` is in config but nothing prunes `sync-trash/`/`sync-conflicts/` yet.
 
 ### Phase 3: Packaging
 - Standalone apps: each bundles its own Node backend (no separate server).
