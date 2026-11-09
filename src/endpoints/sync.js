@@ -267,8 +267,11 @@ export function createSyncRouter(dataRoot, options = {}) {
             return;
         }
         const deviceId = response.locals.deviceId;
-        const name = typeof request.body?.name === 'string' ? request.body.name.slice(0, 100) : '';
-        registry.upsert(deviceId, { name });
+        const patch = {};
+        if (typeof request.body?.name === 'string' && request.body.name.trim() !== '') {
+            patch.name = request.body.name.slice(0, 100);
+        }
+        registry.upsert(deviceId, patch);
         await registry.save();
         const state = await withHandleLock(handle, async () => {
             const s = await getHandleState(handle, dataRoot);
