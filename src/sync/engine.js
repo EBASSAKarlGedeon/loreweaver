@@ -18,6 +18,7 @@ import {
 import { BaseTable, loadOrCreateDevice, syncStateDir } from './state.js';
 import { createHttpTransport } from './transport-http.js';
 import { planMerge } from './merge.js';
+import { SETTINGS_PATH, mergeSettingsBuffers } from './settings-merge.js';
 
 /**
  * @typedef {Object} SyncRunResult
@@ -178,6 +179,7 @@ export function createSyncEngine(options) {
                 const put = await transport.putFile(handle, relPath, await readFileForPush(root, relPath), B?.hubRev ?? 0);
                 if (put.ok) {
                     base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
+                    await snapshotSettingsBase(relPath, await readFileForPush(root, relPath));
                     result.pushed++;
                 } else if (put.status === 409) {
                     await handleConflict(relPath, L, syntheticChange(put.json), base, result);
@@ -265,6 +267,7 @@ export function createSyncEngine(options) {
         }
         await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
         base.set(relPath, { hash: R.hash ?? got.hash, size: R.size ?? got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        await snapshotSettingsBase(relPath, got.body);
         result.pulled++;
     }
 
@@ -296,6 +299,32 @@ export function createSyncEngine(options) {
 
             const plan = planMerge(relPath, localBuffer, hubBuffer);
 
+            // settings.json: 3-way per-key merge instead of last-writer-wins,
+            // so theme/extensions/persona edits from both devices survive.
+            // On parse failure fall through to the generic plan below.
+            if (relPath === SETTINGS_PATH && hubBuffer && localBuffer) {
+                const baseBuf = await readBaseEntryBuffer(relPath);
+                const merged = mergeSettingsBuffers(baseBuf, localBuffer, hubBuffer);
+                if (merged.ok) {
+                    const put = await transport.putFile(handle, relPath, merged.content, change?.seq ?? 0);
+                    if (put.ok) {
+                        base.set(relPath, { hash: hashBuffer(merged.content), size: merged.content.length, mtimeMs: Date.now(), hubRev: put.json.seq });
+                        await snapshotSettingsBase(relPath, merged.content);
+                        result.pushed++;
+                        if (merged.conflictKeys?.length) {
+                            result.conflicts.push({ path: relPath, kind: `settings-merge (${merged.conflictKeys.length} keys)` });
+                        }
+                    } else if (put.status === 409) {
+                        // Hub moved on again; the next run re-merges against the newer state.
+                        result.skipped++;
+                    } else {
+                        result.errors.push(`${relPath}: merged put failed (${put.status})`);
+                        result.ok = false;
+                    }
+                    return;
+                }
+            }
+
             if (plan.action === 'fast-forward' && plan.winner === 'local') {
                 // Local continuation wins: push it.
                 const put = await transport.putFile(handle, relPath, plan.content, change?.seq ?? 0);
@@ -312,8 +341,17 @@ export function createSyncEngine(options) {
 
             if (plan.action === 'fast-forward' || plan.action === 'hub') {
                 if (plan.action === 'hub' && localBuffer && hubBuffer) {
-                    // Real Rule B conflict: preserve the local loser before overwriting.
-                    await atomicWriteFile(conflictCopyPath(relPath), localBuffer);
+                    // Real Rule B conflict. Preserve the local loser only when
+                    // the pull below will actually land: writing it first made
+                    // a failed/skipped pull repeat the conflict next run and
+                    // pile up copies.
+                    const R = { hash: change.hash, size: change.size, rev: change.seq };
+                    const pulled = await pullRemoteBuffer(relPath, R, change, base, result);
+                    if (pulled) {
+                        await atomicWriteFile(conflictCopyPath(relPath), localBuffer);
+                    }
+                    result.conflicts.push({ path: relPath, kind: plan.action === 'fast-forward' ? 'fast-forward-hub' : (hubDeleted ? 'delete-edit' : 'diverged') });
+                    return;
                 }
                 const R = { hash: change.hash, size: change.size, rev: change.seq };
                 await pullRemote(relPath, R, change, base, result);
@@ -342,6 +380,61 @@ export function createSyncEngine(options) {
             result.errors.push(`${relPath}: conflict handling failed: ${err?.message ?? String(err)}`);
             result.ok = false;
         }
+    }
+
+    /**
+     * Read the snapshot of the last-synced settings.json (the merge
+     * ancestor). Written by snapshotSettingsBase on every successful
+     * pull/push; null when unavailable.
+     * @param {string} relPath
+     * @returns {Promise<Buffer|null>}
+     */
+    async function readBaseEntryBuffer(relPath) {
+        if (relPath !== SETTINGS_PATH) {
+            return null;
+        }
+        try {
+            const { readFile } = await import('node:fs/promises');
+            return await readFile(settingsBaseSnapshotPath());
+        } catch {
+            return null;
+        }
+    }
+
+    /** Persist the common-ancestor bytes for settings.json. */
+    async function snapshotSettingsBase(relPath, buffer) {
+        if (relPath !== SETTINGS_PATH || !buffer) {
+            return;
+        }
+        try {
+            await atomicWriteFile(settingsBaseSnapshotPath(), buffer);
+        } catch { /* best effort; merge still works with a stale/null ancestor */ }
+    }
+
+    /** Absolute path of the settings ancestor snapshot (not synced). */
+    function settingsBaseSnapshotPath() {
+        return path.join(syncStateDir(dataRoot), `settings-base-${handle}.json`);
+    }
+
+    /**
+     * Pull the hub version, returning true when written. Does not touch
+     * result counters (caller reports the outcome).
+     */
+    async function pullRemoteBuffer(relPath, R, change, base, result) {
+        const got = await transport.getFile(handle, relPath);
+        if (!got.ok) {
+            result.errors.push(`${relPath}: conflict get failed (${got.status})`);
+            result.ok = false;
+            return false;
+        }
+        if (got.hash && R.hash && got.hash !== R.hash) {
+            result.skipped++; // hub content drifted mid-run; retry next run
+            return false;
+        }
+        await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
+        base.set(relPath, { hash: R.hash ?? got.hash, size: R.size ?? got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        await snapshotSettingsBase(relPath, got.body);
+        return true;
     }
 
     /** Build the conflict-copy path for a synced file. */
