@@ -51,6 +51,7 @@ import { router as dataMaidRouter } from './endpoints/data-maid.js';
 import { router as backupsRouter } from './endpoints/backups.js';
 import { router as imageMetadataRouter } from './endpoints/image-metadata.js';
 import { createSyncRouter } from './endpoints/sync.js';
+import { router as syncStatusRouter } from './endpoints/sync-status.js';
 import { router as volcengineRouter } from './endpoints/volcengine.js';
 
 /**
@@ -188,6 +189,8 @@ export function setupPrivateEndpoints(app) {
     app.use('/api/image-metadata', imageMetadataRouter);
     // Loreweaver sync hub (bearer-token auth, not session-based).
     app.use('/api/sync', createSyncRouter(globalThis.DATA_ROOT));
+    // Loreweaver sync UI status (login-protected).
+    app.use('/api/sync-status', syncStatusRouter);
 }
 
 /**

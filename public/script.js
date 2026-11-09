@@ -745,6 +745,8 @@ async function firstLoadInit() {
     await initExtensions();
     initExtensionSlashCommands();
     ToolManager.initToolSlashCommands();
+    // Loreweaver sync status block (self-hides when sync is disabled).
+    import('./scripts/sync-status.js').then(({ initSyncStatus }) => initSyncStatus()).catch(() => { });
     await initPresetManager();
     await initSystemMessages();
     await getSettings(initLoaderHandle);
