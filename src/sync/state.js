@@ -197,6 +197,8 @@ export class HubRegistry {
         this.file = file;
         /** @type {{devices: Record<string, {name: string, tokenHash: string, created: number, lastSeen: number}>}} */
         this.data = { devices: {} };
+        /** Loaded file signature (mtimeMs + size); reload when it changes (e.g. CLI created a token). */
+        this.loadedSig = null;
     }
 
     /** @returns {Promise<HubRegistry>} */
@@ -208,7 +210,32 @@ export class HubRegistry {
                 this.data = { devices: parsed.devices };
             }
         } catch { /* start empty */ }
+        this.loadedSig = await this.fileSignature();
         return this;
+    }
+
+    /**
+     * If hub.json changed on disk since our last load (CLI `sync-token.js`
+     * writes it directly), re-read it so newly created tokens are honoured
+     * without a hub restart.
+     * @returns {Promise<void>}
+     */
+    async reloadIfChanged() {
+        const sig = await this.fileSignature();
+        if (sig === this.loadedSig) {
+            return;
+        }
+        await this.load();
+    }
+
+    /** Cheap stat signature of the registry file; null when it does not exist. */
+    async fileSignature() {
+        try {
+            const st = await fsp.stat(this.file);
+            return `${st.size}:${st.mtimeMs}`;
+        } catch {
+            return null;
+        }
     }
 
     /**

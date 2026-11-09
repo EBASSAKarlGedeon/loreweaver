@@ -224,6 +224,10 @@ export function createSyncRouter(dataRoot, options = {}) {
         if (!registryLoaded) {
             await registry.load();
             registryLoaded = true;
+        } else {
+            // Pick up tokens created by the CLI (sync-token.js) since the
+            // last request — it writes hub.json directly, bypassing us.
+            await registry.reloadIfChanged();
         }
         const header = String(request.headers['authorization'] ?? '');
         if (!header.startsWith('Bearer ')) {

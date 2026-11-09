@@ -64,6 +64,30 @@ describe('sync hub router', () => {
         expect(badAuth.status).toBe(401);
     });
 
+    test('auth: token created after startup (CLI writes hub.json) is accepted without restart', async () => {
+        const { app, token, dataRoot } = makeHub();
+        // Warm the registry cache with a valid hello.
+        const warm = await request(app).post('/api/sync/hello?handle=default-user')
+            .set(AUTH(token)).send({});
+        expect(warm.status).toBe(200);
+
+        // Simulate the CLI creating a new device token directly in hub.json.
+        const newToken = crypto.randomBytes(32).toString('hex');
+        const hubFile = path.join(dataRoot, '_sync', 'hub.json');
+        const registry = JSON.parse(fs.readFileSync(hubFile, 'utf-8'));
+        registry.devices['device-late'] = {
+            name: 'late', tokenHash: sha256Hex(newToken), created: Date.now(), lastSeen: 0,
+        };
+        fs.writeFileSync(hubFile, JSON.stringify(registry));
+
+        // No restart: the new token must authenticate on the next request.
+        const late = await request(app).post('/api/sync/hello?handle=default-user')
+            .set(AUTH(newToken)).send({});
+        expect(late.status).toBe(200);
+        const stillBad = await request(app).post('/api/sync/hello').set('Authorization', 'Bearer wrong');
+        expect(stillBad.status).toBe(401);
+    });
+
     test('hello registers device and reports hubSeq', async () => {
         const { app, token } = makeHub({ files: { 'chats/a.jsonl': 'x' } });
         const res = await request(app).post('/api/sync/hello?handle=default-user')
