@@ -34,6 +34,9 @@ function readSyncConfig() {
         intervalSeconds: Math.max(10, Number(get('sync.intervalSeconds', 60))),
         handles: Array.isArray(handles) ? handles.map(String) : ['default-user'],
         retentionDays: Number(get('sync.retentionDays', 30)),
+        // Device name whose settings.json wins leaf conflicts on every device.
+        // Empty = default (hub wins). E.g. set to 'pc' on the PC config only.
+        settingsAuthoritativeDevice: String(get('sync.settingsAuthoritativeDevice', '')),
     };
 }
 
@@ -72,6 +75,7 @@ export async function runSyncOnce() {
                     hubUrl: config.hubUrl,
                     token: config.token,
                     deviceName: config.deviceName,
+                    settingsWinner: config.deviceName && config.settingsAuthoritativeDevice === config.deviceName ? 'local' : 'hub',
                 });
                 const result = await engine();
                 aggregated = aggregated ?? {

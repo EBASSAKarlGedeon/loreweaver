@@ -6,9 +6,9 @@ import path from 'node:path';
 import { mergeSettingsBuffers, DEVICE_LOCAL_KEYS, SETTINGS_PATH } from '../../src/sync/settings-merge.js';
 
 /** Merge helper: buffers from JSON objects. */
-function merge(base, local, hub) {
+function merge(base, local, hub, winner) {
     const buf = (v) => (v === null ? null : Buffer.from(JSON.stringify(v)));
-    return mergeSettingsBuffers(base === null ? null : buf(base), buf(local), buf(hub));
+    return mergeSettingsBuffers(base === null ? null : buf(base), buf(local), buf(hub), winner);
 }
 
 describe('settings merge', () => {
@@ -36,6 +36,18 @@ describe('settings merge', () => {
         expect(r.ok).toBe(true);
         expect(JSON.parse(r.content.toString()).theme).toBe('red');
         expect(r.conflictKeys).toEqual(['theme']);
+    });
+
+    test("winner:'local' lets the authoritative device's leaf edits win", () => {
+        const base = { theme: 'dark', persona: 'A' };
+        const local = { theme: 'blue', persona: 'C' };   // PC changed both
+        const hub = { theme: 'red', persona: 'B' };      // phone changed both
+        const r = merge(base, local, hub, 'local');
+        expect(r.ok).toBe(true);
+        const out = JSON.parse(r.content.toString());
+        expect(out.theme).toBe('blue');   // authoritative device wins leaf conflicts
+        expect(out.persona).toBe('C');
+        expect(r.conflictKeys.sort()).toEqual(['persona', 'theme']);
     });
 
     test('device-local keys keep the local value even when the hub changed them', () => {

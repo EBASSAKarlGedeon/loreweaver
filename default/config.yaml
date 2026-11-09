@@ -412,6 +412,10 @@ sync:
   maxFileMB: 256
   # Days to keep sync-trash and sync-conflicts before pruning.
   retentionDays: 30
+  # Device (by deviceName) whose settings.json wins leaf conflicts during the
+  # per-key settings merge, on every device. Empty = the hub version wins.
+  # Set it only in the authoritative device's config (e.g. your PC).
+  settingsAuthoritativeDevice: ''
   # User handles to sync.
   handles:
     - default-user

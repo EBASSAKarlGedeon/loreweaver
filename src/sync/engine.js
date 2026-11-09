@@ -47,6 +47,7 @@ export function createSyncEngine(options) {
         token,
         deviceName = '',
         quietMs = 0,
+        settingsWinner = 'hub',
     } = options;
     const transport = options.transport ?? createHttpTransport({ hubUrl, token });
     const root = path.join(dataRoot, handle);
@@ -304,7 +305,7 @@ export function createSyncEngine(options) {
             // On parse failure fall through to the generic plan below.
             if (relPath === SETTINGS_PATH && hubBuffer && localBuffer) {
                 const baseBuf = await readBaseEntryBuffer(relPath);
-                const merged = mergeSettingsBuffers(baseBuf, localBuffer, hubBuffer);
+                const merged = mergeSettingsBuffers(baseBuf, localBuffer, hubBuffer, settingsWinner);
                 if (merged.ok) {
                     const put = await transport.putFile(handle, relPath, merged.content, change?.seq ?? 0);
                     if (put.ok) {

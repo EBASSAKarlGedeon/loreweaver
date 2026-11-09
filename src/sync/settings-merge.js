@@ -31,9 +31,10 @@ function sameJson(a, b) {
  * @param {any} local Value from the local device
  * @param {any} hub Value from the hub
  * @param {string} pathKey
- * @param {string[]} conflicts Output: keys where both sides changed (hub won)
+ * @param {string[]} conflicts Output: keys where both sides changed
+ * @param {'hub'|'local'} winner Who wins a both-changed leaf key
  */
-function mergeNode(base, local, hub, pathKey, conflicts) {
+function mergeNode(base, local, hub, pathKey, conflicts, winner) {
     if (isPlainObj(local) && isPlainObj(hub)) {
         const out = {};
         const keys = new Set([...Object.keys(local), ...Object.keys(hub)]);
@@ -75,10 +76,11 @@ function mergeNode(base, local, hub, pathKey, conflicts) {
             }
             // Both changed, differently.
             if (isPlainObj(l) && isPlainObj(h)) {
-                out[k] = mergeNode(b, l, h, pathKey ? `${pathKey}.${k}` : k, conflicts);
+                out[k] = mergeNode(b, l, h, pathKey ? `${pathKey}.${k}` : k, conflicts, winner);
                 continue;
             }
-            out[k] = h; // leaf conflict: hub wins (Rule B), key recorded
+            const leafWinner = winner === 'local' ? l : h;
+            out[k] = leafWinner; // leaf conflict: configured winner, key recorded
             conflicts.push(pathKey ? `${pathKey}.${k}` : k);
         }
         return out;
@@ -91,9 +93,12 @@ function mergeNode(base, local, hub, pathKey, conflicts) {
  * @param {Buffer|null} baseBuf Last-synced settings content (null when unknown)
  * @param {Buffer} localBuf Local settings content
  * @param {Buffer} hubBuf Hub settings content
+ * @param {'hub'|'local'} [winner] Who wins a both-changed leaf key (default 'hub').
+ *   Set to 'local' when the device is the designated authority (e.g. the
+ *   owner's PC overwrites hub settings).
  * @returns {{ok: boolean, content?: Buffer, conflictKeys?: string[]}} ok:false when any buffer is unparseable
  */
-export function mergeSettingsBuffers(baseBuf, localBuf, hubBuf) {
+export function mergeSettingsBuffers(baseBuf, localBuf, hubBuf, winner = 'hub') {
     try {
         const base = baseBuf ? JSON.parse(baseBuf.toString('utf-8')) : undefined;
         const local = JSON.parse(localBuf.toString('utf-8'));
@@ -103,7 +108,7 @@ export function mergeSettingsBuffers(baseBuf, localBuf, hubBuf) {
         }
         /** @type {string[]} */
         const conflicts = [];
-        const merged = mergeNode(base, local, hub, '', conflicts);
+        const merged = mergeNode(base, local, hub, '', conflicts, winner);
         return {
             ok: true,
             content: Buffer.from(JSON.stringify(merged, null, 4) + '\n', 'utf-8'),
