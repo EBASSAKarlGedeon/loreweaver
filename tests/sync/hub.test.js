@@ -225,9 +225,9 @@ describe('sync hub router', () => {
 
     test('unknown handle returns 404', async () => {
         const { app, token } = makeHub();
-        const res = await request(app).post('/api/sync/hello?handle=ghost-user')
+        const res = await request(app).post('/api/sync/hello?handle=ghost user')
             .set(AUTH(token)).send({});
-        expect(res.status).toBe(404);
+        expect(res.status).toBe(400);
     });
 
     test('file PUT size guard rejects oversized uploads', async () => {

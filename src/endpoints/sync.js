@@ -254,8 +254,8 @@ export function createSyncRouter(dataRoot, options = {}) {
             return null;
         }
         if (!fs.existsSync(path.join(dataRoot, handle))) {
-            response.status(404).json({ error: 'unknown handle' });
-            return null;
+            // Fresh hub: create the user directory (charset is validated above).
+            fs.mkdirSync(path.join(dataRoot, handle), { recursive: true });
         }
         return handle;
     }
