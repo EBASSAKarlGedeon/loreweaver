@@ -29,7 +29,7 @@ Tier 3, legal (never change):
 - Syncs: chats, characters, lorebooks, settings (everything under `data/`).
 - Does NOT sync: API keys (per-device secrets).
 - Design DECIDED, full spec in `docs/SYNC-SPEC.md` (read it before touching sync). Summary: hub-and-spoke over Tailscale (personal server = hub running the same Loreweaver backend), file-level sync with SHA-256 hashes, hub-assigned change-log `seq` for ordering, chats fast-forward by message prefix, any other conflict keeps the loser as a conflict copy (never lose data). Cloud drives not used.
-- Status: spec written, nothing implemented. Implement milestone by milestone (spec section 11), one small commit each.
+- Status: milestones 1-7 IMPLEMENTED (paths/scan/state, hub router, client engine+transport, chat merge, scheduler, token CLI `sync-token.js`, UI status block), 411 tests in `tests/sync/`. Milestone 8 (manual multi-device test over Tailscale) is the last step — see spec section 12 for the acceptance checklist.
 - ST stores everything as files, so a per-file change log with timestamps/hashes is the likely starting point.
 
 ### Phase 3: Packaging
