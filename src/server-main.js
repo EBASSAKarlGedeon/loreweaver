@@ -75,6 +75,7 @@ import { diskCache } from './endpoints/characters.js';
 import { migrateFlatSecrets } from './endpoints/secrets.js';
 import { migrateGroupChatsMetadataFormat } from './endpoints/groups.js';
 import * as syncScheduler from './sync/index.js';
+import { createSyncRouter } from './endpoints/sync.js';
 
 // Work around a node v20.0.0, v20.1.0, and v20.2.0 bug. The issue was fixed in v20.3.0.
 // https://github.com/nodejs/node/issues/47822#issuecomment-1564708870
@@ -153,6 +154,11 @@ app.use(hostWhitelistMiddleware);
 if (cliArgs.listen) {
     app.use(accessLoggerMiddleware());
 }
+
+// Loreweaver sync hub: device-to-hub traffic authenticates with bearer tokens,
+// so it must be mounted BEFORE the session, CSRF and login middleware below.
+// The network whitelist and host whitelist above still apply to it.
+app.use('/api/sync', createSyncRouter(globalThis.DATA_ROOT));
 
 app.use(cookieSession({
     name: getCookieSessionName(),
