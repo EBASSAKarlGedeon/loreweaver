@@ -392,3 +392,26 @@ gemini:
 enableServerPlugins: false
 # Attempt to automatically update server plugins on startup
 enableServerPluginsAutoUpdate: true
+# -- LOREAWEAVER SYNC CONFIGURATION --
+# Offline-capable two-way sync between devices via a hub (see docs/SYNC-SPEC.md).
+sync:
+  # Master switch. When false, no sync activity happens.
+  enabled: false
+  # 'hub' makes this instance the sync hub (accepts device connections);
+  # 'client' makes it push/pull to the hub in hubUrl.
+  role: client
+  # Hub base URL, e.g. http://100.x.y.z:8000 (Tailscale address). Client only.
+  hubUrl: ''
+  # Device token issued by the hub admin. Client only. Never synced.
+  token: ''
+  # Human-readable device name shown in conflict copies. Defaults to the device id.
+  deviceName: ''
+  # How often to sync (seconds). Minimum 10.
+  intervalSeconds: 60
+  # Maximum upload size in MB per file.
+  maxFileMB: 256
+  # Days to keep sync-trash and sync-conflicts before pruning.
+  retentionDays: 30
+  # User handles to sync.
+  handles:
+    - default-user
