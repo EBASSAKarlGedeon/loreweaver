@@ -33,7 +33,7 @@ Tier 3, legal (never change):
 - Settings merge: `settings.json` syncs via per-key 3-way merge (`src/sync/settings-merge.js`) with device-local keys; `sync.settingsAuthoritativeDevice` names the device whose values win key clashes (set only in that device's config; the PC here).
 - Opt-ins: `sync.syncExtensions` and `sync.syncSecrets` widen the deny list (extensions dir / root `secrets.json` only); both flags needed on hub AND client; nested `secrets*` always denied.
 - Retention: `sync.retentionDays` pruning of `sync-trash/`/`sync-conflicts/` is IMPLEMENTED (`src/sync/retention.js`, runs on the scheduler for both hub and client roles).
-- Remaining: milestone 8 — onboarding the Linux device (S21 Ultra done, see `docs/SYNC-ONBOARDING.md` for the procedure), running the acceptance checklist in spec section 12.
+- Remaining: milestone 8 — running the acceptance checklist in spec section 12. Linux device onboarding is SKIPPED (user decision, 2026-11: Termux on Android covers it; no separate Linux device will be onboarded). S21 Ultra done, see `docs/SYNC-ONBOARDING.md` for the procedure.
 
 ### Phase 3: Packaging
 - Standalone apps: each bundles its own Node backend (no separate server).
