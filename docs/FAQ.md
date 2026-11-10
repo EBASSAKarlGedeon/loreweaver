@@ -226,3 +226,53 @@ Consequences to remember:
   `.git` stays local and independent. After a git-based update on one
   device, the other device may briefly show a phantom "Update available"
   whose pull is a no-op or needs a local `git checkout` — harmless.
+
+## 9. The hub is behaving oddly — check whether it's running stale code
+
+**Symptom:** The hub misbehaves in ways the client doesn't: e.g. it
+clobbers `settings.json` keys during sync, gets stuck in a pull
+skip-and-retry loop, or scans/pushes `.git` directories — while the
+client (same codebase, newer) behaves fine.
+
+**Cause:** The hub is a Loreweaver instance with its own checkout. When
+client code changes, the hub keeps running whatever it had at its last
+pull — including bugs that were fixed in the meantime. Example
+(2026-11-10, three sync fixes the hub had missed): `621f7c967`
+(mtime preservation end-to-end + a settings merge clobber fix),
+`35eb1c109` (pull livelock fix), `4a0bdf4df` (never scan/push `.git`).
+The settings-merge fix in particular only works correctly if both sides
+run it — a stale hub can still clobber the fixed client's `settings.json`.
+
+**Fix:** SSH to the hub, `git pull`, restart via systemd:
+```bash
+ssh gedeon@thinkpad-srv
+cd ~/loreweaver          # or wherever the hub's checkout lives
+git pull
+npm install              # package.json often changes together with code
+sudo systemctl restart loreweaver.service
+```
+The hub runs as a systemd unit `loreweaver.service` (created 2026-11-09,
+runs as `User=gedeon`, `WorkingDirectory=/home/gedeon/loreweaver`,
+`Restart=on-failure`, auto-starts at boot). Logs go to journald — read
+them with `journalctl -u loreweaver.service` (the old `hub.log` nohup
+habit is gone). It binds `100.94.69.81:8000` (Tailscale), not loopback.
+
+Gotchas from the first run of this procedure:
+- A systemd unit `loreweaver.service` had existed since Nov 9 but was
+  abandoned for a manual `nohup node server.js` — if you find a bare
+  `node server.js` process instead of the unit, `pkill -x node` and
+  `sudo systemctl start loreweaver.service`.
+- `sudo -S` with a here-string writes the password into the file's
+  stdin instead of sudo's — use `echo <pw> | sudo -S <cmd>` for each
+  command, or write the unit to /tmp and `sudo cp` it over.
+- `ss -tlnp | grep ':8000'` right after the start shows nothing — webpack
+  compiles the frontend for ~18s before the listen line appears. Wait ~20s
+  before checking.
+- If `git pull` aborts on `package-lock.json`: the hub's local modification
+  is just the lockfile's `name` field (an `npm install` artifact) —
+  `git restore package-lock.json` and pull again.
+Pulling is safe — the synced `data/` is separate from the code; nothing
+is overwritten or lost.
+
+**Rule of thumb:** whenever the client code changes, pull the hub too
+and restart it. Cheap insurance against fixing a bug on one side only.
