@@ -25,7 +25,7 @@ function describeLastRun(lastRun) {
         return 'Hub unreachable (offline)';
     }
     if (!lastRun.ok) {
-        return `Errors: ${lastRun.errors?.length ?? 0}`;
+        return `Errors: ${lastRun.errors?.length ?? 0} · ${lastRun.percent ?? 0}% ported`;
     }
     const parts = [];
     if (lastRun.pushed) {
@@ -63,6 +63,15 @@ function buildBlock() {
         <div class="flex-container alignitemscenter" style="gap: 8px;">
             <i id="lw-sync-status-icon" class="fa-fw fa-solid fa-circle-question"></i>
             <span id="lw-sync-status-text" class="flex1">Checking…</span>
+        </div>
+        <div id="lw-sync-progress" style="display: none; margin-top: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85em; opacity: 0.85;">
+                <div style="flex: 1; height: 6px; background: var(--SmartThemeBodyColor); opacity: 0.25; border-radius: 3px; overflow: hidden;">
+                    <div id="lw-sync-progress-fill" style="height: 100%; width: 0%; background: var(--SmartThemeEmColor); border-radius: 3px; transition: width 0.4s ease;"></div>
+                </div>
+                <span id="lw-sync-progress-label">0%</span>
+            </div>
+            <div id="lw-sync-progress-detail" style="font-size: 0.8em; opacity: 0.7; margin-top: 2px;"></div>
         </div>
         <details id="lw-sync-conflicts" style="display: none;">
             <summary id="lw-sync-conflicts-summary" style="cursor: pointer;"></summary>
@@ -118,6 +127,25 @@ function renderStatus(data) {
     const lastRun = data.lastRun ?? null;
     text.textContent = describeLastRun(lastRun);
     void maybeReloadSettings(data.settingsHash);
+    // Porting progress bar (only when the engine reports a path count).
+    const progressBox = document.querySelector('#lw-sync-progress');
+    const progressFill = document.querySelector('#lw-sync-progress-fill');
+    const progressLabel = document.querySelector('#lw-sync-progress-label');
+    const progressDetail = document.querySelector('#lw-sync-progress-detail');
+    if (progressBox && progressFill && progressLabel) {
+        if (lastRun && typeof lastRun.total === 'number' && lastRun.total > 0) {
+            const percent = Math.max(0, Math.min(100, lastRun.percent ?? 0));
+            progressBox.style.display = '';
+            progressFill.style.width = `${percent}%`;
+            progressFill.style.background = percent >= 100 ? 'var(--okGreen70a)' : 'var(--SmartThemeEmColor)';
+            progressLabel.textContent = `${percent}%`;
+            if (progressDetail) {
+                progressDetail.textContent = `${lastRun.synced ?? 0} of ${lastRun.total} files confirmed${lastRun.pending ? ` · ${lastRun.pending} pending` : ''}`;
+            }
+        } else {
+            progressBox.style.display = 'none';
+        }
+    }
     if (!lastRun) {
         icon.className = 'fa-fw fa-solid fa-circle-question';
     } else if (lastRun.offline) {

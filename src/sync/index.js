@@ -90,12 +90,17 @@ export async function runSyncOnce() {
                 aggregated = aggregated ?? {
                     pushed: 0, pulled: 0, deleted: 0, errors: [], conflicts: [],
                     ok: true, offline: false, handles: {}, finishedAt: 0,
+                    total: 0, synced: 0, pending: 0, percent: 100,
                 };
                 aggregated.pushed += result.pushed;
                 aggregated.pulled += result.pulled;
                 aggregated.deleted += result.deleted;
                 aggregated.errors.push(...result.errors);
                 aggregated.conflicts.push(...result.conflicts.map(c => c.path));
+                // Each handle's path set is disjoint, so these are exact sums.
+                aggregated.total += result.total ?? 0;
+                aggregated.synced += result.synced ?? 0;
+                aggregated.pending += result.pending ?? 0;
                 aggregated.ok = aggregated.ok && result.ok;
                 aggregated.offline = result.offline;
                 aggregated.handles[handle] = result;
@@ -103,13 +108,20 @@ export async function runSyncOnce() {
                 aggregated = aggregated ?? {
                     pushed: 0, pulled: 0, deleted: 0, errors: [], conflicts: [],
                     ok: false, offline: false, handles: {}, finishedAt: 0,
+                    total: 0, synced: 0, pending: 0, percent: 100,
                 };
+                aggregated.pending += 1; // the whole handle failed to even run
+                aggregated.percent = 0;
                 aggregated.ok = false;
                 aggregated.errors.push(String(err?.message ?? err));
             }
         }
         if (aggregated) {
             aggregated.finishedAt = Date.now();
+            // Recompute over the summed totals (handles' path sets are disjoint).
+            aggregated.percent = aggregated.total
+                ? Math.round(((aggregated.total - aggregated.pending) / aggregated.total) * 100)
+                : (aggregated.errors.length ? 0 : 100);
         }
         lastRunResult = aggregated;
         return aggregated;

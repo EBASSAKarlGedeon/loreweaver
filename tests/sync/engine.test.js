@@ -8,6 +8,7 @@ import http from 'node:http';
 import express from 'express';
 import { createSyncRouter, resetHubState } from '../../src/endpoints/sync.js';
 import { createSyncEngine } from '../../src/sync/engine.js';
+import { createHttpTransport } from '../../src/sync/transport-http.js';
 import { sha256Hex } from '../../src/sync/state.js';
 
 const tmpRoots = [];
@@ -289,6 +290,64 @@ describe('sync engine', () => {
         expect(r2.pushed).toBe(0);
         expect(r2.pulled).toBe(0);
         expect(r2.conflicts).toHaveLength(0);
+    });
+
+    test('progress: 100% when every path is in sync', async () => {
+        const client = makeClientDir('c1');
+        wf(client.dataRoot, 'chats/a.jsonl', 'one');
+        wf(client.dataRoot, 'characters/x.json', '{}');
+        const engine = makeEngine({ deviceId: 'device-a', client });
+        const r = await engine();
+        expect(r.ok).toBe(true);
+        expect(r.total).toBe(2);
+        expect(r.synced).toBe(2);
+        expect(r.pending).toBe(0);
+        expect(r.percent).toBe(100);
+    });
+
+    test('progress: one failed path does not stop other paths, and retried to 100%', async () => {
+        const client = makeClientDir('c1');
+        const hub = tmpRoots[0];
+        wf(client.dataRoot, 'chats/a.jsonl', 'one');
+        wf(client.dataRoot, 'chats/b.jsonl', 'two');
+        wf(client.dataRoot, 'characters/x.json', '{}');
+
+        const token = registerDevice('device-a');
+        const real = createHttpTransport({ hubUrl: `http://127.0.0.1:${hubPort}`, token });
+        const failing = {
+            ...real,
+            putFile: async (handle, p, buf, rev) => {
+                if (p === 'chats/b.jsonl') {
+                    return { ok: false, status: 500, error: 'test failure' };
+                }
+                return real.putFile(handle, p, buf, rev);
+            },
+        };
+        const engine = createSyncEngine({
+            dataRoot: client.dataRoot, handle: 'default-user',
+            hubUrl: `http://127.0.0.1:${hubPort}`, token, deviceName: 'device-a',
+            transport: failing,
+        });
+        const r1 = await engine();
+        // Other paths still sync despite the failed one.
+        expect(r1.ok).toBe(false);
+        expect(r1.errors).toEqual(['chats/b.jsonl: put failed (500)']);
+        expect(r1.synced).toBe(2);
+        expect(r1.pending).toBe(1);
+        expect(r1.total).toBe(3);
+        expect(r1.percent).toBe(67);
+        expect(rf(hub, 'chats/a.jsonl')).toBe('one');
+        expect(rf(hub, 'characters/x.json')).toBe('{}');
+
+        // The failed path retries against a clean transport next run → 100%.
+        const engine2 = createSyncEngine({
+            dataRoot: client.dataRoot, handle: 'default-user',
+            hubUrl: `http://127.0.0.1:${hubPort}`, token, deviceName: 'device-a',
+        });
+        const r2 = await engine2();
+        expect(r2.ok).toBe(true);
+        expect(r2.percent).toBe(100);
+        expect(rf(hub, 'chats/b.jsonl')).toBe('two');
     });
 
     test('new hub files between runs are pulled incrementally', async () => {

@@ -33,6 +33,10 @@ import { SETTINGS_PATH, mergeSettingsBuffers } from './settings-merge.js';
  * @property {{path: string, kind: string}[]} conflicts
  * @property {string[]} errors
  * @property {number} hubSeq New lastHubSeq (when reachable)
+ * @property {number} total Paths in scope this run
+ * @property {number} synced Paths confirmed in sync (settled, no error)
+ * @property {number} pending Paths that errored or need another run
+ * @property {number} percent 0-100 share of paths confirmed
  */
 
 /**
@@ -99,7 +103,14 @@ export function createSyncEngine(options) {
      */
     return async function syncRun() {
         /** @type {SyncRunResult} */
-        const result = { ok: true, offline: false, pushed: 0, pulled: 0, deleted: 0, skipped: 0, conflicts: [], errors: [], hubSeq: 0 };
+        // total/synced/pending/percent: porting confirmation over all paths
+        // in scope this run (pending = errored or drifted here; those retry next run).
+        const result = {
+            ok: true, offline: false,
+            pushed: 0, pulled: 0, deleted: 0, skipped: 0,
+            conflicts: [], errors: [], hubSeq: 0,
+            total: 0, synced: 0, pending: 0, percent: 100,
+        };
 
         // 1. Hello.
         const device = await loadOrCreateDevice(dataRoot);
@@ -107,6 +118,7 @@ export function createSyncEngine(options) {
         if (!hello.ok) {
             result.ok = false;
             result.offline = hello.status === 0;
+            result.percent = 0; // nothing confirmed while unreachable/failing to start
             if (!result.offline) {
                 result.errors.push(`hello failed: ${hello.error ?? hello.status}`);
             }
@@ -141,14 +153,25 @@ export function createSyncEngine(options) {
 
         // 4. Three-way diff over the union of paths.
         const allPaths = new Set([...local.keys(), ...base.paths(), ...remote.keys()]);
+        result.total = allPaths.size;
         for (const relPath of allPaths) {
+            const before = { errors: result.errors.length, skipped: result.skipped };
             try {
                 await processPath(relPath, local, base, remote, result);
             } catch (err) {
                 result.errors.push(`${relPath}: ${err?.message ?? String(err)}`);
                 result.ok = false;
             }
+            // A path is confirmed when it finished without an error or a skip
+            // (both retry next run); successful pushes/pulls/deletes are
+            // settled by the base table in the same pass.
+            if (result.errors.length > before.errors || result.skipped > before.skipped) {
+                result.pending++;
+            } else {
+                result.synced++;
+            }
         }
+        result.percent = result.total ? Math.round(((result.total - result.pending) / result.total) * 100) : 100;
 
         // 5. Advance the watermark only when the whole run was clean, so a
         // failed path is retried against the same hub state next run.
