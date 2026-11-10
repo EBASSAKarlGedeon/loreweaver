@@ -116,12 +116,15 @@
         "url": "https://github.com/SillyTavern/SillyTavern.git"
     },
     "version": "1.18.0",
+    "description": "Loreweaver - personal, immersive AI chatbot platform",
+    "author": "GedeonEBASSA",
     "scripts": {
         "init": "node src/server-init.js",
         "start": "node server.js",
         "debug": "node --inspect server.js",
         "start:global": "node server.js --global",
         "start:electron": "cd ./src/electron && npm run start",
+        "dist": "electron-builder --win",
         "start:deno": "deno run --allow-run --allow-net --allow-read --allow-write --allow-sys --allow-env server.js",
         "start:bun": "bun server.js",
         "start:no-csrf": "node server.js --disableCsrf",
@@ -137,7 +140,46 @@
         "no-path-concat": "off",
         "no-var": "off"
     },
-    "main": "server.js",
+    "main": "src/electron/index.js",
+    "build": {
+        "appId": "dev.loreweaver.desktop",
+        "productName": "Loreweaver",
+        "asar": false,
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "server.js",
+            "webpack.config.js",
+            "plugins.js",
+            "index.d.ts",
+            "package.json",
+            "src/**",
+            "public/**",
+            "default/**",
+            "plugins/**",
+            "!src/electron/node_modules/**",
+            "!src/electron/package-lock.json",
+            "!src/electron/Start.bat",
+            "!src/electron/start.sh",
+            "!src/electron/Start Dev.bat",
+            "!public/ReVardanis/**"
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis"
+                },
+                {
+                    "target": "zip"
+                }
+            ],
+            "icon": "build/icon.ico"
+        },
+        "nsis": {
+            "oneClick": true
+        }
+    },
     "devDependencies": {
         "@chevrotain/types": "^11.2.0",
         "@types/archiver": "^6.0.3",
@@ -166,10 +208,13 @@
         "@types/write-file-atomic": "^4.0.3",
         "@types/yargs": "^17.0.33",
         "@types/yauzl": "^2.10.3",
+        "electron": "^41.1.1",
+        "electron-builder": "^26.18.0",
         "eslint": "^8.57.1",
         "eslint-plugin-jest": "^27.9.0",
         "eslint-plugin-jsdoc": "^48.10.0",
         "eslint-plugin-playwright": "^2.3.0",
+        "png-to-ico": "^3.0.2",
         "typescript": "^5.9.3"
     }
 }

@@ -60,3 +60,4 @@ yarn.lock
 test-results/
 /public/ReVardanis/
 .claude/settings.local.json
+/build/pngs
