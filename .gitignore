@@ -61,3 +61,6 @@ test-results/
 /public/ReVardanis/
 .claude/settings.local.json
 /build/pngs
+
+# character-cells lives as a standalone git clone (github.com/EBASSAKarlGedeon/character-cells)
+public/scripts/extensions/character-cells/
