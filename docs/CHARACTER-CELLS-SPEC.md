@@ -77,7 +77,11 @@ Placement rule for prompt caching: stable content (preset, card, lorebook) first
 - Manual editing matters: models drift, so the user must be able to fix any cell value directly.
 - Slash commands: `/state`, `/promote <char>`, `/demote <char>` etc.
 
-### 5. Tier assignment (DECIDED)
+### 5. User cell (DECIDED 2026-11-10)
+
+A **fixed "user" cell** always exists in the state (id `user`, pinned at the top of the panel). It holds the user's personal inventory / titles / status (FF5 `<internal_inv>` scope). It can never be promoted, demoted or deleted; NPCs keep their own per-cell inventories (feeds the off-screen Agenda system). Every NPC's `bonds.user` anchors to it.
+
+### 6. Tier assignment (DECIDED)
 
 **Automatic, with manual override.**
 
