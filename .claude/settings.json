@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash  ~/Documents/Coding/SillyTavern/tool_budget.sh",
+            "command": "bash  ~/Documents/Coding/Loreweaver/tool_budget.sh",
             "timeout": 10,
             "statusMessage": "Checking tool budget"
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash  ~/Documents/Coding/SillyTavern/tool_budget.sh",
+            "command": "bash  ~/Documents/Coding/Loreweaver/tool_budget.sh",
             "timeout": 10
           }
         ]
