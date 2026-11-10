@@ -199,6 +199,8 @@ Follow the existing test setup in `tests/`. Keep commits small, one milestone pe
 
 ## 12. Acceptance tests (must pass before calling it done)
 
+DONE 2026-11-10: all items below verified — 123 automated tests in `tests/sync/` cover every line item (see CLAUDE.md Phase 2 for the test-to-item mapping), and the live multi-device flow (hub `thinkpad-srv` over Tailscale <-> Windows <-> S21 Ultra) was verified in real use.
+
 - Edit a character on A, sync, B sees it after sync. Reverse direction too.
 - Continue the same chat on A, sync; continue on B (after syncing) and sync again: no conflict, full history everywhere.
 - Edit the same chat on A and B offline (appending different messages), then sync both: both A-side and B-side messages are preserved (one as the main file, the other as a `(conflict ...)` chat plus a `.conflict` copy). Nothing lost.
@@ -229,7 +231,3 @@ The defaults above were revisited after real two-device use hit the problems the
 3. **secrets.json**: the user wants connection profiles including API keys to follow devices. Opt-in flag `sync.syncSecrets` (default `false`), documented warning: enabling it means any compromised device exposes every synced key, and the hub holds all of them. Only the exact root file is allowed; nested `secrets*` paths stay denied unconditionally.
 
 Both flags must be enabled on the hub **and** on each client that should sync them; the hub never accepts an upload its own config forbids.
-
-## 14. Non-goals
-
-Real-time collaboration, per-message CRDT merges, peer-to-peer between clients, cloud-drive backends, syncing API keys, and any change to ST's on-disk formats.
