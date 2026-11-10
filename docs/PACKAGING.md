@@ -73,6 +73,9 @@ app's config. API keys are never synced and must be re-entered per device.
 
 ## Known limitations
 
+- The packaged app passes `--browserLaunchEnabled=false`, so it only opens its
+  own window (upstream's default config would also open a browser tab).
+
 - Character/background **thumbnails fail to generate** under Electron (jimp's wasm
   codecs try to `fetch()` a `file://` URL, which Node refuses). This is an upstream
   behavior that also occurs on plain Node; the UI still works, images are shown
