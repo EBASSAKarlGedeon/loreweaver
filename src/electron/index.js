@@ -4,6 +4,11 @@ import { fileURLToPath } from 'url';
 import yargs from 'yargs';
 import { serverEvents, EVENT_NAMES } from '../server-events.js';
 
+// The desktop app opens its own window; never also spawn a browser tab.
+// '=' style so yargs parses it as a boolean false, which wins over the
+// config value in the merged command line arguments.
+process.argv.push('--browserLaunchEnabled=false');
+
 const cliArguments = yargs(process.argv)
     .usage('Usage: <your-start-script> [options]')
     .option('width', {
