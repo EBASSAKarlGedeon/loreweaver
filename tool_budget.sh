@@ -23,7 +23,7 @@
 # `git diff | grep` or `git grep`.
 #
 # Change the budget by editing this one number (or export TOOL_BUDGET=NN):
-MAX_TOOL_CALLS="${TOOL_BUDGET:-100}"
+MAX_TOOL_CALLS="${TOOL_BUDGET:-40}"
 # Warning starts when 25% of the budget is left: floor(0.75 * MAX).
 # 15 -> 11, 8 -> 6, 4 -> 3. (TOOL_WARN_AT overrides the formula.)
 WARN_AT="${TOOL_WARN_AT:-$((MAX_TOOL_CALLS * 3 / 4))}"
