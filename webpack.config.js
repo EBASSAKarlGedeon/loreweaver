@@ -12,9 +12,19 @@ import { getVersion, color } from './src/util.js';
  * @returns {string} The cache version string.
  */
 function getWebpackCacheVersion() {
-    return crypto.createHash('shake256', { outputLength: 8 })
-        .update(JSON.stringify([appVersion.pkgVersion, appVersion.gitRevision, webpack.version]))
-        .digest('hex');
+    const version = JSON.stringify([appVersion.pkgVersion, appVersion.gitRevision, webpack.version]);
+    try {
+        return crypto.createHash('shake256', { outputLength: 8 })
+            .update(version)
+            .digest('hex');
+    } catch {
+        // Electron's Node build omits SHAKE digests (e.g. for the packaged app);
+        // fall back to SHA-256 so frontend libs still build there.
+        return crypto.createHash('sha256')
+            .update(version)
+            .digest('hex')
+            .slice(0, 16);
+    }
 }
 
 /**
