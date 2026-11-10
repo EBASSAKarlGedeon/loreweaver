@@ -1,9 +1,9 @@
 services:
-  sillytavern:
+  loreweaver:
     build: ..
-    container_name: sillytavern
-    hostname: sillytavern
-    image: ghcr.io/sillytavern/sillytavern:latest
+    container_name: loreweaver
+    hostname: loreweaver
+    image: loreweaver:latest
     environment:
       - NODE_ENV=production
       - FORCE_COLOR=1

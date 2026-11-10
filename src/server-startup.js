@@ -242,7 +242,7 @@ export class ServerStartup {
      */
     #getAddressInUseMessage(url, ipVersion) {
         const listenAddress = this.#getListenAddress(url, ipVersion);
-        return `Address ${listenAddress} is already in use. Another SillyTavern instance may already be running. Stop the other process or change "port" in config.yaml.`;
+        return `Address ${listenAddress} is already in use. Another Loreweaver instance may already be running. Stop the other process or change "port" in config.yaml.`;
     }
 
     /**

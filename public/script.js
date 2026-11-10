@@ -12032,7 +12032,7 @@ jQuery(async function () {
             }
 
             if (selected_group && format === 'json') {
-                toastr.warning(t`Only SillyTavern's own format is supported for group chat imports. Sorry!`);
+                toastr.warning(t`Only Loreweaver's own format is supported for group chat imports. Sorry!`);
                 continue;
             }
 
