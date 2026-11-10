@@ -303,12 +303,14 @@ export function createSyncEngine(options) {
             result.ok = false;
             return;
         }
-        if (got.hash && R.hash && got.hash !== R.hash) {
-            result.skipped++; // hub content drifted mid-run; retry next run
-            return;
-        }
+        // The hub may have drifted since the change entry was written (its own
+        // ST instance rewrites files between log entries). The /file endpoint
+        // hashes the exact bytes it sends, so got.hash always describes
+        // got.body: record the actual content and rev it to this change. The
+        // hub's applyLocalDrift logs the drifted content on the next /changes,
+        // and the recorded hash then matches — no skip-and-retry livelock.
         await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
-        base.set(relPath, { hash: R.hash ?? got.hash, size: R.size ?? got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
         await snapshotSettingsBase(relPath, got.body);
         result.pulled++;
     }
@@ -469,12 +471,10 @@ export function createSyncEngine(options) {
             result.ok = false;
             return false;
         }
-        if (got.hash && R.hash && got.hash !== R.hash) {
-            result.skipped++; // hub content drifted mid-run; retry next run
-            return false;
-        }
+        // Same rule as pullRemote: trust the actual bytes (got.hash describes
+        // got.body exactly), not the possibly-stale change-entry hash.
         await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
-        base.set(relPath, { hash: R.hash ?? got.hash, size: R.size ?? got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
         await snapshotSettingsBase(relPath, got.body);
         return true;
     }
