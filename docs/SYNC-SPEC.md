@@ -139,7 +139,7 @@ Whole-file last-writer-wins made `settings.json` a perpetual conflict: each devi
   - Both changed differently → the configured winner takes the key and it is logged as a conflict key (no file-level conflict copy for settings).
   - One side deleted, other unchanged → deletion wins.
 - Device-local keys are excluded from merging entirely; the local value always stays: `api_server`, `active_character`, `active_group`, `selected_button`.
-- Winner for key clashes: `sync.settingsAuthoritativeDevice` (default: empty → hub wins). Set it to this device's `sync.deviceName` **only on the authoritative device** to make it win every key clash (e.g. the PC).
+- Winner for key clashes: `sync.settingsAuthoritativeDevice` (default: empty → hub wins). Set it to this device's `sync.deviceName` **only on the authoritative device** to make it win every key clash. Current setting (2026-11-10, user decision): the packaged Windows app (`windows-app`) is authoritative; the PC repo checkout (`windows`) has it empty.
 - If either version fails to parse as JSON, fall back to Rule B whole-file handling.
 
 ## 8. Triggers

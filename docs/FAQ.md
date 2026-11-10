@@ -160,9 +160,10 @@ per-key, and the `sync.settingsAuthoritativeDevice` device's values win.
    the old file throws away today's state instead.)
 5. Write as UTF-8 **without BOM**, restart, and verify in the UI.
 6. Because the authoritative device wins settings clashes, restore the
-   file on the `settingsAuthoritativeDevice` (the PC) — the fix then
-   propagates to other devices on their next sync. If a non-authoritative
-   device got clobbered instead, just let it pull.
+   file on the `settingsAuthoritativeDevice` — as of 2026-11-10 that is the
+   packaged app (`windows-app`), not the PC repo checkout (`windows`).
+   The fix then propagates to other devices on their next sync. If a
+   non-authoritative device got clobbered instead, just let it pull.
 
 Rule of thumb: before any data-directory migration, snapshot
 `data/<handle>/settings.json` from the source install — it is the single
@@ -192,3 +193,36 @@ responsive styles. Size it explicitly against the viewport:
 flush with the bottom. Keep this in mind for any future full-screen UI
 layer: **a transform on any ancestor silently re-parents
 fixed-position children** — always give them an explicit viewport size.
+
+## 8. The per-extension "Update" button never appears in the packaged app
+
+**Symptom:** In the extensions drawer/panel, the download-icon "Update
+available" button next to an extension never shows (and "Update all"
+fails with a server error) — while the same extension on the PC repo
+install offers updates fine. Felt like "sync killed the update button".
+
+**Cause:** The packaged app's bundled
+`public/scripts/extensions/third-party/<name>/` folders had no `.git`
+directories — electron-builder strips them when packing. The server's
+version check (`/api/extensions/version`) treats a folder without `.git`
+as "not a repo" and answers `isUpToDate: true`, so the button is never
+un-hidden, and `/api/extensions/update` throws on the same check. Sync
+itself was never the culprit — and note sync would not fix this anyway:
+`.git` paths are on sync's hard deny list, so synced extension copies
+never carry git metadata.
+
+**Fix (done 2026-11-10):** All third-party extensions now live in
+`data/default-user/extensions/` — the modern install location, which
+`sync.syncExtensions` syncs and where each device's own install keeps a
+real `.git`. The legacy `public/scripts/extensions/third-party/` copies
+were deleted from the repo checkout and from
+`dist/win-unpacked/resources/app/public/`. Extension settings survived
+the move (they are keyed by name in `settings.json`, not by folder).
+Consequences to remember:
+- A device that receives an extension purely via sync (e.g. a fresh
+  install or the Android/Termux client) gets **no `.git`**, so its
+  update button will not appear — it pulls code via sync instead.
+- Extension "working files" sync between devices while each device's
+  `.git` stays local and independent. After a git-based update on one
+  device, the other device may briefly show a phantom "Update available"
+  whose pull is a no-op or needs a local `git checkout` — harmless.
