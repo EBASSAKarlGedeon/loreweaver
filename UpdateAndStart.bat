@@ -1,5 +1,7 @@
 @echo off
+title Loreweaver
 pushd %~dp0
+echo Updating Loreweaver...
 git --version > nul 2>&1
 if %errorlevel% neq 0 (
     echo [91mGit is not installed on this system.[0m

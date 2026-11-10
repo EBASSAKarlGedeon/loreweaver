@@ -1,6 +1,8 @@
 @echo off
 @setlocal enabledelayedexpansion
+title Loreweaver
 pushd %~dp0
+echo Updating Loreweaver...
 
 echo Checking Git installation
 git --version > nul 2>&1
