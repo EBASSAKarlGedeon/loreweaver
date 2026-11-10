@@ -167,3 +167,28 @@ per-key, and the `sync.settingsAuthoritativeDevice` device's values win.
 Rule of thumb: before any data-directory migration, snapshot
 `data/<handle>/settings.json` from the source install — it is the single
 file where "everything works but my parameters are gone" comes from.
+
+## 7. The landing page vanishes when the window gets narrow
+
+**Symptom:** Shrink the app window (or use a narrow screen) below ~1000px
+and the landing page disappears completely — only the SillyTavern
+background photo and icon bar remain. DevTools shows
+`#landing_page_root` still in the DOM but with **height 0**.
+
+**Cause:** SillyTavern applies a CSS `transform` to `<html>` as part of
+its narrow-screen layout (≤1000px `mobile-styles.css` behavior). A
+transform on an ancestor changes what `position: fixed` measures itself
+against: the landing's `inset: 0` no longer meant "fill the viewport",
+but "fill the nearest transformed ancestor" — `<html>`, which is 0px
+tall. Width still matched the window, height collapsed to 0, and the
+landing's own `overflow: hidden` clipped everything inside.
+
+**Fix (in the landing-page extension):** Never rely on `inset: 0` /
+`top+bottom` for a fixed-position overlay that must survive ST's
+responsive styles. Size it explicitly against the viewport:
+`height: 100dvh` (with `100vh` fallback) + `width: 100dvw` in
+`style.css`; when the ST bar is pinned, the extension sets
+`height: calc(100dvh - <barHeight>)` in JS so the panel still ends
+flush with the bottom. Keep this in mind for any future full-screen UI
+layer: **a transform on any ancestor silently re-parents
+fixed-position children** — always give them an explicit viewport size.
