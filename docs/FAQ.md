@@ -121,3 +121,49 @@ machine's LAN/Tailscale address (e.g. `100.x.y.z:8000`), not loopback.
 `Loreweaver is listening on IPv4: <ip>:8000`, or just reach it over
 Tailscale as the clients do. A `403` on an unauthenticated curl is the
 whitelist doing its job — the server is up.
+
+## 6. Presets, persona, prompt list, or extension settings reset after a data-directory migration
+
+**Symptom:** After copying/moving data between installs (git checkout →
+packaged app, a re-setup, or a botched sync round), the generation preset
+shows "Default", the prompt manager list shrinks (e.g. 68 prompts → 12),
+context/response limits drop (80000/15000 → 4095/300), the persona is
+unnamed with an empty description, and extension configs (`lorebook-forge`,
+`summaryception`, `landing-page`, …) are empty — while chats, character
+cards and preset *files* are all still present and correct.
+
+**Cause:** All of the above live in exactly one file:
+`data/<handle>/settings.json`. If that file comes from the wrong source (a
+fresh scaffold, an older copy of the install, a data root swapped mid-way),
+everything keyed in it is silently replaced — nothing else is damaged, so
+the rest of the copy looks fine and the loss is only noticed in the UI.
+Sync then faithfully propagates the bad file: `settings.json` syncs
+per-key, and the `sync.settingsAuthoritativeDevice` device's values win.
+
+**Fix:**
+1. **Back up** the current file:
+   `cp data/default-user/settings.json data/default-user/settings.json.pre-merge-backup`
+2. Close the app — `settings.json` is rewritten on activity/shutdown.
+3. Diff the old install's `settings.json` against the current one
+   (the incident of 2026-11-10: original `C:\SillyTavern` vs live install).
+   The keys that carry parameters:
+   - `oai_settings` (preset selection, `prompts`, `prompt_order`, samplers,
+     `openai_max_context`, `openai_max_tokens`)
+   - `kai_settings`, `textgenerationwebui_settings`
+   - `power_user.persona_description[s]`, `personas`, persona prefs
+   - `extension_settings` (per-extension config; compare sizes — e.g.
+     `lorebook-forge` 1.2 MB vs 375 bytes)
+   - `world_info_settings`, `tags`, `username`, `user_avatar`
+4. Merge the lost keys from the old file into the current one, but KEEP
+   the current install's genuine UI state: `accountStorage`,
+   `active_character`, `background`, per-page counts. (Wholesale copying
+   the old file throws away today's state instead.)
+5. Write as UTF-8 **without BOM**, restart, and verify in the UI.
+6. Because the authoritative device wins settings clashes, restore the
+   file on the `settingsAuthoritativeDevice` (the PC) — the fix then
+   propagates to other devices on their next sync. If a non-authoritative
+   device got clobbered instead, just let it pull.
+
+Rule of thumb: before any data-directory migration, snapshot
+`data/<handle>/settings.json` from the source install — it is the single
+file where "everything works but my parameters are gone" comes from.
