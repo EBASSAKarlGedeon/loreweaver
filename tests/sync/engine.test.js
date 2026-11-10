@@ -363,6 +363,35 @@ describe('sync engine', () => {
         expect(rf(client.dataRoot, 'chats/a.jsonl')).toBe('one');
     });
 
+    test('push preserves the local mtime on the hub copy', async () => {
+        const client = makeClientDir('c1');
+        const hub = tmpRoots[0];
+        wf(client.dataRoot, 'chats/a.jsonl', 'one');
+        // A fixed mtime in the past (2026-01-01), like an old chat file.
+        const mtimeMs = 1767225600000;
+        fs.utimesSync(path.join(client.dataRoot, 'default-user', 'chats', 'a.jsonl'), new Date(mtimeMs), new Date(mtimeMs));
+        const engine = makeEngine({ deviceId: 'device-a', client });
+        const r = await engine();
+        expect(r.ok).toBe(true);
+        expect(r.pushed).toBe(1);
+        const stat = fs.statSync(path.join(hub, 'default-user', 'chats', 'a.jsonl'));
+        expect(Math.round(stat.mtimeMs)).toBe(mtimeMs);
+    });
+
+    test('pull applies the hub mtime to the local copy', async () => {
+        const client = makeClientDir('c1');
+        const hub = tmpRoots[0];
+        const mtimeMs = 1767225600000;
+        wf(hub, 'chats/a.jsonl', 'one');
+        fs.utimesSync(path.join(hub, 'default-user', 'chats', 'a.jsonl'), new Date(mtimeMs), new Date(mtimeMs));
+        const engine = makeEngine({ deviceId: 'device-a', client });
+        const r = await engine();
+        expect(r.ok).toBe(true);
+        expect(r.pulled).toBe(1);
+        const stat = fs.statSync(path.join(client.dataRoot, 'default-user', 'chats', 'a.jsonl'));
+        expect(Math.round(stat.mtimeMs)).toBe(mtimeMs);
+    });
+
     test('chat continued on A then on B fast-forwards without losing messages', async () => {
         const a = makeClientDir('a');
         const b = makeClientDir('b');
@@ -419,5 +448,30 @@ describe('sync engine', () => {
         const copies = fs.readdirSync(conflictDir).filter(n => n.endsWith('.conflict'));
         expect(copies).toHaveLength(1);
         expect(fs.readFileSync(path.join(conflictDir, copies[0]), 'utf-8')).toBe(chatOf(m(0), m(1, ' B')));
+    });
+
+    test('settings.json per-key merge keeps both devices\' disjoint edits everywhere', async () => {
+        const a = makeClientDir('a');
+        const b = makeClientDir('b');
+        const s = (extA, extB) => JSON.stringify({ theme: 'dark', extA, extB });
+        // Both devices start from the same settings state.
+        wf(a.dataRoot, 'settings.json', s('a0', 'b0'));
+        const engineA = makeEngine({ deviceId: 'device-a', client: a });
+        const engineB = makeEngine({ deviceId: 'device-b', client: b });
+        await engineA();
+        await engineB();
+
+        // Offline: A edits extA, B edits extB.
+        wf(a.dataRoot, 'settings.json', s('a1', 'b0'));
+        wf(b.dataRoot, 'settings.json', s('a0', 'b1'));
+        const r1 = await engineA();
+        const r2 = await engineB();
+        expect(r1.ok).toBe(true);
+        expect(r2.ok).toBe(true);
+        // B merged A's extA in with its own extB.
+        expect(JSON.parse(rf(b.dataRoot, 'settings.json'))).toEqual({ theme: 'dark', extA: 'a1', extB: 'b1' });
+        // A picks the merged result up and nothing regresses.
+        await engineA();
+        expect(JSON.parse(rf(a.dataRoot, 'settings.json'))).toEqual({ theme: 'dark', extA: 'a1', extB: 'b1' });
     });
 });

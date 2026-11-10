@@ -218,7 +218,7 @@ export function createSyncEngine(options) {
         if (localChanged && !remoteChanged) {
             // Push local state.
             if (L) {
-                const put = await transport.putFile(handle, relPath, await readFileForPush(root, relPath), B?.hubRev ?? 0);
+                const put = await transport.putFile(handle, relPath, await readFileForPush(root, relPath), B?.hubRev ?? 0, L.mtimeMs);
                 if (put.ok) {
                     base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
                     await snapshotSettingsBase(relPath, await readFileForPush(root, relPath));
@@ -309,8 +309,8 @@ export function createSyncEngine(options) {
         // got.body: record the actual content and rev it to this change. The
         // hub's applyLocalDrift logs the drifted content on the next /changes,
         // and the recorded hash then matches — no skip-and-retry livelock.
-        await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
-        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        await atomicWriteFile(resolveSyncPath(root, relPath), got.body, got.mtimeMs);
+        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: got.mtimeMs ?? Date.now(), hubRev: change?.seq ?? R.rev });
         await snapshotSettingsBase(relPath, got.body);
         result.pulled++;
     }
@@ -350,8 +350,12 @@ export function createSyncEngine(options) {
                 const baseBuf = await readBaseEntryBuffer(relPath);
                 const merged = mergeSettingsBuffers(baseBuf, localBuffer, hubBuffer, settingsWinner);
                 if (merged.ok) {
-                    const put = await transport.putFile(handle, relPath, merged.content, change?.seq ?? 0);
+                    const put = await transport.putFile(handle, relPath, merged.content, change?.seq ?? 0, L.mtimeMs);
                     if (put.ok) {
+                        // Land the merge locally too — otherwise the next run
+                        // sees local ≠ base and pushes the pre-merge file back,
+                        // clobbering the other device's keys.
+                        await atomicWriteFile(resolveSyncPath(root, relPath), merged.content);
                         base.set(relPath, { hash: hashBuffer(merged.content), size: merged.content.length, mtimeMs: Date.now(), hubRev: put.json.seq });
                         await snapshotSettingsBase(relPath, merged.content);
                         result.pushed++;
@@ -371,7 +375,7 @@ export function createSyncEngine(options) {
 
             if (plan.action === 'fast-forward' && plan.winner === 'local') {
                 // Local continuation wins: push it.
-                const put = await transport.putFile(handle, relPath, plan.content, change?.seq ?? 0);
+                const put = await transport.putFile(handle, relPath, plan.content, change?.seq ?? 0, L.mtimeMs);
                 if (!put.ok) {
                     result.errors.push(`${relPath}: fast-forward push failed (${put.status})`);
                     result.ok = false;
@@ -405,7 +409,7 @@ export function createSyncEngine(options) {
 
             if (plan.action === 'local') {
                 // Edit-vs-delete: push the local version back.
-                const put = await transport.putFile(handle, relPath, localBuffer, change?.seq ?? 0);
+                const put = await transport.putFile(handle, relPath, localBuffer, change?.seq ?? 0, L.mtimeMs);
                 if (put.ok) {
                     base.set(relPath, { hash: L.hash, size: L.size, mtimeMs: L.mtimeMs, hubRev: put.json.seq });
                     result.pushed++;
@@ -473,8 +477,8 @@ export function createSyncEngine(options) {
         }
         // Same rule as pullRemote: trust the actual bytes (got.hash describes
         // got.body exactly), not the possibly-stale change-entry hash.
-        await atomicWriteFile(resolveSyncPath(root, relPath), got.body);
-        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: Date.now(), hubRev: change?.seq ?? R.rev });
+        await atomicWriteFile(resolveSyncPath(root, relPath), got.body, got.mtimeMs);
+        base.set(relPath, { hash: got.hash ?? R.hash, size: got.body.length, mtimeMs: got.mtimeMs ?? Date.now(), hubRev: change?.seq ?? R.rev });
         await snapshotSettingsBase(relPath, got.body);
         return true;
     }

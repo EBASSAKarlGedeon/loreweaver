@@ -376,6 +376,7 @@ export function createSyncRouter(dataRoot, options = {}) {
         }
         const hash = hashBuffer(stable.buffer);
         response.setHeader('X-Content-Hash', hash);
+        response.setHeader('X-Mtime-Ms', String(Math.round(stable.mtimeMs)));
         response.setHeader('Content-Length', stable.size);
         response.setHeader('Content-Type', 'application/octet-stream');
         response.send(stable.buffer);
@@ -411,6 +412,17 @@ export function createSyncRouter(dataRoot, options = {}) {
             response.status(400).json({ error: 'missing or invalid X-Content-Hash' });
             return;
         }
+        // Optional origin mtime: preserved on the hub copy so file-browser
+        // ordering (chat lists sort by mtime) survives sync. Rejected when
+        // malformed; allowed a little clock skew into the future.
+        let mtimeMs;
+        if (request.query.mtimeMs !== undefined) {
+            mtimeMs = Number(request.query.mtimeMs);
+            if (!Number.isFinite(mtimeMs) || mtimeMs <= 0 || mtimeMs > Date.now() + 5 * 60 * 1000) {
+                response.status(400).json({ error: 'invalid mtimeMs' });
+                return;
+            }
+        }
 
         // Read the body (bounded).
         const chunks = [];
@@ -443,6 +455,18 @@ export function createSyncRouter(dataRoot, options = {}) {
             }
 
             if (sameContent) {
+                // Content already matches; still correct the stored copy's
+                // mtime when the client declares one, so mtime drift from
+                // older builds self-heals without a content rewrite.
+                if (mtimeMs !== undefined) {
+                    try {
+                        const st = fs.statSync(absPath);
+                        if (Math.abs(st.mtimeMs - mtimeMs) > 1000) {
+                            const seconds = mtimeMs / 1000;
+                            fs.utimesSync(absPath, seconds, seconds);
+                        }
+                    } catch { /* best effort; display-only timestamp */ }
+                }
                 return { conflict: false, rev: currentRev, hash: actualHash, noop: true };
             }
 
@@ -452,7 +476,7 @@ export function createSyncRouter(dataRoot, options = {}) {
                 const trashDir = path.join(dataRoot, handle, 'sync-trash');
                 await moveToTrash(absPath, trashDir, relPath);
             }
-            await atomicWriteFile(absPath, buffer);
+            await atomicWriteFile(absPath, buffer, mtimeMs);
             const entry = state.changeLog.append({
                 path: relPath, op: 'put', hash: actualHash, size: buffer.length, deviceId: response.locals.deviceId,
             });

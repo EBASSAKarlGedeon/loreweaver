@@ -11,6 +11,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @property {any} [json]
  * @property {Buffer} [body]
  * @property {string} [hash] Content hash (X-Content-Hash on GET /file)
+ * @property {number} [mtimeMs] File modification time (X-Mtime-Ms on GET /file)
  * @property {string} [error]
  */
 
@@ -19,7 +20,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * @property {(handle: string, name: string, protocol: number) => Promise<TransportResult>} hello
  * @property {(handle: string, since: number, limit?: number) => Promise<TransportResult>} changes
  * @property {(handle: string, relPath: string) => Promise<TransportResult>} getFile
- * @property {(handle: string, relPath: string, buffer: Buffer, baseRev: number) => Promise<TransportResult>} putFile
+ * @property {(handle: string, relPath: string, buffer: Buffer, baseRev: number, mtimeMs?: number) => Promise<TransportResult>} putFile
  * @property {(handle: string, relPath: string, baseRev: number) => Promise<TransportResult>} deleteFile
  */
 
@@ -97,10 +98,19 @@ export function createHttpTransport({ hubUrl, token, timeoutMs = DEFAULT_TIMEOUT
                 return { ok: false, status: r.status, json, error: json?.error ?? `HTTP ${r.status}` };
             }
             const body = Buffer.from(await r.res.arrayBuffer());
-            return { ok: true, status: r.status, body, hash: r.res.headers.get('x-content-hash') ?? undefined };
+            const mtimeHeader = Number(r.res.headers.get('x-mtime-ms'));
+            return {
+                ok: true, status: r.status, body,
+                hash: r.res.headers.get('x-content-hash') ?? undefined,
+                mtimeMs: Number.isFinite(mtimeHeader) && mtimeHeader > 0 ? mtimeHeader : undefined,
+            };
         },
-        async putFile(handle, relPath, buffer, baseRev) {
-            const r = await call('PUT', `/api/sync/file?handle=${encodeURIComponent(handle)}&path=${encodeURIComponent(relPath)}&baseRev=${baseRev}`, {
+        async putFile(handle, relPath, buffer, baseRev, mtimeMs) {
+            let url = `/api/sync/file?handle=${encodeURIComponent(handle)}&path=${encodeURIComponent(relPath)}&baseRev=${baseRev}`;
+            if (typeof mtimeMs === 'number' && Number.isFinite(mtimeMs) && mtimeMs > 0) {
+                url += `&mtimeMs=${Math.round(mtimeMs)}`;
+            }
+            const r = await call('PUT', url, {
                 headers: { 'X-Content-Hash': hashBuffer(buffer), 'Content-Type': 'application/octet-stream' },
                 body: buffer,
             });

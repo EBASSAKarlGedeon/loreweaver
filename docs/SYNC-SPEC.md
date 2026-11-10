@@ -67,8 +67,8 @@ Auth: header `Authorization: Bearer <deviceToken>`. Tokens are issued once by th
 |---|---|
 | `POST /api/sync/hello` | Body `{ deviceId, name, protocol: 1 }`. Returns `{ hubSeq, protocol, serverTime }`. Registers or updates the device. |
 | `GET /api/sync/changes?handle=H&since=N` | Returns `{ hubSeq, changes: [{seq,path,op,hash,size}] }`, collapsed to the latest entry per path, ordered by seq. Paginated with `limit` plus `nextSince`. |
-| `GET /api/sync/file?handle=H&path=P` | Streams file bytes. Response header `X-Content-Hash`. |
-| `PUT /api/sync/file?handle=H&path=P&baseRev=R` | Streams file bytes. Header `X-Content-Hash` is verified against the received bytes. `baseRev` is the `hubRev` the client last synced for this path (0 if new). Returns `200 { seq, hash }`, or `409 { currentHash, currentRev }` if the hub's rev for the path is newer than `baseRev` and its hash differs from the upload's hash. |
+| `GET /api/sync/file?handle=H&path=P` | Streams file bytes. Response headers `X-Content-Hash` and `X-Mtime-Ms` (the hub copy's mtime, ms since epoch). |
+| `PUT /api/sync/file?handle=H&path=P&baseRev=R[&mtimeMs=T]` | Streams file bytes. Header `X-Content-Hash` is verified against the received bytes. `baseRev` is the `hubRev` the client last synced for this path (0 if new). Optional `mtimeMs` is the origin file's modification time; when present and valid (finite, > 0, at most ~5 min in the future) the hub sets it on the stored copy so display ordering (chat lists sort by mtime) survives sync — device clocks are still never used for conflict ordering. Returns `200 { seq, hash }`, or `409 { currentHash, currentRev }` if the hub's rev for the path is newer than `baseRev` and its hash differs from the upload's hash. |
 | `DELETE /api/sync/file?handle=H&path=P&baseRev=R` | Same optimistic check, records a delete (tombstone). Hub moves the old file into `data/<handle>/sync-trash/` instead of unlinking. |
 
 Rules for the hub:
@@ -100,7 +100,8 @@ at the end: base.lastHubSeq = hubSeq returned by the last changes call
 
 Details:
 - A file is skipped if it changed during the scan (size/mtime differ between hashing and use) or if it was modified within the last 2 seconds. It is picked up on the next run. This avoids syncing half-written chat files.
-- Pull writes to a temp file, verifies the hash, then renames atomically. If the same file was modified locally in the meantime (mtime check), skip and retry next run.
+- Pull writes to a temp file, verifies the hash, then renames atomically, applying the hub copy's mtime (`X-Mtime-Ms`) to the local file so chat-list ordering matches everywhere. If the same file was modified locally in the meantime (mtime check), skip and retry next run.
+- Push sends the local file's mtime as the optional `mtimeMs` query parameter; the hub stamps it on its copy (see section 5).
 - Push loops are bounded: if a `PUT` returns 409, treat it as a conflict for that path (section 7), do not retry blindly.
 - Failure of one path never aborts the run. Collect errors, continue, report at the end. The base table only advances for paths that actually succeeded.
 - Offline: if `hello` fails, do nothing and retry on the next trigger. No error spam.

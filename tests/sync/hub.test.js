@@ -141,6 +141,7 @@ describe('sync hub router', () => {
         expect(res.status).toBe(200);
         expect(res.body.toString()).toBe('hello');  // octet-stream body lands in res.body as Buffer
         expect(res.headers['x-content-hash']).toBe(sha('hello'));
+        expect(Number(res.headers['x-mtime-ms'])).toBeGreaterThan(0);
     });
 
     test('file GET rejects traversal and denied paths', async () => {
@@ -208,6 +209,45 @@ describe('sync hub router', () => {
         expect(log).toContain('"deviceId":"device-test"');
     });
 
+    test('file PUT preserves the declared origin mtime on the hub copy', async () => {
+        const { app, token, dataRoot } = makeHub();
+        await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+        const body = 'chat line 1\n';
+        // A fixed mtime safely in the past (2026-01-01).
+        const mtimeMs = 1767225600000;
+        const res = await request(app).put(`/api/sync/file?handle=default-user&path=${H('chats/new.jsonl')}&baseRev=0&mtimeMs=${mtimeMs}`)
+            .set(AUTH(token)).set('X-Content-Hash', sha(body))
+            .set('Content-Type', 'application/octet-stream')
+            .send(Buffer.from(body));
+        expect(res.status).toBe(201);
+        const stat = fs.statSync(path.join(dataRoot, 'default-user', 'chats', 'new.jsonl'));
+        expect(Math.round(stat.mtimeMs)).toBe(mtimeMs);
+    });
+
+    test('file PUT without mtimeMs still works (backwards compatible)', async () => {
+        const { app, token, dataRoot } = makeHub();
+        await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+        const res = await request(app).put(`/api/sync/file?handle=default-user&path=${H('chats/new.jsonl')}&baseRev=0`)
+            .set(AUTH(token)).set('X-Content-Hash', sha('body'))
+            .set('Content-Type', 'application/octet-stream')
+            .send(Buffer.from('body'));
+        expect(res.status).toBe(201);
+        expect(fs.existsSync(path.join(dataRoot, 'default-user', 'chats', 'new.jsonl'))).toBe(true);
+    });
+
+    test('file PUT with a malformed or far-future mtimeMs is rejected', async () => {
+        const { app, token } = makeHub();
+        await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+        for (const bad of ['abc', '-5', '0', String(Date.now() + 10 * 60 * 1000)]) {
+            const res = await request(app).put(`/api/sync/file?handle=default-user&path=${H('chats/new.jsonl')}&baseRev=0&mtimeMs=${bad}`)
+                .set(AUTH(token)).set('X-Content-Hash', sha('body'))
+                .set('Content-Type', 'application/octet-stream')
+                .send(Buffer.from('body'));
+            expect(res.status).toBe(400);
+            expect(res.body.error).toBe('invalid mtimeMs');
+        }
+    });
+
     test('file PUT with baseRev 0 conflicts when hub already has a different version', async () => {
         const { app, token, dataRoot } = makeHub({ files: { 'chats/a.jsonl': 'hub version' } });
         await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
@@ -248,6 +288,26 @@ describe('sync hub router', () => {
         expect(res.status).toBe(200);
         const after = (await request(app).get('/api/sync/changes?handle=default-user&since=0').set(AUTH(token))).body.hubSeq;
         expect(after).toBe(seqBefore);
+    });
+
+    test('file PUT identical content still corrects a drifted mtime without a new change', async () => {
+        const { app, token, dataRoot } = makeHub({ files: { 'chats/a.jsonl': 'same' } });
+        await request(app).post('/api/sync/hello?handle=default-user').set(AUTH(token)).send({});
+        // Simulate mtime drift from an older build: hub copy stamped "now".
+        const abs = path.join(dataRoot, 'default-user', 'chats', 'a.jsonl');
+        const drifted = new Date(Date.now() - 60 * 1000);
+        fs.utimesSync(abs, drifted, drifted);
+        const seqBefore = (await request(app).get('/api/sync/changes?handle=default-user&since=0').set(AUTH(token))).body.hubSeq;
+
+        const mtimeMs = 1767225600000; // true origin mtime, in the past
+        const res = await request(app).put(`/api/sync/file?handle=default-user&path=${H('chats/a.jsonl')}&baseRev=1&mtimeMs=${mtimeMs}`)
+            .set(AUTH(token)).set('X-Content-Hash', sha('same'))
+            .set('Content-Type', 'application/octet-stream')
+            .send(Buffer.from('same'));
+        expect(res.status).toBe(200);
+        expect(Math.round(fs.statSync(abs).mtimeMs)).toBe(mtimeMs);
+        const after = (await request(app).get('/api/sync/changes?handle=default-user&since=0').set(AUTH(token))).body.hubSeq;
+        expect(after).toBe(seqBefore); // no new log entry for a mtime-only correction
     });
 
     test('file DELETE moves to trash and tombstones', async () => {

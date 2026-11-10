@@ -169,14 +169,21 @@ export async function readStableFile(absPath, quietMs = 2000) {
  * Write a file atomically: temp file in the same directory, then rename.
  * @param {string} absPath Final absolute path
  * @param {Buffer|string} data Content
+ * @param {number} [mtimeMs] Optional modification time to set after the write
+ *   (ms since epoch). Used to preserve the origin device's mtime so chat-list
+ *   ordering survives sync; omitted/invalid leaves the file's real mtime.
  */
-export async function atomicWriteFile(absPath, data) {
+export async function atomicWriteFile(absPath, data, mtimeMs) {
     const dir = path.dirname(absPath);
     await fsp.mkdir(dir, { recursive: true });
     const tmp = path.join(dir, `.${path.basename(absPath)}.${process.pid}.${Date.now()}.tmp`);
     try {
         await fsp.writeFile(tmp, data);
         await fsp.rename(tmp, absPath);
+        if (typeof mtimeMs === 'number' && Number.isFinite(mtimeMs) && mtimeMs > 0) {
+            const seconds = mtimeMs / 1000;
+            await fsp.utimes(absPath, seconds, seconds);
+        }
     } catch (err) {
         try {
             await fsp.unlink(tmp);
