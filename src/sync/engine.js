@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
     SYNCED_DIRS,
     SYNCED_ROOT_FILES,
+    isSyncPathAllowed,
     resolveSyncPath,
 } from './paths.js';
 import { USER_DIRECTORY_TEMPLATE } from '../constants.js';
@@ -62,7 +63,7 @@ export function createSyncEngine(options) {
     async function scanLocal() {
         const cache = new HashCache();
         const current = new Map();
-        const skip = ['sync-trash', 'sync-conflicts', '_sync', 'node_modules'];
+        const skip = ['sync-trash', 'sync-conflicts', '_sync', 'node_modules', '.git'];
         // Opt-in dirs/files extend the standard synced set.
         const dirs = [...SYNCED_DIRS];
         if (allowExtensions && !dirs.includes(USER_DIRECTORY_TEMPLATE.extensions)) {
@@ -75,7 +76,12 @@ export function createSyncEngine(options) {
         for (const dir of dirs) {
             const scanned = await scanDirectory(path.join(root, dir), cache, skip);
             for (const [rel, entry] of scanned) {
-                current.set(`${dir}/${rel}`, entry);
+                const relPath = `${dir}/${rel}`;
+                // Never push paths the hub would deny (e.g. .git, Thumbs.db,
+                // nested secrets*): it would 400 and wedge the watermark.
+                if (isSyncPathAllowed(relPath, null, { allowExtensions, allowSecrets })) {
+                    current.set(relPath, entry);
+                }
             }
         }
         for (const file of rootFiles) {

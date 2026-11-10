@@ -69,7 +69,7 @@ function registerDevice(deviceId) {
     return token;
 }
 
-function makeEngine({ deviceId, client, handle = 'default-user' }) {
+function makeEngine({ deviceId, client, handle = 'default-user', ...opts }) {
     const token = registerDevice(deviceId);
     return createSyncEngine({
         dataRoot: client.dataRoot,
@@ -77,6 +77,7 @@ function makeEngine({ deviceId, client, handle = 'default-user' }) {
         hubUrl: `http://127.0.0.1:${hubPort}`,
         token,
         deviceName: deviceId,
+        ...opts,
     });
 }
 
@@ -101,6 +102,28 @@ describe('sync engine', () => {
         expect(result.offline).toBe(true);
         expect(result.errors).toEqual([]);
         expect(exists(client.dataRoot, 'chats/a.jsonl')).toBe(true);
+    });
+
+    test('extensions opt-in: .git dirs and junk files are never scanned or pushed', async () => {
+        const client = makeClientDir('c1');
+        const hub = tmpRoots[0];
+        process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = 'true';
+        try {
+            wf(client.dataRoot, 'extensions/Floating-Viewer/manifest.json', '{"name":"Floating-Viewer"}');
+            wf(client.dataRoot, 'extensions/Floating-Viewer/.git/config', 'git junk');
+            wf(client.dataRoot, 'extensions/Floating-Viewer/.git/objects/pack/pack-abc.pack', 'git junk');
+            wf(client.dataRoot, 'extensions/Floating-Viewer/Thumbs.db', 'junk');
+            const engine = makeEngine({ deviceId: 'device-a', client, allowExtensions: true });
+            const result = await engine();
+            expect(result.ok).toBe(true);
+            expect(result.errors).toEqual([]);
+            expect(result.pushed).toBe(1); // manifest.json only
+            expect(exists(hub, 'extensions/Floating-Viewer/manifest.json')).toBe(true);
+            expect(exists(hub, 'extensions/Floating-Viewer/.git/config')).toBe(false);
+            expect(exists(hub, 'extensions/Floating-Viewer/Thumbs.db')).toBe(false);
+        } finally {
+            process.env.SILLYTAVERN_SYNC_SYNCEXTENSIONS = '';
+        }
     });
 
     test('first sync pushes local files to the empty hub', async () => {
