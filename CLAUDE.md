@@ -48,3 +48,4 @@ Post-Phase-1 sweep (2026-11-10): a full repo triage of `SillyTavern` strings (48
 - Small, focused commits. Ask before merging `rebrand` into `release` or pushing.
 - Never push without asking.
 - Prefer minimal changes to the existing SillyTavern code; adapt rather than rewrite.
+- Every user-found bug that does NOT require a code correction (config fix, procedure, misunderstanding) gets an entry in `docs/FAQ.md` (symptom → cause → fix), so it isn't rediscovered later.
