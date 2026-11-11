@@ -1,6 +1,6 @@
 # Character Cells — design decisions (brainstorm doc)
 
-Status: **DECIDED SO FAR — nothing built yet.** Last updated: 2026-11-10.
+Status: **slices 1-4 built** (state store + panel, witness-filtered injection, bookkeeper pass, tier auto-detection, perspective rebuild in Main Character mode). Last updated: 2026-11-11.
 This doc is the continuation point: if the chat history is cleared, read this file and resume from "Open questions".
 
 Origin: the FF 5.4 "Internal States" preset (`data/default-user/OpenAI Settings/Freaky Frankenstein 5.4 Internal States vers. Fiction Styles + Ground Prose Rules.json`) simulates app features with prompt gymnastics. This project moves that state into Loreweaver itself, as structured data, to fix two pains:
@@ -52,6 +52,8 @@ Before each generation, the context builder injects **only what each present cha
 - This is a retrieval filter — no smarter model needed.
 
 Placement rule for prompt caching: stable content (preset, card, lorebook) first; volatile state last, so the provider's cached prefix survives.
+
+Perspective rebuild (the full hard wall) — DECIDED 2026-11-11: ships scoped to **Main Character mode** (`/cc-mode main`, requires exactly one main-tier cell; otherwise the omniscient block is used). The perspective block contains: YOU (the POV character's full cell), OTHERS AS YOU KNOW THEM (observable sketch only — no bonds/agendas/thoughts/inventories of others), WHAT YOU KNOW (witness-filtered ledger), USER titles/status only, plus world sections with faction intel/fibs, secret Chekhov plants and GM NOTES dropped entirely. Group narration keeps the omniscient block (one prompt voices several minds).
 
 ### 3. Bookkeeper pass (multi-model split)
 
@@ -133,7 +135,8 @@ Success test: a chat past turn 300 with zero knowledge leaks that the old setup 
 
 ## Open questions
 
-- Exact command syntax for the bookkeeper (natural-ish DSL vs strict JSON lines) — decide when building.
+- ~~Exact command syntax for the bookkeeper (natural-ish DSL vs strict JSON lines)~~ — DECIDED 2026-11-11: one command per line, small DSL (`memory_add`, `witness`, `bond`, `agenda_step`, `agenda_set`, `status`, `presence`, `chekhov`, `turn`); malformed lines are skipped, never crash the turn.
+- ~~Single memory list vs per-character copies~~ — DECIDED 2026-11-11: ONE shared event ledger, each event stored once with a witness list (`[{ id, what, witnesses, importance, turn }]`); per-character knowledge is DERIVED at injection time by filtering on witnesses ("store shared, show filtered"). Never widen an existing witness list (Summaryception's rule). Rationale: copies drift, deletion orphans, and the witness-tagged event shape is proven by Summaryception's ledger.
 - Which cheap model to default the bookkeeper to.
-- How tier auto-detection weighs on-screen vs spoke vs acted.
+- ~~How tier auto-detection weighs on-screen vs spoke vs acted~~ — DECIDED 2026-11-11: the bookkeeper emits `appear(<cellId>, spoke|acted|present)` for every participant each scene; a rolling 30-scene score (spoke=3, acted=2, present=1) maps to tier bands (≥18 main, ≥9 secondary, ≥3 minor, below → offstage), and ≥6 consecutive absent scenes force offstage. Hysteresis: a tier changes only after 2 consecutive turns agree. Manual override (/cc-promote, /cc-demote, panel dropdown) PINS the cell — auto stops touching it until /cc-autotier <name> releases the pin.
 - What happens to fired/pruned agenda bullets (the "Chekhov" lists) — probably become memories with importance decay.
