@@ -137,7 +137,7 @@ Success test: a chat past turn 300 with zero knowledge leaks that the old setup 
 
 - ~~Exact command syntax for the bookkeeper (natural-ish DSL vs strict JSON lines)~~ — DECIDED 2026-11-11: one command per line, small DSL (`memory_add`, `witness`, `bond`, `agenda_step`, `agenda_set`, `status`, `presence`, `chekhov`, `turn`); malformed lines are skipped, never crash the turn.
 - ~~Single memory list vs per-character copies~~ — DECIDED 2026-11-11: ONE shared event ledger, each event stored once with a witness list (`[{ id, what, witnesses, importance, turn }]`); per-character knowledge is DERIVED at injection time by filtering on witnesses ("store shared, show filtered"). Never widen an existing witness list (Summaryception's rule). Rationale: copies drift, deletion orphans, and the witness-tagged event shape is proven by Summaryception's ledger.
-- Which cheap model to default the bookkeeper to.
+- ~~Which cheap model to default the bookkeeper to~~ — DECIDED 2026-11-11: no hard-coded default; the user picks a **Connection Manager profile** in the Extensions panel ("Character Cells" drawer, dropdown at the top). ALL cheap calls (bookkeeper, backfill, digests) ride that profile via `ConnectionManagerRequestService.sendRequest()` — one-off requests that do NOT switch the narrator's active connection; profile-call failure or empty reply falls back to the active connection for that call. Empty selection = active connection (old behavior). Persisted in extension settings (`bookkeeperProfileId`).
 - ~~How tier auto-detection weighs on-screen vs spoke vs acted~~ — DECIDED 2026-11-11: the bookkeeper emits `appear(<cellId>, spoke|acted|present)` for every participant each scene; a rolling 30-scene score (spoke=3, acted=2, present=1) maps to tier bands (≥18 main, ≥9 secondary, ≥3 minor, below → offstage), and ≥6 consecutive absent scenes force offstage. Hysteresis: a tier changes only after 2 consecutive turns agree. Manual override (/cc-promote, /cc-demote, panel dropdown) PINS the cell — auto stops touching it until /cc-autotier <name> releases the pin.
 - ~~What happens to fired/pruned agenda bullets (the "Chekhov" lists) — probably become memories with importance decay.~~ — fired plants already land in the ledger via the bookkeeper's memory_add; under the landmark+digest memory scheme they age into digests unless tagged imp-3.
 
@@ -150,3 +150,35 @@ The event ledger is **immutable** — nothing ever edits, merges or deletes an e
 - **Digest**: everything older and non-landmark, summarized into one paragraph per cell by a cheap isolated call, cached per cell, rebuilt only when the cold set changes. `/cc-digest` forces a rebuild; a bad digest loses nothing.
 
 Old FF5 chats convert via the panel's CC TOOLS: **Clean copy** (new chat file, all internal-states HTML stripped, original untouched) → **Backfill** (ledger rebuilt from turn 0 in 4-message batches, one cheap call each, cancelable/resumable, seeds tier detection from the full history). Fully automatic — no approval gates.
+
+### FF5 mechanics port (DECIDED 2026-11-11: Option 3 — hybrid "prompt + code")
+
+The FF5 internal-states prompts were NOT copied into the extension: they instructed the *narrator* to simulate game mechanics in its output, which is exactly what the extension replaces. Instead each FF5 system is split:
+
+- **Mechanical part → code** (deterministic, free, unfudgeable): runs in a **pre-generation tick engine** (`tick.js`) hooked on `GENERATION_AFTER_COMMANDS` — awaited by Generate() BEFORE prompt assembly, so the tick's results are already in the injected block.
+- **Judgment part → Bookkeeper prompt** (new commands): what deserves a memory/spark/grudge/plant/note/thought, detecting that a skilled action needs dice.
+
+Split per system:
+
+| FF5 system | Code | Bookkeeper judgment |
+|---|---|---|
+| DnD Task Sim | DC locked by band (Easy 1-5 / Mod 5-10 / Hard 10-15 / Impossible 15-20), real d20, bond→DC modifiers (≥+4 →−1, ≥+8 →−2, ≥+15 →−4, ≤−3 →+2, ≤−5 →+4), Δ and outcome bands (crit ≥+8 or nat20 / success +0..+7 / near-miss −1..−3 / failure −4..−7 / crit-fail ≤−8 or nat1) | `task(actor, action, easy\|mod\|hard\|impossible)` — detecting that a skilled action with a real failure condition happened |
+| Bonds | Sparks check every 5th turn (≥7 → BOND+1, reset; else decay −1 if no spark gained since last check), Grudge check every 3rd turn (≥5 → BOND−1, reset; else −1), −5..+20 clamp. **Direct positive BOND raises are banned** — `bond(x,user,+n)` is auto-redirected to Sparks | `bond(cell, sparks|grudge, ±n)` for acts the scene shows; negative `bond(x,user,−n)` still direct |
+| Internal Agenda | Off-screen ticking (+1/turn for NPCs not in `present`), completion detection, completion effects (rest→heal+clear grudge, reconcile→BOND+1, research→plant W1 seed), refresh to mundane agenda (1-3 steps) | `agenda_set` for the *new logical* agenda text on exit/re-entry |
+| GM's Notebook | Max 20 entries, prune oldest | `note_add(R\|T\|D, text)` — what's worth logging |
+| Chekhov's Gun | Age +1/turn (locked stay frozen), prune ≥12, max 20 active, fire gate age ≥ 4, threshold = base(W1 18/W2 13/W3 8) − age − proximity (spoke −2 / present −1, from last scene's appear roles), up to 5 d20 checks/turn, nat-20 fire grants −4 threshold to the rest, nat-1 jams, fired bullets surfaced to the narrator ("weave in now") | `plant(text, weight, secret)` — loading 1-2 new bullets when the story plants something; `chekhov(id, fired)` only for story-driven resolutions |
+| Inventory/Feats/Titles | (modifier application happens inside the task roll) | `inv(cell, +item\|−item)`, `title(cell, +name\|−name)` |
+| Internal Thoughts | (nothing) | `thought(cell, text)` — max 3 NPCs per turn |
+| World Sim (BOTH tables) | d20 roll each turn, table selection (DuoTable when ≤2 named NPCs or zero off-screen, else StandardTable), band → event category stored in `world.worldsim` | none — narrator improvises the specifics from the injected category; the bookkeeper captures consequences (e.g. an ENTER_CHECK arrival → `presence on`) |
+
+Anti-Omniscient NPCs is already implemented by witness filtering; Spectacle Combat stays a narrator prose rule in the prose-only preset (the `combat` fields hold its current state).
+
+World Sim ruling (user, 2026-11-11): **both tables**, always available; if faithful Agenda ticking later proves rich enough, dropping StandardTable can be revisited. Toggle: `/cc-worldsim on|off|now` (default on; `now` rerolls immediately).
+
+### Slices for the mechanics port
+1. **Tick engine + new commands + enriched bookkeeper prompt** (this slice).
+2. (DnD sim is part of slice 1 — `task` command + dice live in the same pass.)
+3. Chekhov firing engine tuning after live testing (thresholds/proximity feel).
+4. World Sim tuning (category flavor, whether StandardTable stays).
+
+Success test for the port: a fight scene rolls real dice and reports Task/DC/Roll/Delta/Outcome without the narrator ever writing numbers; off-screen NPCs visibly progress agendas between scenes; a planted bullet fires organically within a few turns of its age gate opening.
