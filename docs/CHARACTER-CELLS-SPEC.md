@@ -182,3 +182,28 @@ World Sim ruling (user, 2026-11-11): **both tables**, always available; if faith
 4. World Sim tuning (category flavor, whether StandardTable stays).
 
 Success test for the port: a fight scene rolls real dice and reports Task/DC/Roll/Delta/Outcome without the narrator ever writing numbers; off-screen NPCs visibly progress agendas between scenes; a planted bullet fires organically within a few turns of its age gate opening.
+
+### Old-chat conversion, round 2 (DECIDED 2026-11-11: Import button + seeded-mode backfill)
+
+The 300-turn FF5 chats already contain their **final internal-states block** in the last AI message — exact current values written by FF5 itself. Re-inferring those with a model would be strictly worse than parsing them. The backfill (existing) is the right tool ONLY for what FF5 never stored: the per-turn, witness-tagged event ledger. So conversion becomes two deterministic-or-targeted steps, not one inference job:
+
+**New CC TOOLS button: "Import state from internal states"** — deterministic HTML parse of the **most recent** `<internal_states>` block in the open chat's message history. No model call, no message modification, instant.
+
+- Creates NPC cells automatically (fixes the backfill's "no cell creation" gap for FF5 chats).
+- Seeds exact current values per section, lenient per-section regexes (parse what matches, skip what doesn't, never fail): BONDS → bonds/sparks/grudge; NPC AGENDAS → agenda goal/step/max/aware/fibs/circle/body(+location from NPC LOCATIONS); INV & SKILLS → user cell inventory/titles/status/mods; CHEKHOV → bullets with weight/age/status/depends/secret; GM'S NOTEBOOK → [R]/[T]/[D] notes; INTERNAL THOUGHTS → per-cell thoughts; DND TASK SIM / COMBAT / PHYSICS → world.roll/combat/env/physics.
+- **(b) seeds the turn counter** from the block's `TURN: N` header.
+- Imported NPCs start tier `minor`, UNPINNED — the backfill's appear history + auto-tier settles real tiers afterward.
+- Reports per-section counts in a toast (imported X bonds, Y bullets, Z notes…; sections not found skipped).
+
+**Backfill gains a SEEDED MODE** (runs automatically when the state was imported): ledger work ONLY — `memory_add`, `witness`, `appear` (→ tier log) and `turn` markers. All accumulating commands (bond/status/agenda/inv/title/note/plant) are stripped from the grammar AND filtered as belt-and-braces, so the imported final values are never double-counted. Relationship *moments* still land in the ledger as memories — only the numeric double-counting is avoided.
+
+**Turn accounting fix (applies to all backfills):** the backfill currently stamps every event with the same `turn0`. Seeded mode instead keeps a LOCAL virtual turn counter starting at 0 and incremented by `turn()` — so old events get historical turns (hot-window/aging math stays correct) and the imported `world.turn` (e.g. 300) is not pushed further.
+
+**Order of operations for an old FF5 chat (documented in the button notes):**
+1. Open the OLD chat → **Import** (seeds cells + exact values + turn counter into its state).
+2. **Clean copy** — CHANGED: when the chat already has cell state, the copy CARRIES it over instead of resetting to fresh (otherwise the import would be lost — the HTML is stripped from the copy's text, so import must run before cleaning).
+3. **Backfill** — runs in seeded mode (ledger only, local turn counter from 0).
+
+Fresh chats (no FF5 blocks) are unaffected: no block found → Import reports "nothing to import", and a normal (non-seeded) backfill behaves as before — except it still cannot create cells, which remains acceptable there (users add NPCs as they appear in live play).
+
+This flow is speculative-coded as slice 8; no coding started yet at time of writing.
