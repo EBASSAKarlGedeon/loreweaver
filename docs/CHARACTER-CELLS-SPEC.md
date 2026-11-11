@@ -232,6 +232,18 @@ Source: `docs/PRESET-RECOMMENDATIONS.md` §4.1 — the behavioural rules of Pura
 
 **Trust is judgment-only.** Heart = existing BOND (Sparks/Grudge ticks, never rises directly — unchanged). Trust = new number, moved ONLY by the bookkeeper (`trust(cell, ±n)`) when the scene shows trustworthy or betraying conduct; no automatic tick. Clamp −5..+20 like BOND. Sola's principle applies as prompt guidance: "trust returns by evidence across the next scenes, not one conversation." Heart ≠ trust is what makes longing/obsession (high heart, low trust) and quiet respect (low heart, solid trust) expressible as distinct states — the card renders the disagreement on purpose.
 
+**Route emoji palette (DECIDED 2026-11-11: palette emoji + free name).** Pura's "invent a fitting route when none suit" is kept as free-text route NAMES (1–4 words, sanitized); only the emoji is constrained, to a generous curated palette (user ruled 12 + spares is too few) so a fitting signifier almost always exists:
+
+- Warm & bloom: 🌱 🌸 💐 🌹 🕊️ 🪶 🧸 🏠
+- Fated & patient: 🔮 🧵 🧲 🌙 ✨ ⏳ 🌅 🕰️
+- Conflict & edge: ⚔️ 🔥 🗡️ 🩸 ⛓️ 🏹 ⚡ 🕸️
+- Dark & tragic: 🕯️ 🥀 🌑 🕳️ 💀 🪞 🧨 🚪
+- Cold & apart: ❄️ 🧊 🌊 🌫️ 🐦 🌉 🎭 🎲
+- Roles & bonds: 🤝 🫂 🛡️ 🎓 🐉 🩹 💍 👑
+- Odd flavours: 🎶 🧪 🍂 🍯 🗝️ 🐍 🌘 ⚓
+
+The palette lives as a constant in the extension code and is echoed in the bookkeeper prompt (pick a fitting palette emoji; invent the name). An off-palette emoji is not rejected: the route is stored with a generic ❔ emoji and the name kept, surfaced for hand-editing. Route still changes only on a true turn of the story.
+
 **Bookkeeper rules (Pura's, adapted, in P7 style — instruction + one-line reminder + audit line):**
 - Bond/spark/grudge ops only on a moment the scene names as earned; most turns emit NO rel ops at all (silence is the default state).
 - Relationships stall, cool and slide backwards: neglect, broken promises and small slights cost (negative ops stay direct).
