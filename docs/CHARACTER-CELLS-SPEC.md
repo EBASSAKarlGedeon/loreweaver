@@ -139,4 +139,14 @@ Success test: a chat past turn 300 with zero knowledge leaks that the old setup 
 - ~~Single memory list vs per-character copies~~ — DECIDED 2026-11-11: ONE shared event ledger, each event stored once with a witness list (`[{ id, what, witnesses, importance, turn }]`); per-character knowledge is DERIVED at injection time by filtering on witnesses ("store shared, show filtered"). Never widen an existing witness list (Summaryception's rule). Rationale: copies drift, deletion orphans, and the witness-tagged event shape is proven by Summaryception's ledger.
 - Which cheap model to default the bookkeeper to.
 - ~~How tier auto-detection weighs on-screen vs spoke vs acted~~ — DECIDED 2026-11-11: the bookkeeper emits `appear(<cellId>, spoke|acted|present)` for every participant each scene; a rolling 30-scene score (spoke=3, acted=2, present=1) maps to tier bands (≥18 main, ≥9 secondary, ≥3 minor, below → offstage), and ≥6 consecutive absent scenes force offstage. Hysteresis: a tier changes only after 2 consecutive turns agree. Manual override (/cc-promote, /cc-demote, panel dropdown) PINS the cell — auto stops touching it until /cc-autotier <name> releases the pin.
-- What happens to fired/pruned agenda bullets (the "Chekhov" lists) — probably become memories with importance decay.
+- ~~What happens to fired/pruned agenda bullets (the "Chekhov" lists) — probably become memories with importance decay.~~ — fired plants already land in the ledger via the bookkeeper's memory_add; under the landmark+digest memory scheme they age into digests unless tagged imp-3.
+
+### Memory scheme (DECIDED 2026-11-11: Option C — "digests + landmarks")
+
+The event ledger is **immutable** — nothing ever edits, merges or deletes an event. Only the injected view ages:
+
+- **LANDMARKS**: importance-3 events injected verbatim forever (witness-filtered, cap 10). A turn-300 plot-critical event still reaches a turn-1000 generation.
+- **Recent ring**: newest 12 witnessed events verbatim (~last 40 turns).
+- **Digest**: everything older and non-landmark, summarized into one paragraph per cell by a cheap isolated call, cached per cell, rebuilt only when the cold set changes. `/cc-digest` forces a rebuild; a bad digest loses nothing.
+
+Old FF5 chats convert via the panel's CC TOOLS: **Clean copy** (new chat file, all internal-states HTML stripped, original untouched) → **Backfill** (ledger rebuilt from turn 0 in 4-message batches, one cheap call each, cancelable/resumable, seeds tier detection from the full history). Fully automatic — no approval gates.
