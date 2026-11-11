@@ -260,4 +260,13 @@ The palette lives as a constant in the extension code and is echoed in the bookk
 
 **Old chats:** FF5 internal-states blocks carry no rel data — imported/backfilled chats start with derived stage from the imported BOND and everything else "still a mystery"; the layer fills in during live play. No special import work.
 
+**Starting values for pre-existing relationships (DECIDED 2026-11-11: origin call at creation).** A fresh cell defaults to BOND 0 → Stranger, which is wrong for a maid who raised the user or a sworn arch-enemy. The fix runs at cell-CREATION time (not per turn):
+
+- **Trigger:** every NEW NPC cell creation — bookkeeper `char_add`, `/cc-add`, and the panel's "＋" button. NOT on import (FF5 chats already carry exact BOND values) and never retroactively for existing cells.
+- **One cheap one-off call** (through `llm.js` cheapCall, the same Connection Manager profile as the bookkeeper) reads: the character's CARD (description/personality/scenario/first message — fuzzy name match, the import's matcher), the SCENE that introduced them, and the current state summary. It emits the starting block: `bonds.user`, `trust`, `route`, `condition` (optionally a first `threshold`).
+- **This is the ONLY place the card is ever read.** The per-turn bookkeeper stays strictly scene-only; card lore enters the state once, at birth, as plain numbers/labels like any other state.
+- **Soft caps** (hand-editable past): starting BOND within −8..+8 (so even a beloved childhood friend lands at Familiar/Friendly and the ladder still has room to climb; an arch-enemy lands around Hostile, not auto-Nemesis); starting trust within 0..+4 (negative trust must be EARNED on screen by betrayal, never granted at birth).
+- **Likes/dislikes/keepsake always start empty** even for pre-existing relationships — Pura's discovery-gating is the point: what the user knows about them is only what has happened ON SCREEN.
+- **Never fatal, never blocking:** it runs after the reply (not pre-generation), a failed or empty call just means the cell starts at 0 as today. Route/condition reuse the same ❔ normalization. Values land via the same `ensureRel` machinery and show up in the panel for hand-fixing, like everything else.
+
 **Success test:** in live play, an NPC the user was friendly to twice does NOT jump stages; a betrayal visibly drops trust faster than heart; a card's threshold names a concrete scene moment and the next stage move happens at (or near) that moment.
