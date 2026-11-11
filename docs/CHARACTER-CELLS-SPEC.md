@@ -207,3 +207,45 @@ The 300-turn FF5 chats already contain their **final internal-states block** in 
 Fresh chats (no FF5 blocks) are unaffected: no block found → Import reports "nothing to import", and a normal (non-seeded) backfill behaves as before — except it still cannot create cells, which remains acceptable there (users add NPCs as they appear in live play).
 
 This flow is speculative-coded as slice 8; no coding started yet at time of writing.
+
+### Relationship layer (DECIDED 2026-11-11: Pura's Relationship Tracker rules + card)
+
+Source: `docs/PRESET-RECOMMENDATIONS.md` §4.1 — the behavioural rules of Pura's Relationship Tracker (from the full prompt text in `OpenAI Settings/Pura's Director Preset 16.0 (SillyTavern).json`), adopted onto cells. User picked: **rules + relationship card** and **heart/trust as two separate numbers**. Queued as slice 9, built only AFTER the hand-test round of slices 4–8 is confirmed.
+
+**Schema — optional `rel` block per NPC cell** (auto-created minor cells may skip it; it describes the NPC's relationship toward the USER only — NPC↔NPC stays in the existing numeric `bonds`):
+
+```json
+"rel": {
+  "stage": "Friendly",          // derived from BOND; tangled overrides possible
+  "condition": "💛 SHIFTING",   // emotional weather — may shift while stage stays put
+  "route": "🌱 Slow Burn",      // this pair's story genre; changes only on a true turn
+  "trust": 4,                   // separate from BOND (heart). May disagree with it.
+  "likes": [],                  // DISCOVERIES only — what the user saw win them over
+  "dislikes": [],               // same rule; "still a mystery" while empty
+  "keepsake": "m123",           // the landmark the NPC replays most (ledger id)
+  "threshold": "a shared meal in silence",  // the named, concrete next gate
+  "severed": false              // 💀 SEVERED: one final card, then retired
+}
+```
+
+**Stage derives from BOND — no double bookkeeping.** Stage is a pure function of the existing BOND number, using the same band technique as `tiers.js`: warm ladder bands upward (Stranger → Noticed → Acquaintance → Familiar → Friendly → Close → Confidant → Intimate → Devoted), cold ladder bands at BOND ≤ 0 (Wary → Guarded → Resentful → Hostile → Nemesis). Exact band edges are a build-time tuning matter. Because BOND only moves via Sparks checks (every 5th turn) and Grudge checks (every 3rd), the stage automatically obeys Pura's core rules: **most scenes move nothing**, and it can only move one rung at a time, and only when the ticks earned it — the discipline is enforced by the machine, not the prompt. Tangled stages (Complicated | Codependent | Estranged | Rivals | Frenemies | Unrequited | Forbidden) are the one judgment exception: the bookkeeper may PIN a tangled stage (like a tier pin); the pin releases when BOND crosses a band boundary.
+
+**Trust is judgment-only.** Heart = existing BOND (Sparks/Grudge ticks, never rises directly — unchanged). Trust = new number, moved ONLY by the bookkeeper (`trust(cell, ±n)`) when the scene shows trustworthy or betraying conduct; no automatic tick. Clamp −5..+20 like BOND. Sola's principle applies as prompt guidance: "trust returns by evidence across the next scenes, not one conversation." Heart ≠ trust is what makes longing/obsession (high heart, low trust) and quiet respect (low heart, solid trust) expressible as distinct states — the card renders the disagreement on purpose.
+
+**Bookkeeper rules (Pura's, adapted, in P7 style — instruction + one-line reminder + audit line):**
+- Bond/spark/grudge ops only on a moment the scene names as earned; most turns emit NO rel ops at all (silence is the default state).
+- Relationships stall, cool and slide backwards: neglect, broken promises and small slights cost (negative ops stay direct).
+- Likes/dislikes are append-only discoveries: record only when the scene shows the user learning it, ≤1 entry per list per scene.
+- Keepsake replaced only when a new moment clearly outshines the old one.
+- Threshold must be a concrete moment (a confession, a rescue, a kept secret, a shared meal in silence), never a vague feeling; rewrite it when the stage moves.
+- Condition may change while the stage stays put. Route changes only when the story truly turns.
+- `severed` ends the relationship: one final card, then no further rel updates.
+- New shared-grammar ops: `trust(cell, ±n)` and `rel(cell, field, value)` for condition/route/likes/dislikes/keepsake/threshold/severed. Code belt-and-braces: cap rel field changes per cell per turn (≤1 likes entry, ≤1 dislikes entry, one condition/route/threshold write max).
+
+**Drift is computed, not stored.** The card's drift label (💗 HEART EVENT when stage rises, 🥀 FALLING OUT when it drops, 🌫️ HOLDING otherwise) is derived at render time from what changed this turn.
+
+**Panel — the route card.** Each NPC cell gains a Pura-style relationship card (app-rendered from JSON, so Pura's regex-fragility/format-law problem does not exist here): route emoji+name, ladder path with the current rung highlighted, condition chip, heart vs trust shown side by side, likes/dislikes lists, the keepsake line, the named threshold, and the drift label. Fully hand-editable like every other cell field. The old numeric BONDS section stays for all bond pairs.
+
+**Old chats:** FF5 internal-states blocks carry no rel data — imported/backfilled chats start with derived stage from the imported BOND and everything else "still a mystery"; the layer fills in during live play. No special import work.
+
+**Success test:** in live play, an NPC the user was friendly to twice does NOT jump stages; a betrayal visibly drops trust faster than heart; a card's threshold names a concrete scene moment and the next stage move happens at (or near) that moment.
