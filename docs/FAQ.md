@@ -276,3 +276,63 @@ is overwritten or lost.
 
 **Rule of thumb:** whenever the client code changes, pull the hub too
 and restart it. Cheap insurance against fixing a bug on one side only.
+
+---
+
+## Character Cells: internal states appeared in the WRONG chat
+
+**Symptom:** You played one card's chat, switched to another chat while the
+extension was still working, and a whole new "internal states" block (new NPC
+cells, bond/trust/route values) showed up inside the *other* chat.
+
+**Cause:** The bookkeeper runs 1.5 s after a reply and then awaits an LLM call
+(seconds). Every step after the delay read the *live* chat/metadata at the
+moment it ran, not at the moment the reply arrived — so a chat switch made the
+whole pass execute against, and save into, the new chat.
+
+**Fix (character-cells ≥ 6ef89be):** each background pass captures a chat token
+(chat id + character id + state epoch) when it is dispatched and aborts if the
+token no longer matches after any delay or await. Covers bookkeeper, origin
+calls, the tick's referee call and backfill. Already-contaminated chats: use
+CC TOOLS → *Reset internal states* in that chat.
+
+## Character Cells: swipes/deletes inflate the turn counter and age plants
+
+**Symptom:** Swiping 5 times advanced the turn by 5, aged Chekhov plants ×5,
+ticked agendas ×5; deleted scenes left ghost events in the ledger.
+
+**Cause:** Every generation ran a full tick and nothing rewound state on
+swipe/delete.
+
+**Fix:** a ring of 5 pre-tick state snapshots is stored in the chat metadata
+(`character_cells_snaps`). Swipe/regenerate restores the snapshot taken before
+that message; deleting the end of the chat restores the state from before the
+removed turns. Deleting a message in the *middle* of the chat does not rewind,
+and swiping between already-existing swipes does not either.
+
+## Character Cells: first message of a new chat did nothing
+
+**Symptom:** New chat, first reply has no dice / injected state; it only starts
+working on turn 2.
+
+**Cause:** State was only created after the first reply by the bookkeeper.
+
+**Fix:** the first generation now creates the state (when Bookkeeper state
+tracking is enabled).
+
+## Character Cells: bookkeeper profile returns empty content (thinking model)
+
+**Symptom:** Console: `cheapCall: profile returned empty content (reasoning:
+N chars …)`; calls silently fall back to the active connection and double-bill.
+
+**Cause:** Reasoning tokens are spent from the same `max_tokens` as the answer;
+a small cap is eaten entirely by thinking (e.g. GLM flash, reasoning cannot be
+turned off).
+
+**Fix:** profile calls use *Profile max tokens* (Extensions → Character Cells,
+default 32000). Raise it if the warning persists; or pick a non-thinking model.
+
+## Character Cells: the narrator copies the World Sim text word for word
+
+**Fix:** only the event category is injected now, with an instruction to invent
+fresh specifics; the canned description is panel-only.
