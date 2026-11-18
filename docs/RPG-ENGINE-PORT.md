@@ -286,10 +286,13 @@ JPEG dataURL), all other bio fields left blank for in-game editing. The record l
 - Stats are never imported (they are per-world anyway); characters/stats of a hero are created
   per adventure by the engine.
 - Reachable from the extension drawer ("Import from Loreweaver" button, same overlay pattern as
-  the bridge) and from a link on the bridge page.
-- Verified by `node tools/check-imports.js` (mock Loreweaver with personas + avatar PNG):
-  listing, import shape, no-duplicate re-import, game-side field preservation, source-change
-  detection + selective update.
+  the bridge) and from a link on the bridge page. Three sections: personas → hero library (§5d),
+  character cards → world NPCs, World Info → world lorebook (both share a "Target world"
+  dropdown; see the handoff doc item 3 for the v2 design — source registry `lwImports` in kv.rpg,
+  update/renames/no-blanking rules).
+- Verified by `node tools/check-imports.js` (mock Loreweaver with personas + avatar PNG + cards +
+  a WI book): listing, import shapes, no-duplicate re-import, game-side field preservation,
+  source-change detection + selective update, keyword/constant mapping, disabled-entry skipping.
 
 ## 6. Text AI providers (`ai-provider.js`)
 
