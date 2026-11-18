@@ -23,7 +23,9 @@ const KV_DIR = path.join('rpg-engine', 'kv');
 const DATA_SUFFIX = '.json';
 const TOMB_SUFFIX = '.tomb.json';
 // Allowlist for opaque names: base64url body, optionally already suffixed by the client.
-const NAME_RE = /^[A-Za-z0-9_-]+(\.json|\.tomb\.json)?$/;
+// The client also writes conflict copies as '<name>.conflict-<ms>.json' (reconcile's
+// both-sides-changed rule) — the mid-name dot and timestamp must pass the allowlist too.
+const NAME_RE = /^[A-Za-z0-9_-]+(\.conflict-\d+)?(\.json|\.tomb\.json)?$/;
 
 /**
  * Resolve and validate the kv directory for the requesting user.
