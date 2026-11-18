@@ -53,8 +53,9 @@ function safeName(name) {
 /** Strip the .json suffix for lookups of the raw data file. */
 function dataFile(dir, name) {
     const base = name.endsWith(DATA_SUFFIX) ? name : name + DATA_SUFFIX;
-    const resolved = path.resolve(dir, base);
-    if (!resolved.startsWith(dir)) {
+    const dirAbs = path.resolve(dir); // dataRoot may be relative ('./data') — resolve once, compare like-for-like
+    const resolved = path.resolve(dirAbs, base);
+    if (!resolved.startsWith(dirAbs)) {
         throw new Error('invalid name');
     }
     return resolved;
@@ -63,8 +64,9 @@ function dataFile(dir, name) {
 /** Tombstone path for a data file name. */
 function tombFile(dir, name) {
     const base = (name.endsWith(DATA_SUFFIX) ? name.slice(0, -DATA_SUFFIX.length) : name) + TOMB_SUFFIX;
-    const resolved = path.resolve(dir, base);
-    if (!resolved.startsWith(dir)) {
+    const dirAbs = path.resolve(dir);
+    const resolved = path.resolve(dirAbs, base);
+    if (!resolved.startsWith(dirAbs)) {
         throw new Error('invalid name');
     }
     return resolved;
