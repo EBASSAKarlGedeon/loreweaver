@@ -290,9 +290,19 @@ JPEG dataURL), all other bio fields left blank for in-game editing. The record l
   character cards → world NPCs, World Info → world lorebook (both share a "Target world"
   dropdown; see the handoff doc item 3 for the v2 design — source registry `lwImports` in kv.rpg,
   update/renames/no-blanking rules).
-- Verified by `node tools/check-imports.js` (mock Loreweaver with personas + avatar PNG + cards +
+- **"Add as world" (card rows, next to "Add as NPC"):** a card whose description is GM rules and
+  whose embedded `data.character_book` is the cast is really a mini-world, so this turns the card
+  into a NEW game world: description+personality+scenario → one always-on `law` entry (title
+  "Rules"), embedded book entries (v2 `keys` or v3 `keys`/`secondary_keys`, `constant` → always,
+  `enabled:false` skipped) → `character`-typed entries with their keywords. A valid fresh
+  `mno-world` file (default stats config, empty trackers/npcs) is saved under a slugified id
+  (≤40 chars, `-2` dedupe), the worlds index gains it, the target-world dropdown switches to it,
+  and the registry records `{ worldId, asWorld: true, titles: [...] }` — Update refreshes the
+  imported entries by title (game-side lore untouched). Cards without a book import as a rules-only
+  world. Verified by `node tools/check-imports.js` (mock Loreweaver with personas + avatar PNG + cards +
   a WI book): listing, import shapes, no-duplicate re-import, game-side field preservation,
-  source-change detection + selective update, keyword/constant mapping, disabled-entry skipping.
+  source-change detection + selective update, keyword/constant mapping, disabled-entry skipping,
+  world-import file form + registry + index + mixed NPC/world update, no-book card fallback.
 
 ## 6. Text AI providers (`ai-provider.js`)
 
