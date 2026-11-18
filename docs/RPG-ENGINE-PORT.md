@@ -270,6 +270,27 @@ write into **`data/<user>/rpg-engine/kv/`** on the Loreweaver server via `/api/r
 - Verified by `node tools/check-storage.js` (mock Loreweaver kv backend): write-through,
   cross-device pull, conflict copy, tombstone delete, fresh push.
 
+## 5d. Imports (`loreweaver-import.html`) — Loreweaver personas → hero library
+
+Personas are listed from `power_user.personas` (avatar id → name) + `power_user.persona_descriptions`
+(id → `{description, title}`) via the same `/api/settings/get` call the bridge uses — `getSettings()`
+returns the whole parsed settings object as `parsed`. Import maps: name → **Name**, description →
+**Persona**, avatar → **Portrait** (fetched from `/User%20Avatars/<id>`, canvas-downscaled to ≤256 px
+JPEG dataURL), all other bio fields left blank for in-game editing. The record lands in
+`kv.rpg.savedHeroes` (same 40-cap as the engine's `HeroStore`) and carries a **link**:
+`lwSource = { type: "persona", id, descHash (fnv1a of the description), importedAt }`.
+
+- Row status: not imported / linked (up to date) / linked — source changed, update.
+- **Update** overwrites only the imported fields (Name, Persona, Portrait); anything filled in the
+  game (race, gender, job…) survives. Re-importing never duplicates — it updates the linked hero.
+- Stats are never imported (they are per-world anyway); characters/stats of a hero are created
+  per adventure by the engine.
+- Reachable from the extension drawer ("Import from Loreweaver" button, same overlay pattern as
+  the bridge) and from a link on the bridge page.
+- Verified by `node tools/check-imports.js` (mock Loreweaver with personas + avatar PNG):
+  listing, import shape, no-duplicate re-import, game-side field preservation, source-change
+  detection + selective update.
+
 ## 6. Text AI providers (`ai-provider.js`)
 
 Perchance AI (the shim slot), OpenAI, DeepSeek, OpenRouter, Ollama (local) — or any
