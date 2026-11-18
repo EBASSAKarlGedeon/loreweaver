@@ -336,3 +336,19 @@ default 32000). Raise it if the warning persists; or pick a non-thinking model.
 
 **Fix:** only the event category is injected now, with an instruction to invent
 fresh specifics; the canned description is panel-only.
+
+## RPG Engine: "Open Loreweaver bridge" / "Import from Loreweaver" buttons do nothing
+
+**Symptom:** Clicking either button in the RPG Engine drawer does nothing visible — no overlay
+appears (the game's "Open RPG Engine" still works).
+
+**Cause:** The overlay CSS was scoped to the old element ids (`#rpge-bridge-root`) while the
+generalized overlay code created new ids (`rpge-page-*`), so the overlays rendered unstyled and
+invisible. Introduced by the imports commit `0e814e3`, fixed by class-scoping in `0993ab6`.
+
+**Fix:** `git pull origin main` inside the installed extension
+(`%LOCALAPPDATA%\SillyTavern\Data\data\default-user\extensions\rpg-engine`) and reload the app
+window. If it ever happens again after an extension update: it is a root-wrapper styling
+regression — run `node tools/shot-overlays.js` (in the port folder) which clicks both buttons and
+screenshots the overlays; a working overlay shows a full-screen `LOREWEAVER BRIDGE` /
+`LOREWEAVER IMPORTS` bar.
