@@ -41,6 +41,7 @@ export const USER_DIRECTORY_TEMPLATE = Object.freeze({
     assets: 'assets',
     comfyWorkflows: 'user/workflows',
     files: 'user/files',
+    rpgEngine: 'rpg-engine',
     vectors: 'vectors',
     backups: 'backups',
     sysprompt: 'sysprompt',

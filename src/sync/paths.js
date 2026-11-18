@@ -27,6 +27,7 @@ export const SYNCED_DIRS = [
     USER_DIRECTORY_TEMPLATE.openAI_Settings,
     USER_DIRECTORY_TEMPLATE.textGen_Settings,
     USER_DIRECTORY_TEMPLATE.files,
+    USER_DIRECTORY_TEMPLATE.rpgEngine,
     USER_DIRECTORY_TEMPLATE.userImages,
     USER_DIRECTORY_TEMPLATE.comfyWorkflows,
 ].sort();

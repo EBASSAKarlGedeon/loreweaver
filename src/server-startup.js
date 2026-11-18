@@ -52,6 +52,7 @@ import { router as backupsRouter } from './endpoints/backups.js';
 import { router as imageMetadataRouter } from './endpoints/image-metadata.js';
 import { router as syncStatusRouter } from './endpoints/sync-status.js';
 import { router as volcengineRouter } from './endpoints/volcengine.js';
+import { router as rpgEngineKvRouter } from './endpoints/rpg-engine-kv.js';
 
 /**
  * @typedef {object} ServerStartupResult
@@ -182,6 +183,7 @@ export function setupPrivateEndpoints(app) {
     app.use('/api/speech', speechRouter);
     app.use('/api/azure', azureRouter);
     app.use('/api/volcengine', volcengineRouter);
+    app.use('/api/rpg-engine-kv', rpgEngineKvRouter);
     app.use('/api/minimax', minimaxRouter);
     app.use('/api/data-maid', dataMaidRouter);
     app.use('/api/backups', backupsRouter);
