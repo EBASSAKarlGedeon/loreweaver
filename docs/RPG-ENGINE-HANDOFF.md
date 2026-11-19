@@ -154,6 +154,19 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   quiet beat / calm) and on a hit schedules a one-line DIRECTION for the next turn's GM context,
   same targetTurn contract as the thread directive. Per-world toggle `world.sceneDice` (default ON,
   World Editor → Story tab). Nudges are direction, never outcomes.
+- **Heavy-testing sweep (2026-11-20, engine commits `5a916fa`..`0ba4cfd` + Loreweaver scan.js fix)** —
+  full frontend+backend sweep against the packaged server with REAL AI (bridge, cheap profile).
+  Everything green: kv router (32/32 edge cases), 8+ real GM turns, trackers, memory roll-up,
+  npc-life, scene dice cadence, duets, re-roll/edit/delete, checks, imports, OP edit, stop,
+  session shelf. 7 bugs fixed: Loreweaver `scan.js` same-key concurrent kv write 500s (unique
+  temp name + per-path write mutex + EPERM retry — 130/130 sync tests pass); portraitHtml path-as-text;
+  patch 014 scene dice riding the roll-up gate (never fired — moved to its own 15-turn cadence,
+  verified live at turn 15); bridged calls gated on a page API key (bridge-enabled setups now skip
+  it); Perchance landing widgets 404 under Loreweaver serving; import page world dropdown not
+  refreshing after boot sync (`rpge-saves-synced` event); failed GM turn = silent unhandled
+  rejection (patch 016 toast, verified live). USER CONFIG: the "Cheaper" profile has the NanoGPT
+  secret bound — rebind it in Connection Manager to an OpenRouter key (settings API writes get
+  clobbered by the live UI). Test harnesses: `tools/heavy-*.js` + `tools/test-seeds.js` (reusable).
 - **[rpge-patch 013] Open threads get teeth (2026-11-20, `d2c8ab2`+`c1c17b6`)** — Feature C
   (Chekhov's Gun) built as an upgrade to the EXISTING open-threads list (no parallel system):
   engine-stamped planted turns (`{text, from, lastFired}`; legacy strings start aging on load),
