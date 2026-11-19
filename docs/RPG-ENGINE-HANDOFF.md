@@ -147,6 +147,11 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   aged + client-rolled d20 firing thresholds.
 - **Feature D — Relationship meters** (FF Bonds simplified / Pura stage ladder).
 - **Feature E — Scene direction dice** (Pura randomizers, client-rolled).
+- **[rpge-patch 012] NPC life tick importance (2026-11-20, `d1c1631`)** — the off-screen life
+  sim (`npc-life.js`, native engine feature, already wired: mini-goal/Whereabouts/Activity in the
+  NPC panel's Life tab, per-route "NPC life sim" AI route) now classifies its own events on the
+  roll-up's 1–3 importance scale; importance 3 = verbatim commitment → pinned + always fed.
+  World-event d20 table decided AGAINST (user 2026-11-20): the life sim already covers the need.
 - **Dual-NPC dialogue: DONE (`4837d76` + `e7f5cb4`, [rpge-patch 011])** — `[A & B] line A | line B`
   renders two NPCs side by side (circular portrait over each name + line); no ` | ` = shared line
   said together. Parser emits two ordinary npc messages flagged `duet` (zero downstream changes);
