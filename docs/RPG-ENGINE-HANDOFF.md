@@ -147,6 +147,13 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   aged + client-rolled d20 firing thresholds.
 - **Feature D — Relationship meters** (FF Bonds simplified / Pura stage ladder).
 - **Feature E — Scene direction dice** (Pura randomizers, client-rolled).
+- **[rpge-patch 014] Scene-direction dice (2026-11-20, `5230b06`)** — Feature E, built as its own
+  system per user decision (separate from thread dice; thread dice = tracked debt, scene dice =
+  unscheduled direction): every 15 turns (user-chosen cadence — "the moment a scene can go stale")
+  the engine rolls a client d20 (scene-dice.js table: complication / twist / arrival / pressure /
+  quiet beat / calm) and on a hit schedules a one-line DIRECTION for the next turn's GM context,
+  same targetTurn contract as the thread directive. Per-world toggle `world.sceneDice` (default ON,
+  World Editor → Story tab). Nudges are direction, never outcomes.
 - **[rpge-patch 013] Open threads get teeth (2026-11-20, `d2c8ab2`+`c1c17b6`)** — Feature C
   (Chekhov's Gun) built as an upgrade to the EXISTING open-threads list (no parallel system):
   engine-stamped planted turns (`{text, from, lastFired}`; legacy strings start aging on load),
