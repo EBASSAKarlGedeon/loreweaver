@@ -154,6 +154,22 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   quiet beat / calm) and on a hit schedules a one-line DIRECTION for the next turn's GM context,
   same targetTurn contract as the thread directive. Per-world toggle `world.sceneDice` (default ON,
   World Editor → Story tab). Nudges are direction, never outcomes.
+- **[rpge-patch 018] Loreweaver-native text AI + Import page in the drawer (2026-11-21, engine commits
+  `7bcb9e8`→`44ccb3f`)** — DIRECTION CHANGE (user decision): the "keep mnomno's code intact" rule is
+  retired; the engine now fuses into Loreweaver step by step. Text AI is Loreweaver-ONLY (bridge →
+  Connection Manager profile, keys server-side); Perchance AI + all BYOK text providers, key forms and
+  the route-off→Perchance fallback are GONE — a route switched off means the job doesn't run (defaults
+  all-ON). Settings → AI Model rebuilt as the old bridge page's true home (main profile dropdown that
+  auto-picks Loreweaver's selected profile, per-job profiles, preset-sampling checkbox, context budget,
+  test call). The import page is now the landing-nav item "Import from Loreweaver" right under
+  Adventures (`#imports`); `loreweaver-bridge.html` / `loreweaver-import.html` / `cheap-model.html`
+  deleted; extension buttons deep-link via `rpgEngine.open(target)` postMessage. First run works with
+  zero config (bridge auto-on + selected-profile fallback in the shim). Standalone serving can no
+  longer generate. Verified: check-bridge/check-imports/check-overlay + live real-server probes incl.
+  one real streamed generation and image bridge still 13/13. Screenshots in `rpge-heavy/f081-f083`.
+  KNOWN USER CONFIG: the server's selected profile "Cheaper" is still misbound (NanoGPT key on an
+  OpenRouter profile → upstream 401); the Test button now surfaces it ("✖ Unauthorized") — user must
+  fix it in Connection Manager or switch the selected profile.
 - **[rpge-patch 017] Loreweaver image bridge SHIPPED (2026-11-21, engine commits `3d1058d` + `59fa6c1`)** —
   Settings → Image Gen gains the **"Loreweaver (server)"** provider: image calls ride the bridge
   shim to the server's `/api/openrouter/image/generate` (the chat-side SD extension's endpoint —
