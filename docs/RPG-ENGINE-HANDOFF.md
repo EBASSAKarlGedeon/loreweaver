@@ -170,6 +170,17 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   KNOWN USER CONFIG: the server's selected profile "Cheaper" is still misbound (NanoGPT key on an
   OpenRouter profile → upstream 401); the Test button now surfaces it ("✖ Unauthorized") — user must
   fix it in Connection Manager or switch the selected profile.
+- **[rpge-patch 018] followups (2026-11-21, engine commits `cba3987`→`f0ce956`)** — (1) stray
+  unclosed function in the Loreweaver wrapper broke the extension parse: drawer panel + wand both
+  vanished silently → `node --check` every wrapper edit before deploy. (2) Import page now has an
+  internal tab strip (Personas→Heroes / Cards→NPCs / World Info→Lore) styled like the Worlds
+  header action strip; target-world selector shared by cards+books tabs; last tab remembered.
+  (3) Import page polls for the boot sync (the one-shot saves-synced event can fire before the
+  page mounts). (4) **CRITICAL storage fix**: fresh browsers were pushing boot-time writes
+  (empty worlds/index) to the server BEFORE the first reconcile — every fresh boot zeroed the
+  server's worlds index (22 conflict copies piled up; live index restored from the newest one).
+  The mirror now gates pushes/deletes/wipes until the first reconcile: server-owned keys are
+  merged, never blind-overwritten. Fresh boot verified lossless both directions.
 - **[rpge-patch 017] Loreweaver image bridge SHIPPED (2026-11-21, engine commits `3d1058d` + `59fa6c1`)** —
   Settings → Image Gen gains the **"Loreweaver (server)"** provider: image calls ride the bridge
   shim to the server's `/api/openrouter/image/generate` (the chat-side SD extension's endpoint —
