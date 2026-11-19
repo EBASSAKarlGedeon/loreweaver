@@ -147,8 +147,11 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   aged + client-rolled d20 firing thresholds.
 - **Feature D — Relationship meters** (FF Bonds simplified / Pura stage ladder).
 - **Feature E — Scene direction dice** (Pura randomizers, client-rolled).
-- **Idea backlog**: side-by-side DUAL-NPC dialogue (two avatars talking in one beat, paired
-  exchange block) — user request 2026-11-20.
+- **Dual-NPC dialogue: DONE (`4837d76` + `e7f5cb4`, [rpge-patch 011])** — `[A & B] line A | line B`
+  renders two NPCs side by side (circular portrait over each name + line); no ` | ` = shared line
+  said together. Parser emits two ordinary npc messages flagged `duet` (zero downstream changes);
+  renderer pairs adjacent flags in BOTH final render and live stream; prompt section added
+  (SIMULTANEOUS SPEECH); history re-feeds the original `[A & B]` line. Verified by screenshot.
 Not porting: colored dialogue/HTML HUD, Pura stat generator + CYOA (our hero stats/dice cover
 them), Sola persona modules, CoT nesting towers.
 
