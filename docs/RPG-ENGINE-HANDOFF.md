@@ -154,6 +154,19 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   quiet beat / calm) and on a hit schedules a one-line DIRECTION for the next turn's GM context,
   same targetTurn contract as the thread directive. Per-world toggle `world.sceneDice` (default ON,
   World Editor → Story tab). Nudges are direction, never outcomes.
+- **[rpge-patch 017] Loreweaver image bridge SHIPPED (2026-11-21, engine commits `3d1058d` + `59fa6c1`)** —
+  Settings → Image Gen gains the **"Loreweaver (server)"** provider: image calls ride the bridge
+  shim to the server's `/api/openrouter/image/generate` (the chat-side SD extension's endpoint —
+  see `docs/IMAGE-GENERATION.md`), key stays on the server, no Base URL/key rows in the UI, model
+  datalist fed live from `/api/openrouter/models/image` (74 real models), Test button probes
+  `/api/openrouter/credits` for free. Default provider under a connected bridge is Loreweaver
+  (server) with **Portraits auto-ON** (user decision) on the FREE `recraft/recraft-v4.1-flash-v2`
+  model. Shape is source-agnostic (prompt+aspect in, image out) so future backends (local
+  ComfyUI etc.) can plug in without touching the engine. **One-time server setup done**: the
+  standard OpenRouter secret (`api_key_openrouter`) was registered from the existing profile key
+  — without it the endpoint 400s. Verified: 13/13 live checks + ONE real portrait generation +
+  Settings screenshot (`rpge-heavy/f071-imgbridge-settings.png`, `sample-portrait.png`). Original
+  plan note: SD-extension reuse (option B) was REJECTED — the engine iframe has no chat context.
 - **Heavy-testing sweep (2026-11-20, engine commits `5a916fa`..`0ba4cfd` + Loreweaver scan.js fix)** —
   full frontend+backend sweep against the packaged server with REAL AI (bridge, cheap profile).
   Everything green: kv router (32/32 edge cases), 8+ real GM turns, trackers, memory roll-up,
