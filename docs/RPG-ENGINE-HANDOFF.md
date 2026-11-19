@@ -147,6 +147,15 @@ dice and rendering instead — strictly more robust. Plan (one feature at a time
   aged + client-rolled d20 firing thresholds.
 - **Feature D — Relationship meters** (FF Bonds simplified / Pura stage ladder).
 - **Feature E — Scene direction dice** (Pura randomizers, client-rolled).
+- **[rpge-patch 013] Open threads get teeth (2026-11-20, `d2c8ab2`+`c1c17b6`)** — Feature C
+  (Chekhov's Gun) built as an upgrade to the EXISTING open-threads list (no parallel system):
+  engine-stamped planted turns (`{text, from, lastFired}`; legacy strings start aging on load),
+  age chips + 🎯 badge in the Threads panel, OVERDUE flag in the GM feed (≥10 turns), and a
+  per-world d20 detonator (`world.threadFires`, default ON, World Editor → Story tab): once per
+  roll-up, the oldest un-cooled thread (age ≥3) rolls d20 vs age-scaled threshold (18+/14+/10+/8+);
+  on a hit the NEXT turn's GM context carries a resurface directive (targetTurn-matched, survives
+  re-rolls). OFF = no directives, prompts otherwise unchanged (age labels always on — the approved
+  split).
 - **[rpge-patch 012] NPC life tick importance (2026-11-20, `d1c1631`)** — the off-screen life
   sim (`npc-life.js`, native engine feature, already wired: mini-goal/Whereabouts/Activity in the
   NPC panel's Life tab, per-route "NPC life sim" AI route) now classifies its own events on the
