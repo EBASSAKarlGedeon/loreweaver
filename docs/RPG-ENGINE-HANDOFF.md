@@ -130,6 +130,28 @@ Live app: packaged app must be running (`dist/win-unpacked/Loreweaver.exe` — *
 - User-found bugs that don't need code fixes → entry in `docs/FAQ.md`.
 - User's priorities: OP-character support (free stats/trackers) is the personal motivation; keep engine upgradable; budget matters (Phase 4 lesson — prefer adapting over rebuilding).
 
+## 8b. Preset-port plan (2026-11-20) — features distilled from 4 community presets
+Analyzed: Freaky Frankenstein 5.4 (Internal States), Pura Director 16, Sola V4 Flame, Voyage.
+Key insight: those presets make the LLM hold state in HTML blocks; the ENGINE can own state,
+dice and rendering instead — strictly more robust. Plan (one feature at a time, user hand-tests):
+- **Feature A — Prose Rules Pack: DONE (`80a7eaf`, [rpge-patch 010])** — new `prose-rules.js`
+  (~560 tokens: direct statements w/ bad->good examples, show-don't-label emotion, every spoken
+  line is an action + nothing owed back, anti-omniscient NPCs, no plot armor, cliche bans,
+  idiolect rhythm). World field `proseRules` (default ON, old saves stay on); World Editor Story
+  tab switch; injected in buildContext's STABLE prefix (after WORLD DESCRIPTION, before premise).
+  Off = byte-identical to pre-patch prompts. Logic-tested; suites green; UI verified by screenshot.
+- **Feature B — Living World (NEXT)**: FF Internal Agenda + World Sim, engine-native: per-NPC
+  agendas tick off-screen (state in session save, editable in panel), client-rolled d20 event
+  table injected per turn.
+- **Feature C — Chekhov's Gun (narrative debt)**: verbatim seeds (like importance-3 memories),
+  aged + client-rolled d20 firing thresholds.
+- **Feature D — Relationship meters** (FF Bonds simplified / Pura stage ladder).
+- **Feature E — Scene direction dice** (Pura randomizers, client-rolled).
+- **Idea backlog**: side-by-side DUAL-NPC dialogue (two avatars talking in one beat, paired
+  exchange block) — user request 2026-11-20.
+Not porting: colored dialogue/HTML HUD, Pura stat generator + CYOA (our hero stats/dice cover
+them), Sola persona modules, CoT nesting towers.
+
 ## 9. Lessons learned (Problem → Cause → Solution — add new ones here)
 
 - **Overlay pages invisible (buttons "do nothing", found via user recording, 2026-11-18).** *Problem:* "Open Loreweaver bridge" and "Import from Loreweaver" opened no overlay; the game button worked. *Cause:* overlay CSS still scoped to old ids (`#rpge-bridge-root`) while the generalized JS created new ids (`rpge-page-*`) → zero styles, invisible. *Solution:* scope overlay styles by CLASS (`.rpge-page-root`/`.rpge-page-frame`, `0993ab6`); after ANY root-extension `index.js`/`style.css` change run the visual check `node tools/shot-overlays.js` (clicks both buttons + screenshots) — the root extension has NO automated test (the fake-ST harness only exercises the port wrapper), so such regressions are otherwise invisible until the user hits them. FAQ entry added.
