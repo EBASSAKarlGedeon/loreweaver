@@ -2,11 +2,24 @@
 // server for runComfyJob (enqueue → poll history → fetch output).
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import http from 'node:http';
-import {
+import express from 'express';
+import { setConfigFilePath } from '../src/util.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+// The upstream routers read config.yaml at import time (secrets module) — point
+// the config loader at the repo's config.yaml before importing sd-follow.
+setConfigFilePath(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'config.yaml'));
+const {
     aspectDims,
     substituteWorkflow,
     runComfyJob,
-} from '../src/endpoints/sd-follow.js';
+    closestAspectRatio,
+    novelParams,
+    closestSize,
+    buildSourceRequest,
+    mapSourceResponse,
+    callRoute,
+} = await import('../src/endpoints/sd-follow.js');
 
 const WORKFLOW = JSON.stringify({
     "3": {
@@ -192,5 +205,245 @@ describe('runComfyJob (mock ComfyUI)', () => {
             .map(it => `${it.node_type} [${it.node_id}] ${it.exception_type}: ${it.exception_message}`)
             .join('\n') || '';
         expect(`ComfyUI generation did not succeed.\n\n${errorMessages}`.trim()).toContain('KSampler [3] OOM: out of memory');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 2 — per-source builders + mappers + internal dispatch
+// ---------------------------------------------------------------------------
+
+const JOB = { prompt: 'a castle', negativePrompt: 'blurry', width: 832, height: 1216 };
+const OAI = { workers_ai_account_id: 'acct-1', vertexai_auth_mode: 'express', vertexai_region: 'us', vertexai_express_project_id: 'proj-1' };
+
+describe('closestAspectRatio', () => {
+    test('stability table picks the closest named ratio', () => {
+        expect(closestAspectRatio({ width: 832, height: 1216 }, 'stability')).toBe('2:3');
+        expect(closestAspectRatio({ width: 1216, height: 832 }, 'stability')).toBe('3:2');
+        expect(closestAspectRatio({ width: 512, height: 512 }, 'stability')).toBe('1:1');
+    });
+    test('google and zai tables differ', () => {
+        expect(closestAspectRatio({ width: 1024, height: 768 }, 'google')).toBe('4:3');
+        expect(closestAspectRatio({ width: 1280, height: 720 }, 'zai')).toBe('16:9');
+        expect(closestAspectRatio({ width: 1024, height: 768 }, 'zai')).toBe('1:1'); // zai has no 4:3 — 1:1 is closest
+    });
+});
+
+describe('novelParams (Anlas guard port)', () => {
+    test('caps steps at 50, no guard keeps dims', () => {
+        const p = novelParams({ steps: 80, width: 832, height: 1216, novel_anlas_guard: false });
+        expect(p.steps).toBe(50);
+        expect(p.width).toBe(832);
+        expect(p.height).toBe(1216);
+    });
+    test('guard shrinks oversized dims to 64-multiples under 1MP and caps steps at 28', () => {
+        const p = novelParams({ steps: 40, width: 1216, height: 1216, novel_anlas_guard: true });
+        expect(p.steps).toBe(28);
+        expect(p.width * p.height).toBeLessThanOrEqual(1024 * 1024);
+        expect(p.width % 64).toBe(0);
+        expect(p.height % 64).toBe(0);
+    });
+    test('ddim sampler forces sm off', () => {
+        const p = novelParams({ steps: 28, width: 512, height: 512, sampler: 'ddim', novel_sm: true, novel_sm_dyn: true });
+        expect(p.sm).toBe(false);
+        expect(p.sm_dyn).toBe(false);
+    });
+});
+
+describe('closestSize (ElectronHub port)', () => {
+    test('picks by combined aspect+resolution diff', () => {
+        expect(closestSize({ width: 832, height: 1216 }, ['1024x1024', '832x1216', '512x512'])).toBe('832x1216');
+        expect(closestSize({ width: 1216, height: 832 }, ['1024x1024', '1216x832'])).toBe('1216x832');
+        expect(closestSize({ width: 800, height: 600 }, [])).toBe(null);
+    });
+});
+
+describe('buildSourceRequest', () => {
+    test('video models are refused with a clear message', async () => {
+        await expect(buildSourceRequest({ source: 'openai', model: 'sora-2' }, JOB, OAI, null)).rejects.toThrow(/images only/);
+        await expect(buildSourceRequest({ source: 'google', model: 'veo-3' }, JOB, OAI, null)).rejects.toThrow(/images only/);
+        await expect(buildSourceRequest({ source: 'zai', model: 'cogvideox-2' }, JOB, OAI, null)).rejects.toThrow(/images only/);
+    });
+
+    test('horde: full body shape from the extension builder', async () => {
+        const sd = { source: 'horde', sampler: 'k_euler', steps: 25, scale: 6, model: 'horde-model', horde_nsfw: true, restore_faces: true, enable_hr: true, horde_sanitize: true, clip_skip: 2, seed: 42 };
+        const r = await buildSourceRequest(sd, JOB, OAI, null);
+        expect(r.router).toBeTruthy();
+        expect(r.body.negative_prompt).toBe('blurry');
+        expect(r.body.sampler).toBe('k_euler');
+        expect(r.body.nsfw).toBe(true);
+        expect(r.body.sanitize).toBe(true);
+        expect(r.body.seed).toBe(42);
+        expect(r.body.width).toBe(832);
+        expect(r.body.height).toBe(1216);
+    });
+
+    test('auto (A1111): url/auth from the source + override settings + ADetailer', async () => {
+        const sd = { source: 'auto', auto_url: 'http://a1111:7860', auto_auth: 'Basic x', sampler: 'Euler a', steps: 20, scale: 7, vae: 'N/A', clip_skip: 1, adetailer_face: true, restore_faces: true, denoising_strength: 0.7, seed: -1 };
+        const r = await buildSourceRequest(sd, JOB, OAI, null);
+        expect(r.path).toBe('/generate');
+        expect(r.body.url).toBe('http://a1111:7860');
+        expect(r.body.auth).toBe('Basic x');
+        expect(r.body.cfg_scale).toBe(7);
+        expect(r.body.override_settings.sd_vae).toBeUndefined(); // N/A vae excluded
+        expect(r.body.alwayson_scripts.ADetailer.args[2].ad_model).toBe('face_yolov8n.pt');
+        expect(r.body.seed).toBeUndefined(); // fixedSeed: <0 → undefined (backend randomizes)
+    });
+
+    test('vlad rides the same builder with vlad_url', async () => {
+        const r = await buildSourceRequest({ source: 'vlad', vlad_url: 'http://vlad:7860', vlad_auth: '' }, JOB, OAI, null);
+        expect(r.body.url).toBe('http://vlad:7860');
+    });
+
+    test('sdcpp: conditional sampler/scheduler/clip_skip', async () => {
+        const sd = { source: 'sdcpp', sdcpp_url: 'http://sdcpp', model: 'm', steps: 20, scale: 7, sampler: 'euler', scheduler: 'N/A', clip_skip: 2 };
+        const r = await buildSourceRequest(sd, JOB, OAI, null);
+        expect(r.path).toBe('/sdcpp/generate');
+        expect(r.body.sampler_name).toBe('euler');
+        expect(r.body.scheduler).toBeUndefined(); // N/A dropped, like the extension
+        expect(r.body.clip_skip).toBe(2);
+    });
+
+    test('openai: dalle-3 landscape gets 1792 width, gpt-image gets 1536, dall-e-2 small stays 512', async () => {
+        const d3 = await buildSourceRequest({ source: 'openai', model: 'dall-e-3', openai_quality: 'hd', openai_style: 'vivid' }, { ...JOB, width: 1216, height: 832 }, OAI, null);
+        expect(d3.body.size).toBe('1792x1024');
+        expect(d3.body.style).toBe('vivid');
+        expect(d3.body.response_format).toBe('b64_json');
+        const gpt = await buildSourceRequest({ source: 'openai', model: 'gpt-image-1' }, { ...JOB, width: 832, height: 1216 }, OAI, null);
+        expect(gpt.body.size).toBe('1024x1536');
+        expect(gpt.body.moderation).toBe('low');
+        const d2 = await buildSourceRequest({ source: 'openai', model: 'dall-e-2' }, { ...JOB, width: 512, height: 512 }, OAI, null);
+        expect(d2.body.size).toBe('512x512');
+    });
+
+    test('aimlapi: SD-like models get steps/guidance/clamped dims; others get n/size', async () => {
+        const sd = await buildSourceRequest({ source: 'aimlapi', model: 'flux/pro', steps: 99, scale: 9, seed: -1 }, { ...JOB, width: 2000, height: 100 }, OAI, null);
+        expect(sd.path).toBe('/aimlapi/generate-image');
+        expect(sd.body.steps).toBe(50);
+        expect(sd.body.guidance).toBe(5);
+        expect(sd.body.width).toBe(1440);
+        expect(sd.body.height).toBe(256);
+        const gpt = await buildSourceRequest({ source: 'aimlapi', model: 'gpt-image-1' }, JOB, OAI, null);
+        expect(gpt.body.size).toBe('832x1216');
+        expect(gpt.body.n).toBe(1);
+    });
+
+    test('stability: named aspect ratio inside payload, 10k prompt clamp', async () => {
+        const long = 'x'.repeat(12000);
+        const r = await buildSourceRequest({ source: 'stability', model: 'core', stability_style_preset: 'anime' }, { ...JOB, prompt: long }, OAI, null);
+        expect(r.path).toBe('/stability/generate');
+        expect(r.body.payload.aspect_ratio).toBe('2:3');
+        expect(r.body.payload.prompt.length).toBe(10000);
+        expect(r.body.payload.output_format).toBe('png');
+    });
+
+    test('nanogpt: integer parsing + resolution string', async () => {
+        const r = await buildSourceRequest({ source: 'nanogpt', model: 'flux', steps: '28.5', scale: '6.2' }, JOB, OAI, null);
+        expect(r.body.num_steps).toBe(28);
+        expect(r.body.scale).toBeCloseTo(6.2);
+        expect(r.body.resolution).toBe('832x1216');
+    });
+
+    test('bfl/falai: clamp guidance into [1.5, 5] and dims into [256, 1440]', async () => {
+        const b = await buildSourceRequest({ source: 'bfl', model: 'flux-pro', steps: 99, scale: 99, bfl_upsampling: true }, { ...JOB, width: 100, height: 5000 }, OAI, null);
+        expect(b.body.guidance).toBe(5);
+        expect(b.body.width).toBe(256);
+        expect(b.body.height).toBe(1440);
+        expect(b.body.prompt_upsampling).toBe(true);
+        const f = await buildSourceRequest({ source: 'falai', model: 'flux', steps: 0, scale: 0.5 }, JOB, OAI, null);
+        expect(f.body.steps).toBe(1);
+        expect(f.body.guidance).toBe(1.5);
+    });
+
+    test('xai: grok-imagine gets named ratio + 1k/2k resolution; others get neither', async () => {
+        const grok = await buildSourceRequest({ source: 'xai', model: 'grok-imagine' }, { ...JOB, width: 1216, height: 832 }, OAI, null);
+        expect(grok.body.aspect_ratio).toBe('3:2');
+        expect(grok.body.resolution).toBe('1k');
+        const other = await buildSourceRequest({ source: 'xai', model: 'grok-2-image' }, JOB, OAI, null);
+        expect(other.body.aspect_ratio).toBeUndefined();
+    });
+
+    test('google: vertexai fields ride from oai settings', async () => {
+        const r = await buildSourceRequest({ source: 'google', model: 'imagen-4', google_api: 'vertexai' }, JOB, OAI, null);
+        expect(r.body.vertexai_auth_mode).toBe('express');
+        expect(r.body.vertexai_express_project_id).toBe('proj-1');
+        expect(r.body.aspect_ratio).toBe('3:4'); // google table: 832x1216 (2:3≈0.667) is closer to 3:4 (0.75) than 9:16
+    });
+
+    test('zai: dims rounded to the model multiple and clamped 512-2048; cogview respects the pixel cap', async () => {
+        const glm = await buildSourceRequest({ source: 'zai', model: 'glm-image' }, { ...JOB, width: 833, height: 1217 }, OAI, null);
+        const [w, h] = glm.body.size.split('x').map(Number);
+        expect(w % 32).toBe(0);
+        expect(h % 32).toBe(0);
+        const cog = await buildSourceRequest({ source: 'zai', model: 'cogview-4' }, { ...JOB, width: 2000, height: 2000 }, OAI, null);
+        const [cw, ch] = cog.body.size.split('x').map(Number);
+        expect(cw * ch).toBeLessThanOrEqual(Math.pow(2, 21));
+    });
+
+    test('openrouter: stability ratio table like the extension', async () => {
+        const r = await buildSourceRequest({ source: 'openrouter', model: 'google/imagen-4' }, JOB, OAI, null);
+        expect(r.path).toBe('/image/generate');
+        expect(r.body.aspect_ratio).toBe('2:3');
+    });
+
+    test('workersai: account_id from oai settings', async () => {
+        const r = await buildSourceRequest({ source: 'workersai', model: 'flux', steps: 20, scale: 3.5, seed: -1 }, JOB, OAI, null);
+        expect(r.body.account_id).toBe('acct-1');
+        expect(r.body.seed).toBeUndefined();
+    });
+
+    test('novel: guard-adjusted dims + sm flags ride the body', async () => {
+        const r = await buildSourceRequest({ source: 'novel', model: 'nai-diffusion-3', steps: 28, scale: 5, sampler: 'k_euler_ancestral', scheduler: 'karras', novel_anlas_guard: true, novel_sm: true, novel_sm_dyn: true, novel_decrisper: true, hr_scale: 1 }, JOB, OAI, null);
+        expect(r.body.steps).toBe(28);
+        expect(r.body.sm).toBe(true);
+        expect(r.body.sm_dyn).toBe(true);
+        expect(r.body.decrisper).toBe(true);
+    });
+
+    test('unknown source errors clearly', async () => {
+        await expect(buildSourceRequest({ source: 'nope' }, JOB, OAI, null)).rejects.toThrow(/not supported/);
+    });
+});
+
+describe('mapSourceResponse (client-mapper parity)', () => {
+    test('auto family pulls images[0]; openai pulls data[0].b64_json', () => {
+        expect(mapSourceResponse('auto', JSON.stringify({ images: ['AAA'] }))).toEqual({ format: 'png', data: 'AAA' });
+        expect(mapSourceResponse('sdcpp', JSON.stringify({ images: ['BBB'] }))).toEqual({ format: 'png', data: 'BBB' });
+        expect(mapSourceResponse('drawthings', JSON.stringify({ images: ['CCC'] }))).toEqual({ format: 'png', data: 'CCC' });
+        expect(mapSourceResponse('openai', JSON.stringify({ data: [{ b64_json: 'DDD' }] }))).toEqual({ format: 'png', data: 'DDD' });
+    });
+    test('raw-text sources pass the text as data', () => {
+        expect(mapSourceResponse('stability', 'RAWDATA')).toEqual({ format: 'png', data: 'RAWDATA' });
+        expect(mapSourceResponse('novel', 'RAWDATA')).toEqual({ format: 'png', data: 'RAWDATA' });
+        expect(mapSourceResponse('horde', 'RAWDATA')).toEqual({ format: 'webp', data: 'RAWDATA' });
+    });
+    test('image-field sources map {image} and carry the router format through', () => {
+        expect(mapSourceResponse('pollinations', JSON.stringify({ image: 'E', format: 'jpeg' }))).toEqual({ format: 'jpeg', data: 'E' });
+        expect(mapSourceResponse('xai', JSON.stringify({ image: 'F', format: 'png' }))).toEqual({ format: 'png', data: 'F' });
+        expect(mapSourceResponse('openrouter', JSON.stringify({ image: 'G' }))).toEqual({ format: 'jpg', data: 'G' });
+        expect(mapSourceResponse('togetherai', JSON.stringify({ format: 'jpg', data: 'H' }))).toEqual({ format: 'jpg', data: 'H' });
+    });
+});
+
+describe('callRoute (internal dispatch)', () => {
+    test('drives a real express router with body + resolves its send', async () => {
+        const router = express.Router();
+        router.post('/generate', (req, res) => {
+            res.send({ image: req.body.prompt + '!', format: 'png', sawUser: !!req.user });
+        });
+        const out = await callRoute(router, '/generate', { prompt: 'hi' }, { id: 'u1' });
+        expect(out.status).toBe(200);
+        const j = JSON.parse(out.text);
+        expect(j.image).toBe('hi!');
+        expect(j.sawUser).toBe(true);
+    });
+
+    test('sendStatus and status().send both resolve with the right status', async () => {
+        const router = express.Router();
+        router.post('/a', (_req, res) => { res.sendStatus(400); });
+        router.post('/b', (_req, res) => { res.status(403).send('forbidden text'); });
+        expect((await callRoute(router, '/a', {}, null)).status).toBe(400);
+        const b = await callRoute(router, '/b', {}, null);
+        expect(b.status).toBe(403);
+        expect(b.text).toBe('forbidden text');
     });
 });
