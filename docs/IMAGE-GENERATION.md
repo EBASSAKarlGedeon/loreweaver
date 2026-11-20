@@ -175,8 +175,10 @@ Since patch 024 the two systems no longer share nothing: the RPG engine's Lorewe
 has a **Follow Image Gen** toggle. When on, its image calls go to the Loreweaver-owned
 `/api/sd-follow/generate`, which reads the user's saved Image Generation settings from
 settings.json and replays the exact request the chat extension would make for that source —
-so "works in chat ⇒ works in the engine" holds for the mirrored sources. **Wave 1 mirrors the
-ComfyUI source** (the local ComfyUI is reached by the Loreweaver server — over Tailscale when
-played from another device — so ComfyUI must run with `--listen 0.0.0.0` for remote devices).
+so "works in chat ⇒ works in the engine" holds for the mirrored sources. **All sources are mirrored** (patch 024 wave 2): cloud sources are dispatched through their
+upstream server routers; ComfyUI is reached by the Loreweaver server — over Tailscale when
+played from another device — so ComfyUI must run with `--listen 0.0.0.0` for remote devices.
+Video-capable models (sora-2, veo-*, CogVideoX, Vidu) are refused: the engine renders images
+only.
 The prompt RECIPES are deliberately not mirrored: the engine builds its own prompts from live
 game state. Other sources are answered with a clear "not mirrored yet" message until wave 2.

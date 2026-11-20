@@ -337,5 +337,13 @@ them), Sola persona modules, CoT nesting towers.
   ComfyUI already configured in the extension (source=comfy, Default_Comfy_Workflow.json).
 - Engine `main` @ 9ca5b86; packaged-app server copy updated (sd-follow.js + server-startup.js)
   and restarted; Loreweaver `release` @ this commit.
-- Wave 2 (planned): mirror remaining sources; hero-portrait pass-through for avatar placeholders;
-  reference-image support via LoadImage nodes.
+- **Wave 2 SHIPPED**: `buildSourceRequest` mirrors EVERY remaining source (extras direct-call,
+  horde, auto/vlad, drawthings, sdcpp, novel + Anlas guard, openai + dalle/gpt-image size rules,
+  aimlapi, comfyrunpod, togetherai, pollinations, stability, huggingface, chutes, electronhub +
+  /sizes probe, nanogpt, bfl, falai, xai, google + vertexai fields from settings.oai_settings,
+  zai + per-model size multiples, openrouter, workersai + account id), dispatched internally
+  through the SAME upstream express routers (minimal req/res shim carrying the real
+  `request.user` for secrets). Response mappers = the extension client's exact mappings.
+  Video models (sora-2, veo-*, CogVideoX, Vidu) refused with a clear message (engine renders
+  images only). Server tests 41/41. Wave 3 candidates: hero-portrait pass-through for avatar
+  placeholders; reference images via LoadImage nodes.
