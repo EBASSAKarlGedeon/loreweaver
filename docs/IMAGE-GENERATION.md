@@ -168,3 +168,15 @@ Example: `/imagine seed=42 width=1024 height=1024 model=juggernaut cat on a drag
 | Output | Chat media message / background | Engine scene images + NPC portraits, stored in the engine's saves |
 
 They share no code paths today. Bridging the RPG engine's image calls through the server (like the text bridge) is planned as [rpge-patch 017] — see `RPG-ENGINE-HANDOFF.md`.
+
+## 10. SD-follow: the RPG engine can render with THESE settings ([rpge-patch 024])
+
+Since patch 024 the two systems no longer share nothing: the RPG engine's Loreweaver provider
+has a **Follow Image Gen** toggle. When on, its image calls go to the Loreweaver-owned
+`/api/sd-follow/generate`, which reads the user's saved Image Generation settings from
+settings.json and replays the exact request the chat extension would make for that source —
+so "works in chat ⇒ works in the engine" holds for the mirrored sources. **Wave 1 mirrors the
+ComfyUI source** (the local ComfyUI is reached by the Loreweaver server — over Tailscale when
+played from another device — so ComfyUI must run with `--listen 0.0.0.0` for remote devices).
+The prompt RECIPES are deliberately not mirrored: the engine builds its own prompts from live
+game state. Other sources are answered with a clear "not mirrored yet" message until wave 2.

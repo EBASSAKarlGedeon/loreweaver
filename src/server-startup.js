@@ -33,6 +33,7 @@ import { router as settingsRouter } from './endpoints/settings.js';
 import { router as backgroundsRouter } from './endpoints/backgrounds.js';
 import { router as spritesRouter } from './endpoints/sprites.js';
 import { router as stableDiffusionRouter } from './endpoints/stable-diffusion.js';
+import { router as sdFollowRouter } from './endpoints/sd-follow.js';
 import { router as hordeRouter } from './endpoints/horde.js';
 import { router as vectorsRouter } from './endpoints/vectors.js';
 import { router as translateRouter } from './endpoints/translate.js';
@@ -169,6 +170,7 @@ export function setupPrivateEndpoints(app) {
     app.use('/api/content', contentManagerRouter);
     app.use('/api/settings', settingsRouter);
     app.use('/api/sd', stableDiffusionRouter);
+    app.use('/api/sd-follow', sdFollowRouter);
     app.use('/api/horde', hordeRouter);
     app.use('/api/vector', vectorsRouter);
     app.use('/api/translate', translateRouter);

@@ -290,3 +290,52 @@ them), Sola persona modules, CoT nesting towers.
   along). Now redirects only the no-section default landing.
 - Verified: `tools/check-preset-ui.js` green (screenshots ps01–ps03); `check-presets.js` 80/80.
 - Engine `main` @ `b76fcc8`; AppData clone current.
+
+## [rpge-patch 023] FF 5.4 — Engine Edition (2026-11-23) — SHIPPED, awaiting hand-test
+- **Bundled preset** `app/src/game/presets/ff54-engine-edition.json` (59 prompts / 52 in play
+  order / ~10.5k-token ON stack), built from the user's own **Prose-Only** curation verbatim.
+  **⭐ FF 5.4 Engine Edition** button in Settings → Prompt Preset imports it into the synced
+  library (fixed name "FF 5.4 — Engine Edition", same-name re-import replaces = install AND
+  update). 9 Internal-States dashboards + Twitter dropped; MAX/Micro CoT kept OFF (BOLT ON);
+  "Character Cells" → renamed + rewritten "🧩 Scene State — injected by the app" (the old
+  extension is discontinued); Colored Dialogue + Auto Image Gen blocks → app-side no-op
+  comments; Pop in Graphics flipped ON (engine renders GFX natively).
+- **CoT leak guard**: `stripThinkBlocks()` in `rp-engine.js` — closed
+  think/thinking/thought/reasoning pairs cut (with blank lines), unclosed opener cuts the tail;
+  wired into GM-reply + death-scene parse paths BEFORE the tracker-echo strippers. Reasoning
+  may flash in the live stream but never lands in transcript/history/memory.
+- **Per-NPC dialogue colors** (engine-side replacement for ST's Colored Dialogue tags): the
+  model writes plain quoted dialogue. `npc.color` on roster entries (inherited from world-cast
+  `color`), Dialogue color ColorPicker in the NPC profile popup (debounced save + chat
+  re-render), stable auto hue (name-hash → 12-color palette) when unset. Rendered as name label
+  + 2px portrait ring on npc/thought/duet bubbles via `--npc-col`.
+- Verified: `check-presets.js` 106/106 (bundled file + think-strip tests), `check-regex.js`
+  40/40, `check-preset-ui.js` green incl. new step 7 (screenshot ps04-bundled.png — button,
+  library entry active ON, 52 rows, Scene State visible, dashboards absent).
+- Engine `main` @ `cf72165`; AppData clone current. **User hand-test next** (see memory).
+
+## [rpge-patch 024] SD-follow — engine follows the Image Generation extension (2026-11-20) — wave 1 SHIPPED
+- **Contract** (user): whatever image endpoint is configured in Loreweaver's Image Generation
+  extension and works in chat also works in the RPG engine (and on every device). Implemented
+  SERVER-side so the mirror lives next to the settings it mirrors (no per-source builders
+  duplicated into the engine).
+- **`src/endpoints/sd-follow.js`** mounted at `/api/sd-follow`: `/generate` reads the user's
+  saved `extension_settings.sd` (settings.json), requires source=ComfyUI (wave 1; other sources
+  get a clear message), reads the workflow file, substitutes the extension's exact placeholder
+  set (quote-wrapped JSON), then runs the upstream comfy enqueue-poll-fetch port.
+  `/status` = free Test probe (source + reachability). Aspect maps onto the extension's
+  width/height by re-orientation (portrait = short side across).
+- **Engine**: Image Gen > Loreweaver provider gains **Follow Image Gen** (mno.imageProvider.follow);
+  on = POST /api/sd-follow/generate, model row hidden; off = previous OpenRouter image path.
+  Test button shows following+reachable / wrong-source / unreachable(--listen hint).
+  Bridge shim now passes server error text through.
+- **Pre-existing engine bug fixed**: image-provider paint() scoped queries to the builder box,
+  which main.js empties after mount (children spread into the section) — every post-mount paint
+  was a no-op; rows only ever reflected build-time state. Now scoped to remoteBox (direct ref).
+- **Tests**: tests/sd-follow.test.js 13/13; tools/check-sdfollow.js 16/16 (mocked, zero spend).
+- **Live**: real render through the user's local ComfyUI via the endpoint (75s, correct image);
+  ComfyUI already configured in the extension (source=comfy, Default_Comfy_Workflow.json).
+- Engine `main` @ 9ca5b86; packaged-app server copy updated (sd-follow.js + server-startup.js)
+  and restarted; Loreweaver `release` @ this commit.
+- Wave 2 (planned): mirror remaining sources; hero-portrait pass-through for avatar placeholders;
+  reference-image support via LoadImage nodes.
