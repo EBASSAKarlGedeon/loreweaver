@@ -250,3 +250,26 @@ them), Sola persona modules, CoT nesting towers.
 - Dice math: `resolveCheck` and the referee both use `effectiveStats` (base + applicable deltas). Hero sheet rows show `base → eff` with a net buff badge (tooltip lists contributors). GM context gains an ACTIONS block + EFFECTIVE STATS block while buffed. Tracker cap formulas intentionally keep reading BASE stats.
 - Verified: `tools/check-actions.js` (seeded kv stub: offer accept→persist, tab switching, stacking badge 8→39 +31, active toggle 9→11, editor add), `check-storage`/`check-imports` still OK; screenshots in Temp/rpge-heavy/a01–a04.
 - Engine `main` @ `baf820f`; AppData extension clone current. User hand-test pending (always-bridged OpenRouter).
+
+## [rpge-patch 022] Prompt-stack preset model + editor (2026-11-22) — SHIPPED
+- New `app/src/scripts/presets.js` (pure, no DOM): parses SillyTavern chat-completion presets
+  (`prompts` + `prompt_order`, global group = `character_id: 100001`), keeps the imported object
+  verbatim so **Export round-trips byte-identically**, and expands the ST macro grammar
+  engine-local (comments, trim/newline/noop, user/char, setvar/addvar/incvar/decvar/getvar with
+  nested-template resolution across passes, roll (NdM), random/pick, isotime/isodate subset).
+  Unknown macros stay literal.
+- Engine seam: `RPEngine` takes `preset`; enabled non-marker blocks ride as a `PRESET DIRECTIVES`
+  cluster right after the prose pack (stable prefix), ABSOLUTE in-chat injections ride just
+  before the final "Now write your reply:" directive. No preset loaded = byte-identical prompts.
+- Editor: Settings → **Prompt Preset** — Import/Export ST `.json`, On/Off (live on a running
+  engine), enable/disable, ▲▼ reorder, edit content inline, add/delete blocks; markers show as
+  dimmed "engine slot" rows (their content is engine-native: sheet/lorebook/transcript).
+- Storage: `localStorage["rpge.promptPreset"]` `{raw, name, on}` — machine-local (like the AI
+  provider prefs), not in session saves / not synced.
+- Verified: `tools/check-presets.js` 80/80 plain-Node — macro grammar, play-order assembly,
+  injection sorting, **real FF 5.4 file round-trip (68 prompts / 61 entries, byte-identical
+  export)**, and real `RPEngine.buildContext` seam tests. `check-regex.js` still 40/40.
+- Engine `main` @ `969a4eb`; AppData extension clone current.
+- **User hand-test**: Settings → Prompt Preset → import a small custom preset (or any ST preset),
+  toggle, play a turn. FF 5.4 "Engine Edition" preset data = patch 023 (its prose/POV/NSFW blocks
+  verbatim; the 8 Internal-States dashboards dropped — engine-native counterparts already exist).
