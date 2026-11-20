@@ -352,3 +352,22 @@ window. If it ever happens again after an extension update: it is a root-wrapper
 regression — run `node tools/shot-overlays.js` (in the port folder) which clicks both buttons and
 screenshots the overlays; a working overlay shows a full-screen `LOREWEAVER BRIDGE` /
 `LOREWEAVER IMPORTS` bar.
+
+## Extensions manager shows "Extension \"RPG Engine\" failed to load: [object Event]"
+
+**Symptom**: a red toast + a failed "RPG Engine" entry when the extensions manager opens
+(console: `Activating extension rpg-engine` → `Could not activate ... Event`, and a 404 on
+`/extensions.js`). The game itself works fine.
+
+**Cause**: the rpg-engine dev clone lives inside the Loreweaver repo at
+`public/scripts/extensions/rpg-engine`, so a packaged app built from the repo discovers it as
+a *system* extension (alongside the real `third-party/rpg-engine` from the user dir). Its
+wrapper's `../../../` import paths are written for the third-party depth and resolve to
+`/extensions.js` (404) at the system depth, so the phantom fails to load. The real extension
+loads right after with no error.
+
+**Fix**: ignore the toast, or uncheck the phantom **RPG Engine** entry in the manager's
+Built-in Extensions list (the real one is listed under its own installed entry). Not fixable
+in code without moving the dev clone out of `public/scripts/extensions/` (tracked for a future
+reorganization).
+
