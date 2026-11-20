@@ -236,3 +236,49 @@ Interesting ports ahead (concrete, not just vibes):
   (and `actions.js` might literally read preset-set `{{setvar::invTemplate}}` vars someday).
 * Per-setting "features modes" (pick-one groups) match the engine's `tracker` + `scene-dice` feature
   toggles; stay consistent.
+---
+
+## Cutover design (2026-11-21, [rpge-patch 020–023] planning)
+
+**Decisions taken in brainstorm (not yet code):**
+
+1. **Bridge shape — data-reuse, not UI-copy.** Do NOT copy ST PromptManager's HTML wall. Port the
+   JSON *schema* (`prompts`+`prompt_order`) and macro grammar (`{{setvar}}`/`{{getvar}}`/`{{// }}`)
+   into an engine-local, lightweight prompt-stack model with Import/Export speaking ST's exact
+   `.json` format. Samplers already bridge via `loreweaver-bridge.js` + `/api/settings/get` connection
+   profiles (unchanged). Regex engine ported wholesale from
+   `public/scripts/extensions/regex/engine.js` (`runRegexScript`) as pre-render post-processing.
+
+2. **FF 5.4 Engine Edition** = verbatim copy of the real FF5.4 file's prose/pacing/POV/NSFW/behavior
+   blocks, with all 8 `injection_position:1` Internal States HTML modules REMOVED. Rationale: each of
+   those fake `<details>` dashboards already has a superior engine-native counterpart
+   (`scene-dice.js`+`stats.js` ≈ DnD Sim; `actions.js` ≈ Inv/Feats/Titles; `openThreads`/patch 013 ≈
+   GM's Notebook; `npc-life.js`/patch 012 ≈ Internal Agenda; tracker rows ≈ Relationships). Code-does-
+   the-math beats AI-claims-dashboard.
+
+3. **`<!-- GFX_START -->` Pop-in Graphics (patch 020)** — `rich-text.js` escape-first pipeline is a
+   constraint (everything `&lt;`-escaped before formatting), but `core()` already liftable-hides code
+   spans via `CODE_MARK` before escaping; same lift-out pattern hoists `<!-- GFX_START -->…INNER…<!-- GFX_END -->`
+   inner HTML aside pre-escape, whitelist-sanitizes (tags: div/span/b/i/u/br/hr; style attribute
+   limited to background/color/font/border/padding-family), swap back post-markdown. Theme CSS in
+   `styles.css` (terminal/map/letter/phone per `<gfx_protocol>`). Self-contained — no preset dependency.
+
+4. **Inline images (patch 020)** — `![alt](src)` handling in `richText`; `esc()` escapes `&<>"'` but
+   NOT brackets/parens so the regex stays viable. Both forms work:
+   - `https://…webp` external URLs load fine — helmet CSP is OFF (`contentSecurityPolicy: false`),
+     `img-src` unrestricted.
+   - `/user/images/...` paths map 1:1 to `src/users.js` line 1217 `router.use('/user/images/*', …)`
+     already serving `req.user.directories.userImages`; same-origin, no CORS issue inside the
+     extension iframe.
+   Validate/escape `url` (reject unbalanced quotes) before writing `src="…"` — no attribute-injection.
+   Emit `<img class="msg-img">`, optional `alt` from the bracket text.
+
+**Proposed patch order (hand-test each before next):**
+- `[rpge-patch 020]` — GFX blocks + inline images in `rich-text.js`/`styles.css`
+- `[rpge-patch 021]` — port `runRegexScript` from `public/scripts/extensions/regex/engine.js`
+- `[rpge-patch 022]` — engine-native prompt-stack model + lightweight editor + Import/Export (ST-json)
+- `[rpge-patch 023]` — author "FF 5.4 — Engine Edition" preset data (port prose/POV/NSFW/behavior
+  blocks verbatim; internal-states dropped in favour of native panels)
+
+**Open questions for user (2026-11-21):** confirm patch order, and whether 020 or 021 should lead
+(patch 020 is smaller/visual, 021 is a defensive prerequisite for importing external presets).
