@@ -273,3 +273,20 @@ them), Sola persona modules, CoT nesting towers.
 - **User hand-test**: Settings → Prompt Preset → import a small custom preset (or any ST preset),
   toggle, play a turn. FF 5.4 "Engine Edition" preset data = patch 023 (its prose/POV/NSFW blocks
   verbatim; the 8 Internal-States dashboards dropped — engine-native counterparts already exist).
+
+## [rpge-patch 022 followup] Syncable preset library + response tuning (2026-11-22) — SHIPPED
+- **Preset library is now synced**: `kv.rpg["promptPresets"]` `{presets:[{name,raw}], active, on}`
+  rides the server-save mirror (same pipeline as sessions/worlds) — presets follow the user
+  across devices, offline-capable. Editor: library select + On/Off, Import/Export, 🗑 Delete
+  preset, one-time migration from the old localStorage blob.
+- **Orphan blocks** (in file, not in play order) show in a collapsed "Not in play order (N)"
+  group with ＋ add-to-order; markers stay dimmed engine slots.
+- **AI Model → Response tuning**: temperature/top_p/top_k/frequency/presence (blank = connection
+  profile decides; a number always wins over profile-preset fills), Max reply tokens (GM
+  narration only), Streaming on/off (off = one JSON body). NOT imported from preset files
+  (user decision: one owner per knob).
+- **Pre-existing bug fixed**: the tweaks shim's default-section redirect clicked "AI Model"
+  ~70 ms after ANY Settings open, stealing the requested section (deep links were affected all
+  along). Now redirects only the no-section default landing.
+- Verified: `tools/check-preset-ui.js` green (screenshots ps01–ps03); `check-presets.js` 80/80.
+- Engine `main` @ `b76fcc8`; AppData clone current.
