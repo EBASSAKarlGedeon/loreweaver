@@ -70,6 +70,12 @@ export const SECRET_KEYS = {
     VOLCENGINE_APP_ID: 'volcengine_app_id',
     VOLCENGINE_ACCESS_KEY: 'volcengine_access_key',
     WORKERS_AI: 'api_key_workers_ai',
+    // Weaver's Vault character-library sources (docs/vault/DESIGN.md).
+    // Per-device, never synced — same policy as every other API key.
+    VAULT_CHUB: 'api_key_vault_chub',
+    VAULT_DATACAT: 'api_key_vault_datacat',
+    VAULT_DATACAT_CLIENT: 'vault_datacat_client_id',
+    VAULT_SAUCEPAN: 'api_key_vault_saucepan',
 };
 
 /**
