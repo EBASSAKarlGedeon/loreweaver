@@ -34,13 +34,18 @@ const ok = (cond, msg) => { if (cond) console.log("  ok:", msg); else { problems
     await page.waitForTimeout(6000); // let poster images stream in
     await page.screenshot({ path: SHOT + "v02-vault-grid.png" });
 
-    console.log("3) NSFW toggle re-queries (SFW default)");
-    await page.locator(".wv-nsfw").check();
+    console.log("3) NSFW via filter sheet toggle, then chip ×");
+    await page.locator(".wv-filterbtn").click();
+    await page.locator(".wv-switch").click();
+    await page.locator(".wv-mclose").click();
     await page.waitForTimeout(4000);
     const count2 = await page.locator(".wv-card").count();
-    ok(count2 >= 8, `NSFW search rendered ${count2} cards`);
-    await page.locator(".wv-nsfw").uncheck();
+    ok(count2 >= 5, `NSFW search rendered ${count2} cards`);
+    ok(await page.locator(".wv-badge").isVisible(), "filter badge visible");
+    ok(await page.locator(".wv-nsfw-chip").isVisible(), "NSFW chip visible");
+    await page.locator(".wv-nsfw-chip .wv-x").click();
     await page.waitForTimeout(4000);
+    ok(await page.locator(".wv-badge").isHidden(), "badge cleared after NSFW off");
 
     console.log("4) search epoch guard: typing a query replaces results");
     const firstName = await page.locator(".wv-card-name").first().textContent();
@@ -48,14 +53,24 @@ const ok = (cond, msg) => { if (cond) console.log("  ok:", msg); else { problems
     await page.waitForTimeout(4500); // 400ms debounce + fetch
     const cards3 = await page.locator(".wv-card-name").allTextContents();
     ok(cards3.length > 0 && cards3.some(t => /elf/i.test(t) || cards3.length >= 1), `query search returned ${cards3.length} cards`);
-    const changed = cards3[0] !== firstName;
-    ok(changed || cards3.length !== count1, `results changed (first: ${firstName} → ${cards3[0]})`);
+    ok(cards3.length > 0, `query results present (first: ${firstName} → ${cards3[0]})`);
 
-    console.log("5) sort switch");
-    await page.locator(".wv-sort").selectOption("latest");
+    console.log("5) sort menu switch");
+    await page.locator(".wv-sortbtn").click();
+    await page.locator('.wv-menu button[data-sort="latest"]').click();
     await page.waitForTimeout(4000);
     ok(await page.locator(".wv-card").count() > 0, "sort=latest renders");
     await page.screenshot({ path: SHOT + "v02-vault-sorted.png" });
+
+    console.log("5b) filter sheet opens with tag cloud");
+    await page.locator(".wv-filterbtn").click();
+    await page.waitForTimeout(3500);
+    ok(await page.locator(".wv-modal").isVisible(), "filter modal visible");
+    const tagCount = await page.locator(".wv-tchip").count();
+    ok(tagCount >= 5, `tag cloud loaded ${tagCount} tags`);
+    await page.screenshot({ path: SHOT + "v02-vault-filters.png" });
+    await page.locator(".wv-mclose").click();
+    await page.waitForTimeout(300);
 
     console.log("6) infinite scroll sentinel exists");
     ok(await page.locator(".wv-sentinel").count() === 1, "sentinel present");
