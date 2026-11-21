@@ -34,17 +34,17 @@ const ok = (cond, msg) => { if (cond) console.log("  ok:", msg); else { problems
     await page.waitForTimeout(6000); // let poster images stream in
     await page.screenshot({ path: SHOT + "v02-vault-grid.png" });
 
-    console.log("3) NSFW via filter sheet toggle, then chip ×");
+    console.log("3) NSFW via filter sheet toggle (commits on close), then chip ×");
     await page.locator(".wv-filterbtn").click();
-    await page.locator(".wv-switch").click();
+    await page.locator(".wv-mcard").first().locator(".wv-switch").first().click();
     await page.locator(".wv-mclose").click();
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(4500);
     const count2 = await page.locator(".wv-card").count();
     ok(count2 >= 5, `NSFW search rendered ${count2} cards`);
     ok(await page.locator(".wv-badge").isVisible(), "filter badge visible");
-    ok(await page.locator(".wv-nsfw-chip").isVisible(), "NSFW chip visible");
-    await page.locator(".wv-nsfw-chip .wv-x").click();
-    await page.waitForTimeout(4000);
+    ok(await page.locator(".wv-fchip-nsfw").isVisible(), "NSFW active-filter chip visible");
+    await page.locator(".wv-fchip-nsfw").click();
+    await page.waitForTimeout(4500);
     ok(await page.locator(".wv-badge").isHidden(), "badge cleared after NSFW off");
 
     console.log("4) search epoch guard: typing a query replaces results");
