@@ -64,3 +64,5 @@ test-results/
 
 # rpg-engine lives as a standalone git clone (github.com/EBASSAKarlGedeon/rpg-engine)
 public/scripts/extensions/rpg-engine/
+# weavers-vault lives as a standalone git clone (github.com/EBASSAKarlGedeon/weavers-fault)
+public/scripts/extensions/weavers-vault/
