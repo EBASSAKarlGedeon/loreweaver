@@ -11,7 +11,8 @@ const ok = (cond, msg) => { if (cond) console.log("  ok:", msg); else { problems
     const browser = await chromium.launch();
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
     page.on("pageerror", e => problems.push("pageerror: " + e.message.slice(0, 160)));
-    await page.goto("http://127.0.0.1:8000/", { waitUntil: "load", timeout: 90000 });
+    const base = process.env.LW_PORT ? `http://127.0.0.1:${process.env.LW_PORT}` : "http://127.0.0.1:8000";
+    await page.goto(base + "/", { waitUntil: "load", timeout: 90000 });
     await page.waitForTimeout(8000); // let the app settle + extensions load
 
     console.log("1) extension loads and opens");

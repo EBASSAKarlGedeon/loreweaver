@@ -248,11 +248,21 @@ router.post('/chub/tags', async (req, res) => {
         // Tag index answer shapes: {tags: [...]} or a bare array; each tag may be
         // a string or {name|value, n_projects|count}. Normalize name-only.
         const raw = Array.isArray(data) ? data : (data?.tags ?? data?.data?.tags ?? []);
-        const tags = raw.map(t => {
-            if (typeof t === 'string') return { name: t };
-            const name = t.name ?? t.value ?? t.topic ?? '';
-            return name ? { name: String(name), count: Number(t.n_projects ?? t.count ?? 0) || undefined } : null;
-        }).filter(Boolean);
+        // parseChubTags (chub_provider.dart): names lowercased and de-duped
+        // (chub matches `topics` without regard to case), then a stable sort by
+        // usage count desc with the server's order breaking ties.
+        const seen = new Set();
+        const entries = [];
+        raw.forEach(t => {
+            const name = String(typeof t === 'string' ? t : (t.name ?? t.value ?? t.topic ?? '')).trim().toLowerCase();
+            if (!name || seen.has(name)) return;
+            seen.add(name);
+            entries.push({ name, count: (typeof t === 'object' && t ? Number(t.n_projects ?? t.total_projects_count ?? t.count ?? 0) : 0) || 0 });
+        });
+        const tags = entries
+            .map((e, i) => ({ e, i }))
+            .sort((a, b) => (b.e.count - a.e.count) || (a.i - b.i))
+            .map(({ e }) => e.count ? { name: e.name, count: e.count } : { name: e.name });
         cacheSet(cacheKey, { tags }, CACHE_TTL.tags);
         return res.json({ tags });
     } catch (error) {
