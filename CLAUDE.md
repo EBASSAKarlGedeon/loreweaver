@@ -44,6 +44,15 @@ Post-Phase-1 sweep (2026-11-10): a full repo triage of `SillyTavern` strings (48
 ### Phase 4: Models
 - LLM provider will be switched later; keep provider config swappable. Cost per token was the reason the earlier project (original Loreweaver rewrite) was abandoned, so prefer adapting what exists over rebuilding.
 
+## Test policy (mandatory since the 2026-11-21 library-loss incident)
+A test harness mass-deleted the character library via the server's delete API. New rules, no exceptions:
+- The `Testing` branch carries a committed snapshot of `data/default-user/` (excluded: `secrets.json`, `backups/`, `thumbnails/`, `vectors/`, transient `_cache/_storage/_webpack/_uploads/_errors` — secrets and regenerable data never go into git).
+- Destructive work (any harness/script that imports, edits, or DELETES data files) runs ONLY against a checkout of `Testing` — use the linked worktree `../Loreweaver-testing` (`git worktree list`). Never against the main checkout's live data or the packaged app's data dir.
+- Cleanup must be PROVENANCE-BASED: delete only items provably created by that very run (for vault imports: `data.extensions.vault_source === 'chub'` AND `vault_url` equal to the exact fullPath the run imported). Set-difference / "before"-snapshot diffs are FORBIDDEN — an empty snapshot aborts the test, it never means "everything is new". Zero or ambiguous (≠1) provenance matches ⇒ delete NOTHING and fail the test.
+- The import harness (`tools/check-vault-import.cjs`) enforces these rules itself: it refuses to run when the target data dir is not git-tracked. Extend the same guard to future destructive harnesses.
+- Restore after destructive tests: `git -C ../Loreweaver-testing reset --hard && git -C ../Loreweaver-testing clean -fd data/`. Refresh the snapshot after intentional data changes: commit on `Testing` (`git add data/ && git commit`).
+- Syncing devices propagate deletions: before touching any data dir, confirm no Loreweaver instance / sync client is running (check node processes, not just listening ports).
+
 ## Working agreements
 - Small, focused commits. Ask before merging `rebrand` into `release` or pushing.
 - Never push without asking.
