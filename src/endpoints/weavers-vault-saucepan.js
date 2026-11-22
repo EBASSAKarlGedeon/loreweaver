@@ -80,6 +80,39 @@ export async function saucepanGetJson(path, token) {
 }
 
 /**
+ * Handle + password login (saucepan_extractor.dart login): mints a bearer
+ * token that gates local extraction. The password is only sent to Saucepan —
+ * the caller stores just the returned token.
+ */
+export async function saucepanLogin(handle, password) {
+    const response = await fetch(`${SAUCEPAN_BASE}/api/v1/auth/sign_in_password`, {
+        method: 'POST',
+        headers: {
+            ...saucepanHeaders(),
+            'Content-Type': 'application/json',
+            Referer: `${SAUCEPAN_BASE}/sign-in`,
+        },
+        body: JSON.stringify({ handle: handle.trim(), password }),
+    });
+    const text = await response.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* non-json error body */ }
+    if (response.status >= 400) {
+        const msg = (data?.error && typeof data.error === 'object' ? data.error.message : null)
+            ?? `Saucepan HTTP ${response.status}`;
+        const err = new Error(msg);
+        err.status = response.status;
+        throw err;
+    }
+    const token = [data?.token, data?.access_token, data?.session_token, data?.sessionToken]
+        .find(t => typeof t === 'string' && t.length > 0);
+    if (!token) {
+        throw new Error('login succeeded but no token was returned');
+    }
+    return token;
+}
+
+/**
  * Pure normalization of a Saucepan extraction (definition + v2 companion JSON)
  * into a TavernCardV2 with vault provenance stamped in. Mirrors
  * saucepan_extractor.dart's extractCompanion body exactly.

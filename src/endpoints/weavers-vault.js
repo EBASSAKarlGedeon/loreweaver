@@ -7,6 +7,7 @@ import {
     normalizeSaucepanExtraction,
     parseCompanionId,
     saucepanGetJson,
+    saucepanLogin,
     saucepanHeaders,
     SAUCEPAN_BASE,
     SAUCEPAN_CLOSED_MESSAGE,
@@ -181,6 +182,25 @@ router.post('/saucepan/token', async (req, res) => {
     } catch (error) {
         console.warn("[Weaver's Vault] saucepan token save failed:", error.message);
         return res.status(500).json({ error: error.message });
+    }
+});
+
+// Handle + password login (saucepan_login_sheet.dart's primary path): mints
+// the bearer token server-side and stores it. The password is forwarded to
+// Saucepan once and never persisted — only the token lands in secrets.json.
+router.post('/saucepan/login', async (req, res) => {
+    try {
+        const handle = String(req.body?.handle ?? '').trim();
+        const password = String(req.body?.password ?? '');
+        if (!handle || !password) {
+            return res.status(400).json({ error: 'Handle and password are required.' });
+        }
+        const token = await saucepanLogin(handle, password);
+        writeSecret(req.user.directories, SECRET_KEYS.VAULT_SAUCEPAN, token);
+        return res.json({ ok: true, loggedIn: true });
+    } catch (error) {
+        console.warn("[Weaver's Vault] saucepan login failed:", error.message);
+        return res.status(error.status ?? 502).json({ error: error.message });
     }
 });
 
