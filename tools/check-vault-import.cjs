@@ -67,6 +67,22 @@ assertTrackedDataDir();
     await page.waitForTimeout(9000);
     await page.locator("#stlp_exit_btn").click();
     await page.waitForTimeout(1200);
+    // Deterministic baseline: persisted vault filters (e.g. a stale tagNames
+    // entry) can zero out the search, which would look like a UI failure.
+    // Reset them to defaults before opening the panel.
+    await page.evaluate(async () => {
+        const { extension_settings } = await import("/scripts/extensions.js");
+        const { saveSettingsDebounced } = await import("/script.js");
+        const v = extension_settings["weavers-vault"] ?? {};
+        v.filters = v.filters ?? { chub: {} };
+        v.filters.chub.tagNames = [];
+        v.filters.chub.topics = [];
+        v.filters.chub.minTokens = 29;
+        v.filters.chub.maxTokens = 100000;
+        v.filters.chub.nsfw = false;
+        v.query = "grandmother";
+        saveSettingsDebounced();
+    });
     await page.locator("#wv-launcher").click();
     await page.waitForSelector(".wv-card", { timeout: 30000 });
     await page.waitForTimeout(4000);
