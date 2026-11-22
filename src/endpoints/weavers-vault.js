@@ -7,6 +7,8 @@ import {
     normalizeSaucepanExtraction,
     parseCompanionId,
     saucepanGetJson,
+    saucepanHeaders,
+    SAUCEPAN_BASE,
     SAUCEPAN_CLOSED_MESSAGE,
 } from './weavers-vault-saucepan.js';
 import { DEFAULT_AVATAR_PATH } from '../constants.js';
@@ -170,7 +172,89 @@ export function chubCharacterData(node) {
 // endpoint that returns a ready-to-import card PNG.
 // ---------------------------------------------------------------------------
 
+router.post('/saucepan/token', async (req, res) => {
+    try {
+        // Paste-only bearer token (DESIGN.md Q14) — never a password flow.
+        const token = String(req.body?.token ?? '').trim();
+        writeSecret(req.user.directories, SECRET_KEYS.VAULT_SAUCEPAN, token);
+        return res.json({ ok: true, loggedIn: Boolean(token) });
+    } catch (error) {
+        console.warn("[Weaver's Vault] saucepan token save failed:", error.message);
+        return res.status(500).json({ error: error.message });
+    }
+});
 
+router.get('/saucepan/status', (req, res) => {
+    const token = readSecret(req.user.directories, SECRET_KEYS.VAULT_SAUCEPAN) ?? '';
+    return res.json({ loggedIn: Boolean(token.trim()) });
+});
+
+router.post('/saucepan/extract', async (req, res) => {
+    try {
+        const token = (readSecret(req.user.directories, SECRET_KEYS.VAULT_SAUCEPAN) ?? '').trim();
+        if (!token) {
+            return res.status(401).json({ error: 'No Saucepan token configured — set one first.' });
+        }
+        const url = String(req.body?.url ?? '');
+        const companionId = parseCompanionId(url);
+        if (!companionId) {
+            return res.status(400).json({ error: 'Not a Saucepan companion URL.' });
+        }
+
+        const [defRes, compRes] = await Promise.all([
+            saucepanGetJson(`/api/v1/companion/definition?companion_id=${companionId}`, token),
+            saucepanGetJson(`/api/v2/companions/${companionId}`, token),
+        ]);
+        if (defRes.status >= 400 || !defRes.data) {
+            const msg = defRes.data?.error?.message ?? `Saucepan HTTP ${defRes.status}`;
+            return res.status(defRes.status === 401 ? 401 : 502).json({ error: msg });
+        }
+        const comp = compRes.data?.companion;
+        if (compRes.status >= 400 || !comp) {
+            console.warn(`[Weaver's Vault] saucepan greetings/metadata unavailable (companions/${companionId} HTTP ${compRes.status})`);
+        }
+
+        const extraction = normalizeSaucepanExtraction(defRes.data, compRes.data, companionId);
+        if (extraction.closed) {
+            return res.status(403).json({ error: SAUCEPAN_CLOSED_MESSAGE });
+        }
+
+        // Card avatar comes from the authed CDN (`/cdn/<imageId>/card`); fall
+        // back to the built-in default like every other source importer does.
+        let imageBuffer = null;
+        const imageId = comp?.image && typeof comp.image === 'object' ? comp.image.id : null;
+        if (imageId != null) {
+            try {
+                const r = await fetch(`${SAUCEPAN_BASE}/cdn/${encodeURIComponent(String(imageId))}/card`, {
+                    headers: saucepanHeaders(token),
+                });
+                if (r.ok) imageBuffer = Buffer.from(await r.arrayBuffer());
+                else console.warn(`[Weaver's Vault] saucepan avatar answered ${r.status} — using default avatar`);
+            } catch (error) {
+                console.warn("[Weaver's Vault] saucepan avatar fetch failed:", error.message);
+            }
+        }
+        if (!imageBuffer) {
+            imageBuffer = fs.readFileSync(path.join(serverDirectory, DEFAULT_AVATAR_PATH));
+        }
+
+        const cardBuffer = writeCardChunk(imageBuffer, JSON.stringify(extraction.character));
+        const fileName = `${extraction.character.data.name.replace(/[\\/:*?"<>|]/g, '_')}.png`;
+        return res.json({
+            companionId,
+            character: extraction.character,
+            file: {
+                buffer: cardBuffer.toString('base64'),
+                fileName,
+                fileType: 'image/png',
+            },
+            avatarDataUrl: `data:image/png;base64,${cardBuffer.toString('base64')}`,
+        });
+    } catch (error) {
+        console.warn("[Weaver's Vault] saucepan extract failed:", error.message);
+        return res.status(502).json({ error: error.message });
+    }
+});
 
 // ---------------------------------------------------------------------------
 // Sort keys (Glaze _sortMap): chub's own sort param + optional recency window.
