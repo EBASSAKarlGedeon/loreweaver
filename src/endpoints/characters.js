@@ -217,6 +217,25 @@ async function readCharacterData(inputFile, inputFormat = 'png') {
  * @param {Crop|undefined} crop - Crop parameters
  * @returns {Promise<boolean>} - True if the operation was successful
  */
+/**
+ * write-file-atomic's rename step transiently fails with EPERM/EACCES/EBUSY on Windows
+ * when another handle (thumbnail processor, AV scan) holds the target open — the file
+ * vanishes-then-appears and the whole edit is lost (seen live: character edits raced
+ * generateThumbnail on a fresh import). Retrying the full atomic write absorbs it.
+ */
+async function writeFileAtomicWithRetry(filePath, buffer) {
+    const codes = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT']);
+    for (let attempt = 0; ; attempt++) {
+        try {
+            writeFileAtomicSync(filePath, buffer);
+            return;
+        } catch (err) {
+            if (!codes.has(err?.code) || attempt >= 4) throw err;
+            await new Promise(resolve => setTimeout(resolve, 15 * (attempt + 1)));
+        }
+    }
+}
+
 async function writeCharacterData(inputFile, data, outputFile, request, crop = undefined) {
     try {
         // Reset the cache
@@ -256,7 +275,7 @@ async function writeCharacterData(inputFile, data, outputFile, request, crop = u
         const outputImage = write(inputImage, data);
         const outputImagePath = path.join(request.user.directories.characters, `${outputFile}.png`);
 
-        writeFileAtomicSync(outputImagePath, outputImage);
+        await writeFileAtomicWithRetry(outputImagePath, outputImage);
         return true;
     } catch (err) {
         console.error(err);
