@@ -52,6 +52,8 @@ A test harness mass-deleted the character library via the server's delete API. N
 - The import harness (`tools/check-vault-import.cjs`) enforces these rules itself: it refuses to run when the target data dir is not git-tracked. Extend the same guard to future destructive harnesses.
 - Restore after destructive tests: `git -C ../Loreweaver-testing reset --hard && git -C ../Loreweaver-testing clean -fd data/`. Refresh the snapshot after intentional data changes: commit on `Testing` (`git add data/ && git commit`).
 - Syncing devices propagate deletions: before touching any data dir, confirm no Loreweaver instance / sync client is running (check node processes, not just listening ports).
+- NEVER `git switch`/`checkout` the MAIN checkout to `Testing` — data files tracked on `Testing` are removed from the working tree when switching away (this emptied the dev data dir on 2026-11-22). Run destructive tests only in the `Loreweaver-testing` worktree; if main-checkout data files ever vanish, restore no-clobber from `C:/Users/Gedeon/Documents/Coding/og_data` (authoritative original-SillyTavern copy, user-maintained) and/or the Testing worktree, then re-commit the snapshot on `Testing`.
+- `og_data` is the user's own offline backup of the data folder (the authority the user trusts over agent work). Treat it as read-only; never delete or rewrite it without asking.
 
 ## Working agreements
 - Small, focused commits. Ask before merging `rebrand` into `release` or pushing.
