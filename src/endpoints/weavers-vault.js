@@ -1,7 +1,18 @@
 import express from 'express';
 import fetch from 'node-fetch';
 
-import { readSecret, SECRET_KEYS } from './secrets.js';
+import { readSecret, writeSecret, SECRET_KEYS } from './secrets.js';
+import { write as writeCardChunk } from '../character-card-parser.js';
+import {
+    normalizeSaucepanExtraction,
+    parseCompanionId,
+    saucepanGetJson,
+    SAUCEPAN_CLOSED_MESSAGE,
+} from './weavers-vault-saucepan.js';
+import { DEFAULT_AVATAR_PATH } from '../constants.js';
+import path from 'node:path';
+import fs from 'node:fs';
+import { serverDirectory } from '../server-directory.js';
 
 /**
  * Weaver's Vault — character library backend.
@@ -152,6 +163,16 @@ export function chubCharacterData(node) {
     };
 }
 
+// ---------------------------------------------------------------------------
+// M4 · Saucepan (saucepan.ai): extraction logic lives in
+// weavers-vault-saucepan.js (pure, unit-tested). This section holds the
+// routes: paste-token storage (DESIGN.md Q14), status, and the extract
+// endpoint that returns a ready-to-import card PNG.
+// ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
 // Sort keys (Glaze _sortMap): chub's own sort param + optional recency window.
 const CHUB_SORTS = {
     popular: { sort: 'download_count' },
