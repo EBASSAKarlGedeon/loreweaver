@@ -16,6 +16,7 @@ import { DEFAULT_AVATAR_PATH } from '../constants.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { serverDirectory } from '../server-directory.js';
+import { createDatacatRouter } from './weavers-vault-datacat-routes.js';
 
 /**
  * Weaver's Vault — character library backend.
@@ -28,6 +29,10 @@ import { serverDirectory } from '../server-directory.js';
  */
 
 export const router = express.Router();
+
+// M5 · DataCat lives in its own module (routes + I/O); mount it before the chub
+// routes so its paths are unambiguous.
+router.use(createDatacatRouter());
 
 // Cosplay as Chrome — the same lesson Glaze learned: default server UAs get
 // blocked or degraded answers from these APIs.

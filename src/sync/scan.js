@@ -173,13 +173,49 @@ export async function readStableFile(absPath, quietMs = 2000) {
  *   (ms since epoch). Used to preserve the origin device's mtime so chat-list
  *   ordering survives sync; omitted/invalid leaves the file's real mtime.
  */
+// In-process write mutexes keyed by resolved path: concurrent writes to the SAME file are
+// serialized, so the Windows rename-over-existing race (EPERM when another writer is
+// mid-rename onto the same target) cannot happen between our own calls. Cross-process
+// contention is still absorbed by the bounded retry below.
+const writeLocks = new Map();
+
 export async function atomicWriteFile(absPath, data, mtimeMs) {
+    const lockKey = path.resolve(absPath);
+    const prev = writeLocks.get(lockKey) || Promise.resolve();
+    let release;
+    const gate = new Promise(r => { release = r; });
+    const tail = prev.then(() => gate);
+    writeLocks.set(lockKey, tail);
+    try {
+        await prev;
+        await atomicWriteFileInner(absPath, data, mtimeMs);
+    } finally {
+        release();
+        // Clean the map entry once this write is the newest tail and has settled.
+        tail.then(() => { if (writeLocks.get(lockKey) === tail) writeLocks.delete(lockKey); });
+    }
+}
+
+async function atomicWriteFileInner(absPath, data, mtimeMs) {
     const dir = path.dirname(absPath);
     await fsp.mkdir(dir, { recursive: true });
-    const tmp = path.join(dir, `.${path.basename(absPath)}.${process.pid}.${Date.now()}.tmp`);
+    // Unique per call: two concurrent writers in the same millisecond would otherwise
+    // share one temp path — the first rename moves it away and the second fails (ENOENT).
+    const tmp = path.join(dir, `.${path.basename(absPath)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`);
     try {
         await fsp.writeFile(tmp, data);
-        await fsp.rename(tmp, absPath);
+        // Windows: rename-over-existing can transiently fail with EPERM/EBUSY when another
+        // writer renames onto the same target concurrently. A short bounded retry absorbs it.
+        const RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT']);
+        for (let attempt = 0; ; attempt++) {
+            try {
+                await fsp.rename(tmp, absPath);
+                break;
+            } catch (err) {
+                if (!RETRY_CODES.has(err?.code) || attempt >= 4) throw err;
+                await new Promise(r => setTimeout(r, 10 * (attempt + 1)));
+            }
+        }
         if (typeof mtimeMs === 'number' && Number.isFinite(mtimeMs) && mtimeMs > 0) {
             const seconds = mtimeMs / 1000;
             await fsp.utimes(absPath, seconds, seconds);

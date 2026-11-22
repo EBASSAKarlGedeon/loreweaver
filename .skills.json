@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "skills": {
+    "code-review": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T18:36:04.816Z",
+      "platform": "claude-code",
+      "contentHash": "a36edc8e90bf772b3577c3819abc824edca4e5e434b843c23cce91836e91d00c"
+    },
+    "skill-finder": {
+      "version": "2.0.0",
+      "installedAt": "2026-11-20T18:37:02.513Z",
+      "platform": "claude-code"
+    },
+    "web-research-agent": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T18:37:29.416Z",
+      "platform": "claude-code",
+      "contentHash": "e07bdcc948dae034fc03bbf0716dd6bcf0f28d7029ceddf64fc98010c61a279e"
+    },
+    "refactor": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T18:37:57.170Z",
+      "platform": "claude-code",
+      "contentHash": "718bfd8d8a6b18d4894e23e98f1924d8cf3a09d3e67ca37bd7be0ba6c11847cf"
+    },
+    "alirezarezvani-senior-frontend": {
+      "version": "1.0.5",
+      "installedAt": "2026-11-20T18:39:36.216Z",
+      "platform": "claude-code"
+    },
+    "alirezarezvani-ui-design-system": {
+      "version": "1.0.2",
+      "installedAt": "2026-11-20T18:39:49.808Z",
+      "platform": "claude-code"
+    },
+    "anthropic-frontend-design": {
+      "version": "1.0.2",
+      "installedAt": "2026-11-20T18:40:02.893Z",
+      "platform": "claude-code"
+    },
+    "alirezarezvani-senior-backend": {
+      "version": "1.0.5",
+      "installedAt": "2026-11-20T18:40:17.408Z",
+      "platform": "claude-code"
+    },
+    "scientific-skills-markitdown": {
+      "version": "1.0.3",
+      "installedAt": "2026-11-20T18:40:29.852Z",
+      "platform": "claude-code"
+    },
+    "security-review": {
+      "version": "2.0.1",
+      "installedAt": "2026-11-20T20:24:47.657Z",
+      "platform": "claude-code"
+    },
+    "unit-test": {
+      "version": "2.0.1",
+      "installedAt": "2026-11-20T20:24:58.303Z",
+      "platform": "claude-code"
+    },
+    "humanizer": {
+      "version": "1.0.1",
+      "installedAt": "2026-11-20T20:25:14.078Z",
+      "platform": "claude-code"
+    },
+    "design-to-code": {
+      "version": "2.0.350",
+      "installedAt": "2026-11-20T20:25:19.887Z",
+      "platform": "claude-code"
+    },
+    "web-game": {
+      "version": "2.0.1",
+      "installedAt": "2026-11-20T20:25:25.940Z",
+      "platform": "claude-code"
+    },
+    "flutter": {
+      "version": "2.0.0",
+      "installedAt": "2026-11-20T20:25:31.263Z",
+      "platform": "claude-code"
+    },
+    "alirezarezvani-self-improving-agent": {
+      "version": "1.0.5",
+      "installedAt": "2026-11-20T20:26:06.944Z",
+      "platform": "claude-code"
+    },
+    "superpowers-using-superpowers": {
+      "version": "1.0.5",
+      "installedAt": "2026-11-20T20:26:12.468Z",
+      "platform": "claude-code"
+    },
+    "alirezarezvani-social-media-manager": {
+      "version": "1.0.3",
+      "installedAt": "2026-11-20T20:26:18.277Z",
+      "platform": "claude-code"
+    },
+    "design-animate": {
+      "version": "1.0.1",
+      "installedAt": "2026-11-20T20:27:29.938Z",
+      "platform": "claude-code"
+    },
+    "claudekit-backend-development": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:28:40.478Z",
+      "platform": "claude-code"
+    },
+    "mindrally-ui-design": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:29:28.219Z",
+      "platform": "claude-code"
+    },
+    "design-claude": {
+      "version": "1.0.1",
+      "installedAt": "2026-11-20T20:30:58.126Z",
+      "platform": "claude-code"
+    },
+    "cisco-skill-scanner-jailbreak-override": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:34:52.417Z",
+      "platform": "cline"
+    },
+    "anthropic-webapp-testing": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:37:29.707Z",
+      "platform": "claude-code",
+      "contentHash": "830bd54146bc08d43e6fb986bd3a189490fb34c76109bc2d0bfa6a852e46ae53"
+    },
+    "prompt-engineering": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:39:32.746Z",
+      "platform": "claude-code"
+    },
+    "qwen-code-desktop-pet": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:40:22.731Z",
+      "platform": "claude-code"
+    },
+    "vercel-agent-browser-agent-browser": {
+      "version": "1.0.6",
+      "installedAt": "2026-11-20T20:46:49.267Z",
+      "platform": "claude-code"
+    },
+    "getting-started": {
+      "version": "1.0.1",
+      "installedAt": "2026-11-20T20:50:00.978Z",
+      "platform": "claude-code"
+    },
+    "wshobson-agents-tailwind-design-system": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:51:44.392Z",
+      "platform": "claude-code",
+      "contentHash": "4cbacfa805e2aca4101884de8ad4bfae4df0d2af1321a96ed9e8f30f0d6835a2"
+    },
+    "claude-mem-learn-codebase": {
+      "version": "1.0.0",
+      "installedAt": "2026-11-20T20:56:09.558Z",
+      "platform": "claude-code",
+      "contentHash": "40a02c9ec17439e4958d8ecbfac4096b8efd8806c35f4cfdf48f983d28d39276"
+    }
+  }
+}
