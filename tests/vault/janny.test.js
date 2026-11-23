@@ -16,7 +16,10 @@ import {
     normalizeJannyHit,
     parseJannyCharacterPage,
     parseJannyMultiSearch,
+    parseJannyTagCloud,
     resolveJannyAvatar,
+    resolveJannyTagIds,
+    JANNY_TAGS_FALLBACK,
     stripJannyHtml,
 } from '../../src/endpoints/weavers-vault-janny.js';
 
@@ -211,7 +214,9 @@ describe('hit normalisation', () => {
             avatarUrl: `${JANNY_IMAGE_CDN}x.webp`, tokens: 519, tagIds: [2, 5],
             nsfw: true, source: 'janny',
         });
-        expect(item.tags).toEqual(['NSFW']);
+        // The grid draws the safety chip from `nsfw`; a 'SFW'/'NSFW' entry here
+        // would render a second, redundant chip on every card.
+        expect(item.tags).toEqual([]);
     });
 
     test('the index carries no definition, so none is invented', () => {
@@ -271,5 +276,93 @@ describe('error classification', () => {
 
     test('stripHtml removes tags and entities', () => {
         expect(stripJannyHtml('<p>a &amp; b</p><br/>')).toBe('a & b');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Tags. The index only carries numeric tagIds (measured: its filterable
+// attributes are createdAtStamp, isLowQuality, isNsfw, permanentToken, tagIds,
+// totalToken), so labels are read from the site's own sidebar. The fixture below
+// is verbatim markup from a browse page.
+// ---------------------------------------------------------------------------
+describe('tag vocabulary', () => {
+    const sidebarHtml = `
+      <ul>
+        <li title="Male characters" class="mb-2 mr-2"><a data-astro-reload="true" href="/?query=tsundere&amp;tag_id=1&amp;page=1" class="block px-2 py-1 text-sm">👨‍🦰 Male<!-- --> </a></li>
+        <li title="Female characters" class="mb-2 mr-2"><a data-astro-reload="true" href="/?query=tsundere&amp;tag_id=2&amp;page=1" class="block px-2 py-1 text-sm">👩‍🦰 Female<!-- --> </a></li>
+        <li title="BDSM - Dominant character" class="mb-2 mr-2"><a data-astro-reload="true" href="/?query=tsundere&amp;tag_id=28&amp;page=1" class="block px-2 py-1 text-sm">⛓️ Dominant<!-- --> </a></li>
+        <li title="For bots that are parodies, have silly scenarios, or are intended to make the user laugh." class="mb-2 mr-2"><a data-astro-reload="true" href="/?query=tsundere&amp;tag_id=52&amp;page=1" class="block px-2 py-1 text-sm">😂 Comedy<!-- --> </a></li>
+        <li title="For bots written from a female user perspective." class="mb-2 mr-2"><a data-astro-reload="true" href="/?query=tsundere&amp;tag_id=54&amp;page=1" class="block px-2 py-1 text-sm">👩 FemPov<!-- --> </a></li>
+      </ul>`;
+
+    test('reads id, label and tooltip out of the sidebar', () => {
+        const tags = parseJannyTagCloud(sidebarHtml);
+        expect(tags).toEqual([
+            { id: 1, name: '👨‍🦰 Male', title: 'Male characters' },
+            { id: 2, name: '👩‍🦰 Female', title: 'Female characters' },
+            { id: 28, name: '⛓️ Dominant', title: 'BDSM - Dominant character' },
+            { id: 52, name: '😂 Comedy', title: 'For bots that are parodies, have silly scenarios, or are intended to make the user laugh.' },
+            { id: 54, name: '👩 FemPov', title: 'For bots written from a female user perspective.' },
+        ]);
+    });
+
+    test('falls back to bare anchors when the list markup changes', () => {
+        const html = '<div><a href="/?tag_id=7">👤 Real</a><a href="/?tag_id=9">📺 Anime</a></div>';
+        expect(parseJannyTagCloud(html).map(t => `${t.id}:${t.name}`)).toEqual(['7:👤 Real', '9:📺 Anime']);
+    });
+
+    test('ignores pages with no tag links', () => {
+        expect(parseJannyTagCloud('<html><body>nothing</body></html>')).toEqual([]);
+        expect(parseJannyTagCloud('')).toEqual([]);
+    });
+
+    test('the fallback list matches the ids the site actually uses', () => {
+        // Measured on two real pages: 2,5,42,43,46,52 and 2,5,6,28,48,54.
+        const byId = new Map(JANNY_TAGS_FALLBACK.map(t => [t.id, t.name]));
+        expect(byId.get(2)).toContain('Female');
+        expect(byId.get(5)).toContain('OC');
+        expect(byId.get(42)).toContain('AnyPOV');
+        expect(byId.get(43)).toContain('Angst');
+        expect(byId.get(46)).toContain('Smut');
+        expect(byId.get(52)).toContain('Comedy');
+        expect(byId.get(54)).toContain('FemPov');
+    });
+
+    test('resolves names back to ids, tolerating emoji changes and case', () => {
+        const catalog = [
+            { id: 2, name: '👩‍🦰 Female' },
+            { id: 46, name: '❤️‍🔥 Smut' },
+            { id: 52, name: '😂 Comedy' },
+        ];
+        expect(resolveJannyTagIds(catalog, ['👩‍🦰 Female'])).toEqual([2]);
+        // Label without the emoji still resolves.
+        expect(resolveJannyTagIds(catalog, ['female'])).toEqual([2]);
+        expect(resolveJannyTagIds(catalog, ['SMUT', 52])).toEqual([46, 52]);
+        // Unknown names are dropped rather than sent as garbage, and duplicates collapse.
+        expect(resolveJannyTagIds(catalog, ['nonsense', 'female', 'Female'])).toEqual([2]);
+        expect(resolveJannyTagIds(catalog, [])).toEqual([]);
+    });
+
+    test('search body turns tag ids into index clauses', () => {
+        const [andBody] = jannySearchAttempts({ tagIds: [2, 46] });
+        expect(andBody.queries[0].filter).toContain('tagIds = 2');
+        expect(andBody.queries[0].filter).toContain('tagIds = 46');
+
+        const [orBody] = jannySearchAttempts({ tagIds: [2, 46], inclusiveOr: true });
+        expect(orBody.queries[0].filter).toContain('tagIds IN [2, 46]');
+        expect(orBody.queries[0].filter).not.toContain('tagIds = 2');
+    });
+
+    test('one selected tag stays an equality clause even in "match any" mode', () => {
+        const [body] = jannySearchAttempts({ tagIds: [46], inclusiveOr: true });
+        expect(body.queries[0].filter).toContain('tagIds = 46');
+        expect(body.queries[0].filter).not.toContain('IN [');
+    });
+
+    test('junk tag ids are ignored instead of breaking the query', () => {
+        const [body] = jannySearchAttempts({ tagIds: [0, -1, 'x', 2.5, 3] });
+        expect(body.queries[0].filter).toContain('tagIds = 3');
+        expect(body.queries[0].filter).not.toContain('tagIds = 0');
+        expect(body.queries[0].filter).not.toContain('tagIds = NaN');
     });
 });

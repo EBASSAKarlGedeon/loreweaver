@@ -26,7 +26,12 @@ import WebSocket from 'ws';
 const ORIGIN = 'https://jannyai.com/';
 const IDLE_TTL_MS = 60_000;
 const START_TIMEOUT_MS = 30_000;
-const CHALLENGE_TIMEOUT_MS = 45_000;
+// A brand-new profile has to solve Cloudflare's managed challenge from scratch:
+// measured 18 s on this machine and ~42 s on a truly cold one, so 45 s sat right
+// on the edge and surfaced as "it loads, then times out". A profile that has
+// solved before reuses cf_clearance and is ready in about a second.
+const CHALLENGE_TIMEOUT_MS = 120_000;
+const CHALLENGE_TIMEOUT_WARM_MS = 30_000;
 
 /** Candidate browser binaries, first existing wins. */
 const BROWSER_CANDIDATES = [
@@ -266,6 +271,13 @@ export class JannyBrowser {
             '--disable-blink-features=AutomationControlled',
             '--disable-background-timer-throttling',
             '--disable-renderer-backgrounding',
+            // An unfocused or covered window throttles its timers, which stalls
+            // the challenge script until the deadline expires and looks exactly
+            // like a dead site. These keep a background window at full speed.
+            '--disable-backgrounding-occluded-windows',
+            '--disable-features=CalculateNativeWinOcclusion,Translate,MediaRouter',
+            '--disable-hang-monitor',
+            '--no-service-autorun',
             // Offscreen but *headful*: Cloudflare rejects headless Chrome
             // (measured), and a real window is what Glaze's WebView2 provides.
             '--window-position=-32000,-32000',
@@ -310,8 +322,12 @@ export class JannyBrowser {
         }
         const cleared = await this.waitForPage();
         if (!cleared) {
+            // Leave nothing half-solved behind: a challenged page would be reused
+            // by the next request and fail the same way.
+            await this.dispose();
             throw new JannyBrowserUnavailable(
-                'The Cloudflare challenge did not clear. Open the browser window once and solve it, then retry.',
+                'The Cloudflare check did not finish. A Chrome window stays open for a moment — '
+                + 'if it shows a verification button, click it once and retry.',
             );
         }
     }
@@ -410,6 +426,7 @@ export class JannyBrowser {
                 if (page?.webSocketDebuggerUrl) {
                     const session = await CdpPage.attach(page.webSocketDebuggerUrl);
                     await session.send('Runtime.enable').catch(() => {});
+                    await this.focusPage(session);
                     return session;
                 }
             } catch { /* browser still booting */ }
@@ -423,8 +440,11 @@ export class JannyBrowser {
      * "Just a moment…" interstitial. Checking `window._cf_chl_opt` rather than
      * the cookie also returns at once when Cloudflare never challenged us.
      */
-    async waitForPage(timeoutMs = CHALLENGE_TIMEOUT_MS) {
-        const deadline = Date.now() + timeoutMs;
+    async waitForPage(timeoutMs = null) {
+        const budget = timeoutMs ?? (this.hasSolvedBefore() ? CHALLENGE_TIMEOUT_WARM_MS : CHALLENGE_TIMEOUT_MS);
+        const startedAt = Date.now();
+        const deadline = startedAt + budget;
+        let lastFocus = startedAt;
         while (Date.now() < deadline) {
             try {
                 const ready = await this.page.evaluate(
@@ -433,13 +453,45 @@ export class JannyBrowser {
                 );
                 if (ready === true) {
                     this.logger.info?.("[Weaver's Vault] JannyAI: browser session ready");
+                    this.markSolved();
                     return true;
                 }
             } catch { /* mid-navigation */ }
+            // Re-assert focus while waiting: a window that loses the foreground
+            // mid-challenge would otherwise stall for the whole budget.
+            if (Date.now() - lastFocus > 5_000) {
+                lastFocus = Date.now();
+                await this.focusPage();
+            }
             await new Promise(r => setTimeout(r, 400));
         }
         this.logger.warn?.("[Weaver's Vault] JannyAI: challenge not cleared in time");
         return false;
+    }
+
+    /** Whether this profile has cleared the challenge before (marker file). */
+    hasSolvedBefore() {
+        return fs.existsSync(path.join(this.profileDir, 'challenge-solved.marker'));
+    }
+
+    markSolved() {
+        try {
+            fs.writeFileSync(path.join(this.profileDir, 'challenge-solved.marker'), new Date().toISOString());
+        } catch { /* advisory only */ }
+    }
+
+    /**
+     * Raise the page and tell it that it is focused.
+     *
+     * Without this a background window throttles its timers and Cloudflare's
+     * interstitial never finishes, which from the outside is indistinguishable
+     * from a dead site. Both calls are best-effort.
+     * @param {CdpPage} [session]
+     */
+    async focusPage(session = this.page) {
+        if (!session) return;
+        await session.send('Page.bringToFront').catch(() => {});
+        await session.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
     }
 
     /** Re-run the managed challenge from the origin (Glaze's `_reload`). */

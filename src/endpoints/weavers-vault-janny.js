@@ -91,6 +91,7 @@ export function jannySearchAttempts({
     minTokens = 0,
     maxTokens = 100000,
     tagIds = [],
+    inclusiveOr = false,
     sort = 'newest',
 } = {}) {
     const mandatory = [];
@@ -99,7 +100,16 @@ export function jannySearchAttempts({
     const minTok = minTokens > 0 ? minTokens : 29;
     const preferred = [`totalToken >= ${minTok}`];
     if (maxTokens < 100000) preferred.push(`totalToken <= ${maxTokens}`);
-    for (const id of tagIds) preferred.push(`tagIds = ${id}`);
+    // tagIds is an array attribute: repeated `=` clauses intersect (contains all),
+    // one `IN [...]` clause unions (contains any) — the sheet's "Match any tag".
+    const numericIds = (Array.isArray(tagIds) ? tagIds : [])
+        .map(id => Number(id))
+        .filter(id => Number.isInteger(id) && id > 0);
+    if (numericIds.length === 1 || !inclusiveOr) {
+        for (const id of numericIds) preferred.push(`tagIds = ${id}`);
+    } else if (numericIds.length > 1) {
+        preferred.push(`tagIds IN [${numericIds.join(', ')}]`);
+    }
 
     const sortArr = JANNY_SORTS[sort] ?? JANNY_SORTS.newest;
 
@@ -262,9 +272,11 @@ export function normalizeJannyHit(hit) {
         tokens: Number(hit?.totalToken ?? 0) || 0,
         tagIds: Array.isArray(hit?.tagIds) ? hit.tagIds : [],
         nsfw: isNsfw,
-        // The index carries no creator field; the grid must not print a bare "@".
+        // The index carries no creator and no tag names (only ids), and the grid
+        // draws its own safety chip from `nsfw` — putting 'SFW' here too painted
+        // a second, redundant chip on every card.
         creator: '',
-        tags: [isNsfw ? 'NSFW' : 'SFW'],
+        tags: [],
         createdAt: Number(hit?.createdAtStamp ?? 0) || 0,
         source: 'janny',
     };
@@ -369,4 +381,142 @@ export function classifyJannyError(status, body = '') {
         return { code: 'janny_challenge', message: JANNY_CLOSED_MESSAGE };
     }
     return { code: 'janny_error', message: `JannyAI answered HTTP ${status}.` };
+}
+
+// ---------------------------------------------------------------------------
+// Tags. The search index only knows numeric `tagIds` (its filterable attributes
+// are exactly `createdAtStamp, isLowQuality, isNsfw, permanentToken, tagIds,
+// totalToken` — measured), so the names come from the site's own tag sidebar,
+// which any browse page renders as `/?query=…&tag_id=<id>` links with an emoji
+// label and a `title` description.
+// ---------------------------------------------------------------------------
+
+/**
+ * Names as the site renders them (2026-11-23, captured verbatim from a browse
+ * page). Used to seed the cache and to keep the filter usable when the sidebar
+ * cannot be read, so the UI never has to invent a label.
+ */
+export const JANNY_TAGS_FALLBACK = [
+    { id: 1, name: '👨‍🦰 Male', title: 'Male characters' },
+    { id: 2, name: '👩‍🦰 Female', title: 'Female characters' },
+    { id: 3, name: '🌈 Non-binary', title: 'Non-binary characters' },
+    { id: 4, name: '🎭 Celebrity', title: 'Famous people' },
+    { id: 5, name: '🧑‍🎨 OC', title: 'Original characters' },
+    { id: 6, name: '📚 Fictional', title: 'Fictional characters' },
+    { id: 7, name: '👤 Real', title: 'Real people' },
+    { id: 8, name: '🎮 Game', title: 'Characters originating from video games' },
+    { id: 9, name: '📺 Anime', title: 'Characters originating from anime or manga' },
+    { id: 10, name: '🏰 Historical', title: 'Characters from a historical period or setting' },
+    { id: 11, name: '👑 Royalty', title: 'Characters with royal lineage or titles' },
+    { id: 12, name: '🕵️‍♀️ Detective', title: 'Characters who work as detectives' },
+    { id: 13, name: '🦸‍♂️ Hero', title: 'Heroic characters' },
+    { id: 14, name: '🦹‍♂️ Villain', title: 'Villainous characters' },
+    { id: 15, name: '🔮 Magical', title: 'Characters with magical abilities' },
+    { id: 16, name: '🦄 Non-human', title: 'Non-human characters' },
+    { id: 17, name: '👹 Monster', title: 'Monstrous characters' },
+    { id: 18, name: '👧 Monster Girl', title: 'Female monstrous characters' },
+    { id: 19, name: '👽 Alien', title: 'Characters from other planets' },
+    { id: 20, name: '🤖 Robot', title: 'Mechanical or electronic characters' },
+    { id: 21, name: '📜 Politics', title: 'Political characters' },
+    { id: 22, name: '🧛‍♂️ Vampire', title: 'Characters that are vampires' },
+    { id: 23, name: '🧖🏼‍♀️ Giant', title: 'Giant/Giantess/Big size characters' },
+    { id: 24, name: '🤐 OpenAI', title: 'Character is optimized to work with OpenAI ONLY' },
+    { id: 25, name: '🧝‍♀️ Elf', title: 'Elf race' },
+    { id: 26, name: '👭 Multiple', title: 'Character contains more than 1 character' },
+    { id: 27, name: '👩🏼‍💻 VTuber', title: 'VTuber' },
+    { id: 28, name: '⛓️ Dominant', title: 'BDSM - Dominant character' },
+    { id: 29, name: '🙇 Submissive', title: 'BDSM - Submissive character' },
+    { id: 30, name: '🪢 Scenario', title: 'For scenario/RPG/setup card, not a character' },
+    { id: 31, name: '🐙 Pokemon', title: 'This tag will attract furry, use it with care' },
+    { id: 32, name: '💁 Assistant', title: 'Personal assistant' },
+    { id: 34, name: '🌎 Non-English', title: 'Characters whose main language is not English' },
+    { id: 36, name: '📙 Philosophy', title: 'Philosophical chats' },
+    { id: 38, name: '🎲 RPG', title: 'For RPG bots' },
+    { id: 39, name: '⛪️ Religon', title: 'Religous chats' },
+    { id: 41, name: '📚 Books', title: 'From books' },
+    { id: 42, name: '👤 AnyPOV', title: 'Character is not specific in the gender or orientation of the User' },
+    { id: 43, name: '💔 Angst', title: 'Sad or emotional content made to evoke emotions' },
+    { id: 44, name: '🧬 Demi-Human', title: 'A race of humans with distinct animal features' },
+    { id: 45, name: '⚔️ Enemies to Lovers', title: 'Enemies who become lovers' },
+    { id: 46, name: '❤️‍🔥 Smut', title: 'Little plot, extremely sexually explicit' },
+    { id: 47, name: '👨‍❤️‍👨 MLM', title: 'Male loves Male' },
+    { id: 48, name: '👩‍❤️‍👩 WLW', title: 'Woman loves Woman' },
+    { id: 49, name: '🕊️🗡️ Dead Dove', title: 'Content warnings apply to their full extent' },
+    { id: 50, name: '❤️‍🩹 Fluff', title: 'Wholesome and sweet content meant to bring comfort' },
+    { id: 51, name: '🔦 Horror', title: 'Scary or creepy content' },
+    { id: 52, name: '😂 Comedy', title: 'Parodies, silly scenarios, intended to make the user laugh' },
+    { id: 53, name: '🐺 Furry', title: 'Anthropomorphic animal characters' },
+    { id: 54, name: '👩 FemPov', title: 'For bots written from a female user perspective' },
+    { id: 55, name: '👨 MalePov', title: 'For bots written from a male user perspective' },
+    { id: 56, name: '🌗 Switch', title: 'For bots that can be both dominant and submissive' },
+    { id: 57, name: '🏳️‍⚧️ Trans', title: 'Transgender characters' },
+    { id: 58, name: '🌀 Staff Pick', title: 'Hand picked by the JanitorAI Team' },
+    { id: 59, name: '🐉 The Beginning', title: 'Event Tag: magic, mystery, mythical beings' },
+    { id: 60, name: '🛸 Sci-Fi', title: 'Sci-Fi and Fantasy Characters' },
+    { id: 61, name: '💽 Music Mania', title: 'Music Mania Events' },
+];
+
+/**
+ * Read the tag sidebar out of a browse page.
+ *
+ * Each entry looks like
+ * `<li title="Female characters" …><a … href="/?query=tsundere&amp;tag_id=2&amp;page=1" …>👩‍🦰 Female<!-- --> </a></li>`
+ * so the label needs its HTML comment and tags stripped.
+ * @param {string} html
+ * @returns {{id: number, name: string, title: string}[]}
+ */
+export function parseJannyTagCloud(html) {
+    const source = String(html ?? '');
+    const found = new Map();
+    const itemRe = /<li[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/li>/g;
+    let match;
+    while ((match = itemRe.exec(source)) !== null) {
+        const [, title, inner] = match;
+        const idMatch = /tag_id=(\d+)/.exec(inner);
+        if (!idMatch) continue;
+        const label = stripJannyHtml(inner.replace(/<!--[\s\S]*?-->/g, ' '))
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!label) continue;
+        const id = Number(idMatch[1]);
+        if (!Number.isInteger(id) || id <= 0 || found.has(id)) continue;
+        found.set(id, { id, name: label, title: stripJannyHtml(title).trim() });
+    }
+    // Fallback for markup that drops the <li> wrapper.
+    if (found.size === 0) {
+        const anchorRe = /<a[^>]*tag_id=(\d+)[^>]*>([\s\S]*?)<\/a>/g;
+        while ((match = anchorRe.exec(source)) !== null) {
+            const id = Number(match[1]);
+            const label = stripJannyHtml(match[2].replace(/<!--[\s\S]*?-->/g, ' ')).replace(/\s+/g, ' ').trim();
+            if (!Number.isInteger(id) || id <= 0 || !label || found.has(id)) continue;
+            found.set(id, { id, name: label, title: '' });
+        }
+    }
+    return [...found.values()].sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Turn chosen tag names back into the numeric ids the index filters on.
+ * Matching ignores the emoji prefix and case, so a stored selection keeps
+ * working after the site tweaks a label.
+ * @param {{id: number, name: string}[]} catalog
+ * @param {string[]|number[]} selection Names (or ids) the user picked
+ * @returns {number[]}
+ */
+export function resolveJannyTagIds(catalog, selection) {
+    const list = Array.isArray(selection) ? selection : [];
+    const bare = (name) => String(name).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+    const byId = new Map((catalog ?? []).map(tag => [Number(tag.id), tag]));
+    const byName = new Map((catalog ?? []).map(tag => [bare(tag.name), Number(tag.id)]));
+    const ids = [];
+    for (const entry of list) {
+        const numeric = Number(entry);
+        if (Number.isInteger(numeric) && byId.has(numeric)) {
+            ids.push(numeric);
+            continue;
+        }
+        const id = byName.get(bare(entry));
+        if (id) ids.push(id);
+    }
+    return [...new Set(ids)];
 }

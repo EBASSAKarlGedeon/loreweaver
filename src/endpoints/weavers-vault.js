@@ -30,6 +30,8 @@ import {
     parseJannyMultiSearch,
 } from './weavers-vault-janny.js';
 import { JannyBrowserUnavailable, disposeJannyBrowser, findBrowserBinary, getJannyBrowser } from './weavers-vault-janny-browser.js';
+import { loadJannyTagCatalog } from './weavers-vault-janny-tags.js';
+import { resolveJannyTagIds } from './weavers-vault-janny.js';
 
 /**
  * Weaver's Vault — character library backend.
@@ -308,6 +310,30 @@ function jannyProfileDir() {
     return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janny-profile');
 }
 
+/** Tag labels are cached beside the profile, outside every sync handle. */
+function jannyTagCachePath() {
+    return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janny-tags.json');
+}
+
+function jannyBrowserFor(req) {
+    return getJannyBrowser({
+        profileDir: jannyProfileDir(),
+        chromePath: String(req.user?.settings?.vaultJannyBrowserPath ?? '').trim() || null,
+    });
+}
+
+async function jannyCatalog(req, { force = false } = {}) {
+    const browser = jannyBrowserFor(req);
+    return loadJannyTagCatalog({
+        cachePath: jannyTagCachePath(),
+        force,
+        fetchHtml: url => browser.fetchText(url),
+    });
+}
+
+/** Measured `maxTotalHits` of the JannyAI index: paginated totals stop here. */
+const JANNY_MAX_TOTAL_HITS = 4000;
+
 function jannyToken(settings) {
     const configured = String(settings?.jannySearchToken ?? '').trim();
     return configured || JANNY_FALLBACK_TOKEN;
@@ -326,18 +352,50 @@ router.get('/janny/status', (req, res) => {
     });
 });
 
+// Tag vocabulary for the filter sheet. Names live only on the site, so this
+// reads its sidebar once and caches it (7 days); the measured fallback list
+// keeps the filter usable if the site cannot be read.
+router.get('/janny/tags', async (req, res) => {
+    try {
+        const force = String(req.query.refresh ?? '') === '1';
+        const catalog = await jannyCatalog(req, { force });
+        return res.json({
+            tags: catalog.tags,
+            source: catalog.source,
+            fetchedAt: catalog.fetchedAt,
+        });
+    } catch (error) {
+        console.warn("[Weaver's Vault] janny tags failed:", error.message);
+        return res.status(502).json({ error: error.message });
+    }
+});
+
 // Search rides the Meilisearch instance directly: no challenge, no browser.
 router.post('/janny/search', async (req, res) => {
     try {
-        const { query = '', page = 1, nsfw, minTokens, maxTokens, tagIds, sort } = req.body ?? {};
+        const { query = '', page = 1, nsfw, minTokens, maxTokens, tagIds, tags, inclusiveOr, sort } = req.body ?? {};
         const token = jannyToken(req.user?.settings);
+
+        // The sheet stores tag *names* (uniform with chub); the index filters on
+        // numeric ids, so resolve them through the cached catalog.
+        const selection = Array.isArray(tags) && tags.length ? tags : (Array.isArray(tagIds) ? tagIds : []);
+        let resolvedIds = [];
+        if (selection.length) {
+            const catalog = await jannyCatalog(req);
+            resolvedIds = resolveJannyTagIds(catalog.tags, selection);
+            if (!resolvedIds.length) {
+                console.warn(`[Weaver's Vault] janny tags not resolvable: ${JSON.stringify(selection)}`);
+            }
+        }
+
         const attempts = jannySearchAttempts({
             query: String(query ?? ''),
             page: Number(page) || 1,
             nsfw: nsfw !== false,
             minTokens: Number(minTokens) || 0,
             maxTokens: Number(maxTokens) || 100000,
-            tagIds: Array.isArray(tagIds) ? tagIds : [],
+            tagIds: resolvedIds,
+            inclusiveOr: inclusiveOr === true,
             sort: String(sort ?? 'newest'),
         });
 
@@ -351,13 +409,21 @@ router.post('/janny/search', async (req, res) => {
             const text = await response.text();
             if (response.ok) {
                 const parsed = parseJannyMultiSearch(JSON.parse(text));
+                // Meilisearch caps paginated totals at the index's maxTotalHits
+                // (measured: every broad query reports exactly 4000, while a
+                // nonsense query reports 0). Reporting the capped number would
+                // tell the user there are 4000 filtered matches when there are
+                // five, so the count is dropped once it hits the cap.
+                const capped = parsed.total >= JANNY_MAX_TOTAL_HITS;
                 return res.json({
                     items: parsed.hits.map(normalizeJannyHit),
-                    total: parsed.total,
+                    total: capped ? null : parsed.total,
+                    capped,
                     page: parsed.page,
                     pageCount: parsed.totalPages,
-                    // The grid's infinite scroll reads `hasMore`, not pageCount.
-                    hasMore: parsed.page < parsed.totalPages,
+                    // The grid's infinite scroll reads `hasMore`, and a short page
+                    // is the only trustworthy end-of-results signal here.
+                    hasMore: parsed.hits.length >= 40 && parsed.page < parsed.totalPages,
                 });
             }
             lastError = classifyJannyError(response.status, text);
@@ -383,10 +449,7 @@ router.post('/janny/card', async (req, res) => {
         return res.status(400).json({ error: 'A JannyAI character id is required.' });
     }
     try {
-        const browser = getJannyBrowser({
-            profileDir: jannyProfileDir(),
-            chromePath: String(req.user?.settings?.vaultJannyBrowserPath ?? '').trim() || null,
-        });
+        const browser = jannyBrowserFor(req);
         const url = jannyCharacterUrl(id, name);
         const page = await browser.fetchText(url);
         if (page.challenged || page.status === 403 || page.status === 503) {
@@ -454,6 +517,19 @@ router.post('/janny/card', async (req, res) => {
         }
         console.warn("[Weaver's Vault] janny card failed:", error.message);
         return res.status(502).json({ error: error.message });
+    }
+});
+
+// Brings the automation window to the front so a stuck check can be finished by
+// hand once; harmless when nothing is running yet.
+router.post('/janny/browser/focus', async (req, res) => {
+    try {
+        const browser = jannyBrowserFor(req);
+        await browser.ensureStarted();
+        await browser.focusPage();
+        return res.json({ ok: true, running: browser.isRunning() });
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janny_browser' });
     }
 });
 
