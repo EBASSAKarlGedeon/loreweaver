@@ -531,9 +531,11 @@ router.post('/janny/card', async (req, res) => {
 router.post('/janny/browser/focus', async (req, res) => {
     try {
         const browser = jannyBrowserFor(req);
-        await browser.ensureStarted();
-        await browser.focusPage();
-        return res.json({ ok: true, running: browser.isRunning() });
+        // Moving it on screen is the point: the window is parked offscreen and
+        // has no taskbar button, so a check that needs one human click would
+        // otherwise be unreachable.
+        const { revealed, running } = await browser.reveal();
+        return res.json({ ok: true, running, revealed });
     } catch (error) {
         return res.status(503).json({ error: error.message, code: 'janny_browser' });
     }

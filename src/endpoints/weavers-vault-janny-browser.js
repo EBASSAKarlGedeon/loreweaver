@@ -136,8 +136,19 @@ $cb = [Wv.U+EnumWindowsProc]{
         $ex = [int64][Wv.U]::GetWindowLongPtr($h, -20)
         # TOOLWINDOW on, APPWINDOW off — APPWINDOW forces a taskbar button.
         $new = ($ex -bor 0x80) -band (-bnot 0x40000)
-        if ($new -ne $ex) { [void][Wv.U]::SetWindowLongPtr($h, -20, [IntPtr]$new) }
-        [void][Wv.U]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+        if ($new -ne $ex) {
+            [void][Wv.U]::SetWindowLongPtr($h, -20, [IntPtr]$new)
+            [void][Wv.U]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+        } else {
+            # The style is already right but the shell may have created a button
+            # when the window was last shown (measured after revealing it for a
+            # manual check). Toggle TOOLWINDOW off and on: that forces the shell
+            # to re-evaluate without hiding or moving the window.
+            [void][Wv.U]::SetWindowLongPtr($h, -20, [IntPtr]($ex -band (-bnot 0x80)))
+            [void][Wv.U]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+            [void][Wv.U]::SetWindowLongPtr($h, -20, [IntPtr]$new)
+            [void][Wv.U]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+        }
         $script:n++
     }
     return $true
@@ -209,6 +220,68 @@ function repairExitState(profileDir) {
             fs.writeFileSync(file, JSON.stringify(prefs), 'utf8');
         } catch { /* a profile we cannot read is not fatal */ }
     }
+}
+
+/**
+ * Move the browser windows onto the screen and to the front.
+ *
+ * The window is parked offscreen *and* marked as a tool window, so it has no
+ * taskbar button and cannot be reached — which is what we want until a challenge
+ * needs one human click. On those failures the user must be able to see and
+ * click it, so this brings it back: normal size, centred, foreground, still a
+ * tool window (it disappears from the taskbar again as soon as it closes).
+ * @param {string} profileDir
+ * @returns {Promise<number>} windows revealed
+ */
+function revealProfileWindows(profileDir) {
+    if (process.platform !== 'win32') return Promise.resolve(-1);
+    const base = path.basename(path.resolve(profileDir)).replace(/'/g, "''");
+    const script = `
+Add-Type -Namespace Wv -Name V -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+'@
+Add-Type -AssemblyName System.Windows.Forms
+$area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$w = [Math]::Min(1200, [int]($area.Width * 0.8))
+$hh = [Math]::Min(860, [int]($area.Height * 0.85))
+$x = [int]($area.X + ($area.Width - $w) / 2)
+$y = [int]($area.Y + ($area.Height - $hh) / 2)
+$pids = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like '*${base}*' } |
+    ForEach-Object { [uint32]$_.ProcessId })
+if ($pids.Count -eq 0) { Write-Output 0; exit }
+$script:n = 0
+$cb = [Wv.V+EnumWindowsProc]{
+    param($h, $l)
+    $procId = [uint32]0
+    [void][Wv.V]::GetWindowThreadProcessId($h, [ref]$procId)
+    if ($pids -contains $procId) {
+        [void][Wv.V]::ShowWindow($h, 9)          # SW_RESTORE
+        [void][Wv.V]::SetWindowPos($h, [IntPtr](-1), $x, $y, $w, $hh, 0x40)  # HWND_TOP | SWP_SHOWWINDOW
+        [void][Wv.V]::SetForegroundWindow($h)
+        $script:n++
+    }
+    return $true
+}
+[void][Wv.V]::EnumWindows($cb, [IntPtr]::Zero)
+Write-Output $script:n
+`;
+    return new Promise(resolve => {
+        let out = '';
+        const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+            { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+        child.stdout?.on('data', chunk => { out += chunk; });
+        child.on('error', () => resolve(-1));
+        child.on('exit', () => {
+            const n = Number(String(out).trim().split(/\s+/).filter(Boolean).pop());
+            resolve(Number.isFinite(n) ? n : -1);
+        });
+    });
 }
 
 /** @returns {string|null} Path of the browser this process will drive. */
@@ -400,6 +473,23 @@ export class JannyBrowser {
             throw error;
         });
         return this.starting;
+    }
+
+    /**
+     * Bring the browser to the screen so a human can finish a check by hand.
+     * @returns {Promise<{revealed: number, running: boolean}>}
+     */
+    async reveal() {
+        await this.ensureStarted();
+        await this.focusPage();
+        const revealed = await revealProfileWindows(this.profileDir);
+        // Showing the window must not put it back in the taskbar: the tool-window
+        // style only affects the shell's lists, so the user can still see and
+        // click it while it stays out of the taskbar (measured: revealing alone
+        // gave it a button again).
+        await hideProfileWindows(this.profileDir);
+        this.taskbarHidden = true;
+        return { revealed, running: this.isRunning() };
     }
 
     /**
