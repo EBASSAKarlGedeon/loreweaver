@@ -24,7 +24,7 @@ import path from 'node:path';
 import WebSocket from 'ws';
 
 const ORIGIN = 'https://jannyai.com/';
-const IDLE_TTL_MS = 60_000;
+const IDLE_TTL_MS = 30_000;
 const START_TIMEOUT_MS = 30_000;
 // A brand-new profile has to solve Cloudflare's managed challenge from scratch:
 // measured 18 s on this machine and ~42 s on a truly cold one, so 45 s sat right
