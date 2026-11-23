@@ -317,7 +317,10 @@ function jannyTagCachePath() {
 
 function jannyBrowserFor(req) {
     return getJannyBrowser({
-        profileDir: jannyProfileDir(),
+        // Absolute: the browser resolves it too, and a relative
+        // --user-data-dir made its own command line relative, which silently
+        // defeated reclaiming the profile from a previous run.
+        profileDir: path.resolve(jannyProfileDir()),
         chromePath: String(req.user?.settings?.vaultJannyBrowserPath ?? '').trim() || null,
     });
 }
@@ -344,7 +347,10 @@ router.get('/janny/status', (req, res) => {
     res.json({
         ok: Boolean(browserPath),
         browserPath,
-        profileDir: jannyProfileDir(),
+        // Absolute: the browser resolves it too, and a relative
+        // --user-data-dir made its own command line relative, which silently
+        // defeated reclaiming the profile from a previous run.
+        profileDir: path.resolve(jannyProfileDir()),
         tokenSource: String(req.user?.settings?.jannySearchToken ?? '').trim() ? 'settings' : 'fallback',
         note: browserPath
             ? 'JannyAI detail is fetched by a real browser session (Cloudflare managed challenge).'

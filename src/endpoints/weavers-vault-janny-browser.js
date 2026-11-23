@@ -18,7 +18,7 @@
  * installed browser, a dedicated profile dir, no user profile touched.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import WebSocket from 'ws';
@@ -50,6 +50,48 @@ export class JannyBrowserUnavailable extends Error {
     constructor(message) {
         super(message);
         this.name = 'JannyBrowserUnavailable';
+    }
+}
+
+/**
+ * Kill browser processes that hold this profile directory.
+ *
+ * Chrome is single-instance per profile: if a previous run left one alive, a new
+ * launch hands the URL to it and **exits 0 without ever opening a debugging
+ * port** (measured — that is exactly how the live app wedged). The profile is
+ * ours alone, so reclaiming it is safe.
+ * @param {string} profileDir
+ * @returns {number} how many processes were asked to stop
+ */
+function killProfileBrowsers(profileDir) {
+    // Match on the folder's own name: the launch passes whatever `profileDir`
+    // holds (the server hands us a relative path, so Chrome's command line shows
+    // that same relative form and an absolute needle never matched).
+    const needle = path.basename(path.resolve(profileDir)).toLowerCase();
+    try {
+        if (process.platform === 'win32') {
+            const escaped = needle.replace(/'/g, "''");
+            const script = "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' OR Name='msedge.exe'\""
+                + ` | Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains('${escaped}') }`
+                + ' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; $_.ProcessId }';
+            const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 15_000 });
+            return String(result.stdout ?? '').split(/\s+/).filter(Boolean).length;
+        }
+        // POSIX: scan /proc for our profile path.
+        let killed = 0;
+        for (const pid of fs.readdirSync('/proc')) {
+            if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
+            try {
+                    const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split(String.fromCharCode(0)).join(' ');
+                if (cmdline.toLowerCase().includes(needle)) {
+                    process.kill(Number(pid), 'SIGKILL');
+                    killed++;
+                }
+            } catch { /* gone or not ours */ }
+        }
+        return killed;
+    } catch {
+        return 0;
     }
 }
 
@@ -149,7 +191,9 @@ export class JannyBrowser {
      * @param {{profileDir: string, chromePath?: string|null, headless?: boolean, logger?: {info: Function, warn: Function}}} options
      */
     constructor({ profileDir, chromePath = null, headless = false, logger = console }) {
-        this.profileDir = profileDir;
+        // Absolute from the start: a relative --user-data-dir makes the browser's
+        // own command line relative too, which defeats profile reclaiming.
+        this.profileDir = path.resolve(profileDir);
         this.chromePath = chromePath;
         this.headless = headless;
         this.logger = logger;
@@ -254,9 +298,17 @@ export class JannyBrowser {
         const adopted = await this.adoptExisting();
         if (adopted) return;
 
-        // Nothing answered, so any lock file left in the profile is stale — a
-        // killed or crashed run. Chrome refuses to start while it is present and
-        // exits silently, which used to look like "challenge never cleared".
+        // Nothing answers on the recorded port, but a previous run's browser can
+        // still be alive and holding the profile. Chrome would hand our URL to it
+        // and exit 0 with no debugging port — a wedge that looked like Cloudflare
+        // never clearing. The profile is exclusive to us, so reclaim it.
+        const reclaimed = killProfileBrowsers(this.profileDir);
+        if (reclaimed !== 0) {
+            this.logger.warn?.("[Weaver's Vault] JannyAI: reclaimed the browser profile from a previous run");
+            await new Promise(r => setTimeout(r, 800));
+        }
+
+        // Any lock file left in the profile is now stale — a killed or crashed run.
         for (const name of ['DevToolsActivePort', 'SingletonLock', 'SingletonSocket', 'SingletonCookie', 'lockfile']) {
             try {
                 fs.rmSync(path.join(this.profileDir, name), { force: true, recursive: true });
