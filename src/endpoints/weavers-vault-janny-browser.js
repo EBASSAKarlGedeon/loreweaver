@@ -158,6 +158,59 @@ Write-Output $script:n
     });
 }
 
+/**
+ * Ask Chrome to shut down through its own shutdown path.
+ *
+ * A killed browser records `profile.exit_type: "Crashed"` in its Preferences,
+ * and the next launch then greets the user with "Restore pages? Chrome didn't
+ * shut down correctly." (measured: that file said exactly that). `Browser.close`
+ * on the browser endpoint runs the normal shutdown instead.
+ * @param {number} port
+ * @returns {Promise<boolean>} true when the browser acknowledged the close
+ */
+function closeBrowserGracefully(port) {
+    if (!(port > 0)) return Promise.resolve(false);
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = value => { if (!settled) { settled = true; resolve(value); } };
+        let socket;
+        try {
+            socket = new WebSocket(`ws://127.0.0.1:${port}/devtools/browser`);
+        } catch {
+            finish(false);
+            return;
+        }
+        socket.on('open', () => {
+            try { socket.send(JSON.stringify({ id: 1, method: 'Browser.close' })); } catch { finish(false); }
+        });
+        socket.on('message', () => finish(true));
+        socket.on('close', () => finish(true));
+        socket.on('error', () => finish(false));
+        setTimeout(() => { try { socket.close(); } catch { /* ignore */ } finish(false); }, 3000);
+    });
+}
+
+/**
+ * Rewrite the recorded exit state in the profile so Chrome starts clean.
+ * Covers the cases we cannot close politely: a wedged leftover process, a hard
+ * kill, or a crash.
+ * @param {string} profileDir
+ */
+function repairExitState(profileDir) {
+    for (const rel of ['Default/Preferences', 'Preferences']) {
+        const file = path.join(profileDir, rel);
+        try {
+            if (!fs.existsSync(file)) continue;
+            const prefs = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const profile = prefs.profile && typeof prefs.profile === 'object' ? prefs.profile : (prefs.profile = {});
+            if (profile.exit_type === 'Normal' && profile.exited_cleanly !== false) continue;
+            profile.exit_type = 'Normal';
+            profile.exited_cleanly = true;
+            fs.writeFileSync(file, JSON.stringify(prefs), 'utf8');
+        } catch { /* a profile we cannot read is not fatal */ }
+    }
+}
+
 /** @returns {string|null} Path of the browser this process will drive. */
 export function findBrowserBinary() {
     for (const candidate of BROWSER_CANDIDATES) {
@@ -256,6 +309,8 @@ export class JannyBrowser {
     constructor({ profileDir, chromePath = null, headless = false, logger = console }) {
         /** Set once the taskbar style has been applied for this browser run. */
         this.taskbarHidden = false;
+        /** DevTools port of the running browser (for a graceful shutdown). */
+        this.port = null;
         // Absolute from the start: a relative --user-data-dir makes the browser's
         // own command line relative too, which defeats profile reclaiming.
         this.profileDir = path.resolve(profileDir);
@@ -389,6 +444,10 @@ export class JannyBrowser {
             await new Promise(r => setTimeout(r, 800));
         }
 
+        // Nothing can be holding the profile at this point, so it is safe to clear
+        // the "Crashed" exit type that shows the restore bubble on next start.
+        repairExitState(this.profileDir);
+
         // Any lock file left in the profile is now stale — a killed or crashed run.
         for (const name of ['DevToolsActivePort', 'SingletonLock', 'SingletonSocket', 'SingletonCookie', 'lockfile']) {
             try {
@@ -411,6 +470,9 @@ export class JannyBrowser {
             '--disable-features=CalculateNativeWinOcclusion,Translate,MediaRouter',
             '--disable-hang-monitor',
             '--no-service-autorun',
+            // Belt and braces: never offer "Restore pages?" even if a previous
+            // run had to be killed (the exit state is repaired above).
+            '--hide-crash-restore-bubble',
             // Offscreen but *headful*: Cloudflare rejects headless Chrome
             // (measured), and a real window is what Glaze's WebView2 provides.
             '--window-position=-32000,-32000',
@@ -449,6 +511,7 @@ export class JannyBrowser {
             throw new JannyBrowserUnavailable(`The browser did not expose a debugging port in time${detail}.`);
         }
 
+        this.port = port;
         this.page = await this.attachToPage(port);
         if (!this.page) {
             throw new JannyBrowserUnavailable('The browser page could not be attached.');
@@ -491,6 +554,7 @@ export class JannyBrowser {
         }
         const page = await this.attachToPage(port);
         if (!page) return false;
+        this.port = port;
         this.page = page;
         // The adopted instance may still be mid-challenge; waitForPage covers it.
         await this.waitForPage();
@@ -654,12 +718,45 @@ export class JannyBrowser {
         this.page = null;
         this.starting = null;
         const child = this.child;
+        const port = this.port;
         this.child = null;
-        if (child && !child.killed) {
-            try {
-                child.kill();
-            } catch { /* already gone */ }
+        this.port = null;
+        this.taskbarHidden = false;
+
+        // Ask nicely first: a killed browser marks the profile as crashed and the
+        // next launch shows "Restore pages? Chrome didn't shut down correctly."
+        const closed = await closeBrowserGracefully(port);
+        if (child) {
+            const gone = closed && await this.waitForExit(child, 5000);
+            if (!gone && !child.killed) {
+                try {
+                    if (process.platform === 'win32') {
+                        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+                    } else {
+                        child.kill('SIGKILL');
+                    }
+                } catch { /* already gone */ }
+            }
         }
+        // Chrome writes "Crashed" while it runs and does not always flush the
+        // clean value on the way out (measured: Crashed/exited_cleanly true after
+        // a polite close). The exit *was* orderly, so record that ourselves.
+        repairExitState(this.profileDir);
+    }
+
+    /**
+     * Wait for the browser process to exit on its own.
+     * @param {import('node:child_process').ChildProcess} child
+     * @param {number} timeoutMs
+     * @returns {Promise<boolean>}
+     */
+    waitForExit(child, timeoutMs) {
+        if (child.exitCode !== null) return Promise.resolve(true);
+        return new Promise(resolve => {
+            const timer = setTimeout(() => { child.off('exit', onExit); resolve(false); }, timeoutMs);
+            const onExit = () => { clearTimeout(timer); resolve(true); };
+            child.once('exit', onExit);
+        });
     }
 
     /** Whether a session is currently up (no start attempt). */
