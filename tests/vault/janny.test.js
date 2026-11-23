@@ -207,7 +207,7 @@ describe('hit normalisation', () => {
             avatar: 'x.webp', totalToken: 519, tagIds: [2, 5], isNsfw: true, createdAtStamp: 1795369031.3,
         });
         expect(item).toMatchObject({
-            id: 'abc', name: 'Akumi', description: 'Hi & bye',
+            id: 'abc', fullPath: 'abc', name: 'Akumi', description: 'Hi & bye',
             avatarUrl: `${JANNY_IMAGE_CDN}x.webp`, tokens: 519, tagIds: [2, 5],
             nsfw: true, source: 'janny',
         });

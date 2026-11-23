@@ -301,7 +301,12 @@ router.post('/saucepan/extract', async (req, res) => {
 // which is the port of Glaze's JannyWebViewProxy).
 // ---------------------------------------------------------------------------
 
-const JANNY_PROFILE_DIR = path.join(serverDirectory, 'data', '_vault-janny-profile');
+// Lives at the data root, beside the per-user handles rather than inside one, so
+// sync (which walks `data/default-user`) never sees a Chrome profile. Resolved
+// lazily because DATA_ROOT is assigned after this module is imported.
+function jannyProfileDir() {
+    return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janny-profile');
+}
 
 function jannyToken(settings) {
     const configured = String(settings?.jannySearchToken ?? '').trim();
@@ -313,7 +318,7 @@ router.get('/janny/status', (req, res) => {
     res.json({
         ok: Boolean(browserPath),
         browserPath,
-        profileDir: JANNY_PROFILE_DIR,
+        profileDir: jannyProfileDir(),
         tokenSource: String(req.user?.settings?.jannySearchToken ?? '').trim() ? 'settings' : 'fallback',
         note: browserPath
             ? 'JannyAI detail is fetched by a real browser session (Cloudflare managed challenge).'
@@ -351,6 +356,8 @@ router.post('/janny/search', async (req, res) => {
                     total: parsed.total,
                     page: parsed.page,
                     pageCount: parsed.totalPages,
+                    // The grid's infinite scroll reads `hasMore`, not pageCount.
+                    hasMore: parsed.page < parsed.totalPages,
                 });
             }
             lastError = classifyJannyError(response.status, text);
@@ -377,7 +384,7 @@ router.post('/janny/card', async (req, res) => {
     }
     try {
         const browser = getJannyBrowser({
-            profileDir: JANNY_PROFILE_DIR,
+            profileDir: jannyProfileDir(),
             chromePath: String(req.user?.settings?.vaultJannyBrowserPath ?? '').trim() || null,
         });
         const url = jannyCharacterUrl(id, name);

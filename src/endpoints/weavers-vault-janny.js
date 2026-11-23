@@ -250,14 +250,20 @@ export function parseJannyCharacterPage(html) {
  */
 export function normalizeJannyHit(hit) {
     const isNsfw = hit?.isNsfw === true;
+    const id = String(hit?.id ?? '');
     return {
-        id: String(hit?.id ?? ''),
+        id,
+        // Every other source keys items by `fullPath` (ledger, detail, kebab);
+        // for JannyAI that is the character id, so the grid code stays uniform.
+        fullPath: id,
         name: String(hit?.name ?? 'Unknown').trim() || 'Unknown',
         description: stripJannyHtml(hit?.description),
         avatarUrl: resolveJannyAvatar(hit?.avatar),
         tokens: Number(hit?.totalToken ?? 0) || 0,
         tagIds: Array.isArray(hit?.tagIds) ? hit.tagIds : [],
         nsfw: isNsfw,
+        // The index carries no creator field; the grid must not print a bare "@".
+        creator: '',
         tags: [isNsfw ? 'NSFW' : 'SFW'],
         createdAt: Number(hit?.createdAtStamp ?? 0) || 0,
         source: 'janny',
@@ -275,7 +281,11 @@ export function normalizeJannyHit(hit) {
 export function jannyCardFromCharacter(character, extra = {}) {
     const id = String(extra.id ?? character?.id ?? '').trim();
     const name = String(character?.name ?? 'Unknown').trim() || 'Unknown';
-    const creator = String(extra.creatorUsername ?? character?.creatorName ?? character?.creatorId ?? '').trim();
+    // The page renders the creator as "@name"; the UI adds its own "@", so a
+    // captured leading @ would double up.
+    const creator = String(extra.creatorUsername ?? character?.creatorName ?? character?.creatorId ?? '')
+        .trim()
+        .replace(/^@+/, '');
     const firstMes = String(character?.firstMessage ?? '');
     // The island carries real tag names (`tags: [{id, name}]`); ids alone would
     // force the UI to translate them.
