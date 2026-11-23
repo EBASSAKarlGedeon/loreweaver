@@ -95,6 +95,69 @@ function killProfileBrowsers(profileDir) {
     }
 }
 
+/**
+ * Turn every top-level window of our browser into a tool window.
+ *
+ * `--window-position=-32000,-32000` keeps the window out of sight but the shell
+ * still gives it a taskbar button (and an Alt-Tab entry), which is what the user
+ * sees as "a Chrome window I cannot enter". WS_EX_TOOLWINDOW hides it from both
+ * *without* hiding the window: it keeps rendering and painting, which the
+ * challenge needs — a hidden window gets no frames and stalls the check.
+ *
+ * The window must be visible-but-offscreen, never SW_HIDE, and the style has to
+ * be applied per window after it exists, so this runs on session start and again
+ * once the page is ready.
+ * @param {string} profileDir
+ * @returns {Promise<number>} windows restyled, or -1 when unsupported/failed
+ */
+function hideProfileWindows(profileDir) {
+    if (process.platform !== 'win32') return Promise.resolve(-1);
+    const base = path.basename(path.resolve(profileDir)).replace(/'/g, "''");
+    const script = `
+Add-Type -Namespace Wv -Name U -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll", EntryPoint="GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+[DllImport("user32.dll", EntryPoint="SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+'@
+$pids = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like '*${base}*' } |
+    ForEach-Object { [uint32]$_.ProcessId })
+if ($pids.Count -eq 0) { Write-Output 0; exit }
+$script:n = 0
+$cb = [Wv.U+EnumWindowsProc]{
+    param($h, $l)
+    $procId = [uint32]0
+    [void][Wv.U]::GetWindowThreadProcessId($h, [ref]$procId)
+    if (($pids -contains $procId) -and [Wv.U]::IsWindowVisible($h)) {
+        $ex = [int64][Wv.U]::GetWindowLongPtr($h, -20)
+        # TOOLWINDOW on, APPWINDOW off — APPWINDOW forces a taskbar button.
+        $new = ($ex -bor 0x80) -band (-bnot 0x40000)
+        if ($new -ne $ex) { [void][Wv.U]::SetWindowLongPtr($h, -20, [IntPtr]$new) }
+        [void][Wv.U]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+        $script:n++
+    }
+    return $true
+}
+[void][Wv.U]::EnumWindows($cb, [IntPtr]::Zero)
+Write-Output $script:n
+`;
+    return new Promise(resolve => {
+        let out = '';
+        const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+            { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+        child.stdout?.on('data', chunk => { out += chunk; });
+        child.on('error', () => resolve(-1));
+        child.on('exit', () => {
+            const n = Number(String(out).trim().split(/\s+/).filter(Boolean).pop());
+            resolve(Number.isFinite(n) ? n : -1);
+        });
+    });
+}
+
 /** @returns {string|null} Path of the browser this process will drive. */
 export function findBrowserBinary() {
     for (const candidate of BROWSER_CANDIDATES) {
@@ -191,6 +254,8 @@ export class JannyBrowser {
      * @param {{profileDir: string, chromePath?: string|null, headless?: boolean, logger?: {info: Function, warn: Function}}} options
      */
     constructor({ profileDir, chromePath = null, headless = false, logger = console }) {
+        /** Set once the taskbar style has been applied for this browser run. */
+        this.taskbarHidden = false;
         // Absolute from the start: a relative --user-data-dir makes the browser's
         // own command line relative too, which defeats profile reclaiming.
         this.profileDir = path.resolve(profileDir);
@@ -280,6 +345,22 @@ export class JannyBrowser {
             throw error;
         });
         return this.starting;
+    }
+
+    /**
+     * Keep the browser's windows out of the taskbar (Windows, best effort).
+     * Cheap enough for session start; never fails a request.
+     * @returns {Promise<void>}
+     */
+    async hideWindow() {
+        if (this.taskbarHidden) return;
+        try {
+            const n = await hideProfileWindows(this.profileDir);
+            if (n > 0) {
+                this.taskbarHidden = true;
+                this.logger.info?.("[Weaver's Vault] JannyAI: browser window hidden from the taskbar (it keeps rendering offscreen)");
+            }
+        } catch { /* cosmetic only */ }
     }
 
     async start() {
@@ -372,7 +453,15 @@ export class JannyBrowser {
         if (!this.page) {
             throw new JannyBrowserUnavailable('The browser page could not be attached.');
         }
+
+        // Keep the window out of the taskbar. Applied per window, so it must run
+        // after the window exists; re-applied below in case the page creates
+        // another one while loading.
+        await this.hideWindow();
         const cleared = await this.waitForPage();
+        // A window created while loading (Chrome restores one on a crash) would
+        // not carry the style yet.
+        await this.hideWindow();
         if (!cleared) {
             // Leave nothing half-solved behind: a challenged page would be reused
             // by the next request and fail the same way.
