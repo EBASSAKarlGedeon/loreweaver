@@ -17,6 +17,19 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { serverDirectory } from '../server-directory.js';
 import { createDatacatRouter } from './weavers-vault-datacat-routes.js';
+import {
+    JANNY_FALLBACK_TOKEN,
+    JANNY_SEARCH_URL,
+    classifyJannyError,
+    jannyCardFromCharacter,
+    jannyCharacterUrl,
+    jannySearchAttempts,
+    jannySearchHeaders,
+    normalizeJannyHit,
+    parseJannyCharacterPage,
+    parseJannyMultiSearch,
+} from './weavers-vault-janny.js';
+import { JannyBrowserUnavailable, disposeJannyBrowser, findBrowserBinary, getJannyBrowser } from './weavers-vault-janny-browser.js';
 
 /**
  * Weaver's Vault — character library backend.
@@ -279,6 +292,167 @@ router.post('/saucepan/extract', async (req, res) => {
         console.warn("[Weaver's Vault] saucepan extract failed:", error.message);
         return res.status(502).json({ error: error.message });
     }
+});
+
+// ---------------------------------------------------------------------------
+// M6 · JannyAI (jannyai.com). Search is plain HTTPS against their Meilisearch
+// instance; character detail needs a real browser session because the site is
+// behind a Cloudflare managed challenge (see weavers-vault-janny-browser.js,
+// which is the port of Glaze's JannyWebViewProxy).
+// ---------------------------------------------------------------------------
+
+const JANNY_PROFILE_DIR = path.join(serverDirectory, 'data', '_vault-janny-profile');
+
+function jannyToken(settings) {
+    const configured = String(settings?.jannySearchToken ?? '').trim();
+    return configured || JANNY_FALLBACK_TOKEN;
+}
+
+router.get('/janny/status', (req, res) => {
+    const browserPath = findBrowserBinary();
+    res.json({
+        ok: Boolean(browserPath),
+        browserPath,
+        profileDir: JANNY_PROFILE_DIR,
+        tokenSource: String(req.user?.settings?.jannySearchToken ?? '').trim() ? 'settings' : 'fallback',
+        note: browserPath
+            ? 'JannyAI detail is fetched by a real browser session (Cloudflare managed challenge).'
+            : 'No Chrome/Edge binary found — set vaultJannyBrowserPath or JANNY_BROWSER_PATH.',
+    });
+});
+
+// Search rides the Meilisearch instance directly: no challenge, no browser.
+router.post('/janny/search', async (req, res) => {
+    try {
+        const { query = '', page = 1, nsfw, minTokens, maxTokens, tagIds, sort } = req.body ?? {};
+        const token = jannyToken(req.user?.settings);
+        const attempts = jannySearchAttempts({
+            query: String(query ?? ''),
+            page: Number(page) || 1,
+            nsfw: nsfw !== false,
+            minTokens: Number(minTokens) || 0,
+            maxTokens: Number(maxTokens) || 100000,
+            tagIds: Array.isArray(tagIds) ? tagIds : [],
+            sort: String(sort ?? 'newest'),
+        });
+
+        let lastError = null;
+        for (const body of attempts) {
+            const response = await fetch(JANNY_SEARCH_URL, {
+                method: 'POST',
+                headers: jannySearchHeaders(token),
+                body: JSON.stringify(body),
+            });
+            const text = await response.text();
+            if (response.ok) {
+                const parsed = parseJannyMultiSearch(JSON.parse(text));
+                return res.json({
+                    items: parsed.hits.map(normalizeJannyHit),
+                    total: parsed.total,
+                    page: parsed.page,
+                    pageCount: parsed.totalPages,
+                });
+            }
+            lastError = classifyJannyError(response.status, text);
+            // Only a rejected *clause* is worth retrying more plainly; an auth
+            // or rate-limit answer is final.
+            if (response.status !== 400) break;
+        }
+        const status = lastError?.code === 'janny_auth' ? 401
+            : lastError?.code === 'janny_rate_limited' ? 429
+                : 502;
+        return res.status(status).json({ error: lastError?.message ?? 'JannyAI search failed.', code: lastError?.code });
+    } catch (error) {
+        console.warn("[Weaver's Vault] janny search failed:", error.message);
+        return res.status(502).json({ error: error.message });
+    }
+});
+
+// Detail: fetch the page inside a real browser session, parse the Astro props.
+router.post('/janny/card', async (req, res) => {
+    const id = String(req.body?.id ?? '').trim();
+    const name = String(req.body?.name ?? '').trim();
+    if (!/^[0-9a-f-]{8,}$/i.test(id)) {
+        return res.status(400).json({ error: 'A JannyAI character id is required.' });
+    }
+    try {
+        const browser = getJannyBrowser({
+            profileDir: JANNY_PROFILE_DIR,
+            chromePath: String(req.user?.settings?.vaultJannyBrowserPath ?? '').trim() || null,
+        });
+        const url = jannyCharacterUrl(id, name);
+        const page = await browser.fetchText(url);
+        if (page.challenged || page.status === 403 || page.status === 503) {
+            return res.status(403).json({
+                error: classifyJannyError(page.status === -1 ? 503 : page.status, page.body).message,
+                code: 'janny_challenge',
+            });
+        }
+        if (page.status >= 400 || page.status <= 0) {
+            return res.status(502).json({ error: `JannyAI answered HTTP ${page.status} for this character.` });
+        }
+
+        const parsed = parseJannyCharacterPage(page.body);
+        if (!parsed) {
+            return res.status(502).json({ error: 'Could not parse the JannyAI character page (no character props).' });
+        }
+
+        const character = jannyCardFromCharacter(parsed.character, {
+            id,
+            imageUrl: parsed.imageUrl,
+            creatorUsername: parsed.creatorUsername,
+        });
+
+        // The CDN answers WebP whatever Accept says and a card must be a PNG.
+        // Node pulls the bytes (the CDN sends no CORS headers), the warm browser
+        // transcodes them only when they are not already a PNG.
+        let imageBuffer = null;
+        if (parsed.imageUrl) {
+            try {
+                const avatar = await fetch(parsed.imageUrl, { headers: { 'User-Agent': VAULT_UA } });
+                if (avatar.ok) {
+                    const bytes = Buffer.from(await avatar.arrayBuffer());
+                    if (bytes.length > 8 && bytes.subarray(1, 4).toString() === 'PNG') {
+                        imageBuffer = bytes;
+                    } else {
+                        const mime = String(avatar.headers.get('content-type') ?? 'image/webp').split(';')[0];
+                        imageBuffer = await browser.convertImageToPng(`data:${mime};base64,${bytes.toString('base64')}`);
+                    }
+                } else {
+                    console.warn(`[Weaver's Vault] janny avatar answered ${avatar.status} — using default avatar`);
+                }
+            } catch (error) {
+                console.warn("[Weaver's Vault] janny avatar fetch failed:", error.message);
+            }
+        }
+        if (!imageBuffer) {
+            imageBuffer = fs.readFileSync(path.join(serverDirectory, DEFAULT_AVATAR_PATH));
+        }
+
+        const cardBuffer = writeCardChunk(imageBuffer, JSON.stringify(character));
+        const fileName = `${String(character.data.name).replace(/[\\/:*?"<>|]/g, '_')}.png`;
+        return res.json({
+            characterId: id,
+            character,
+            file: {
+                buffer: cardBuffer.toString('base64'),
+                fileName,
+                fileType: 'image/png',
+            },
+            avatarDataUrl: `data:image/png;base64,${cardBuffer.toString('base64')}`,
+        });
+    } catch (error) {
+        if (error instanceof JannyBrowserUnavailable) {
+            return res.status(503).json({ error: error.message, code: 'janny_browser' });
+        }
+        console.warn("[Weaver's Vault] janny card failed:", error.message);
+        return res.status(502).json({ error: error.message });
+    }
+});
+
+router.post('/janny/browser/close', async (req, res) => {
+    await disposeJannyBrowser();
+    res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
