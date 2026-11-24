@@ -88,6 +88,17 @@ describe('janitorCardCharacter', () => {
     });
 });
 
+describe('janitorAccount', () => {
+    test('falls back to the handle when the display name is empty', () => {
+        // Measured on a second account: `/hampter/profiles/mine` answered 200 with
+        // a real id and `name: ''`, so the account read as nameless.
+        expect(janitorAccount({ id: 'abc', name: '', user_name: 'Neo' })).toEqual({ signedIn: true, name: 'Neo', id: 'abc' });
+        expect(janitorAccount({ id: 'abc', name: 'Yang', user_name: 'Yang Goka' }).name).toBe('Yang');
+        expect(janitorAccount({ id: 'abc' }).name).toBe('');
+        expect(janitorAccount(null)).toEqual({ signedIn: false, name: '', id: '' });
+    });
+});
+
 describe('normalizeJanitorRow', () => {
     test('reads a token count from a detail payload, which only has token_counts', () => {
         // Measured on a live public card: the flat field is undefined and the

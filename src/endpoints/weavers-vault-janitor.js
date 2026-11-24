@@ -301,7 +301,14 @@ export function janitorAccount(payload) {
     const source = payload && typeof payload === 'object' ? (payload.data && typeof payload.data === 'object' ? payload.data : payload) : null;
     if (!source) return { signedIn: false, name: '', id: '' };
     const id = String(source.id ?? source.user_id ?? '').trim();
-    const name = String(source.handle ?? source.username ?? source.name ?? source.display_name ?? '').trim();
+    // `user_name` is the handle the site shows on reviews and profiles; an account
+    // whose display `name` is empty reports as nameless without it (measured on a
+    // second account: 200 with a real id, name '').
+    // First *non-empty* candidate: `??` alone does not skip `name: ''`, which is
+    // exactly the shape a second account had (200, real id, empty display name).
+    const name = [source.name, source.display_name, source.handle, source.username, source.user_name]
+        .map(value => String(value ?? '').trim())
+        .find(value => value.length > 0) ?? '';
     return { signedIn: Boolean(id || name), name, id };
 }
 

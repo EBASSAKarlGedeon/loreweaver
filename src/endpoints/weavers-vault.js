@@ -49,6 +49,21 @@ import {
 } from './weavers-vault-janitor.js';
 import { janitorCatalog, janitorTagsUrl } from './weavers-vault-janitor-tags.js';
 import {
+    janitorAccountDiff,
+    janitorDirtyReason,
+    janitorStrayPresets,
+} from './weavers-vault-janitor-account.js';
+import {
+    captureJanitorCard,
+    janitorAccountStatePath,
+    janitorCapturedCardCharacter,
+    readJanitorAccountState,
+    readJanitorApiSettings,
+    restoreJanitorAccount,
+    writeJanitorAccountState,
+} from './weavers-vault-janitor-capture.js';
+import {
+    JanitorBrowserUnavailable,
     disposeJanitorBrowser,
     findBrowserBinary as findJanitorBrowserBinary,
     getJanitorBrowser,
@@ -56,6 +71,15 @@ import {
     readJanitorAccount,
 } from './weavers-vault-janitor-browser.js';
 import { resolveJannyTagIds } from './weavers-vault-janny.js';
+
+/**
+ * The capture's page script: a verbatim port of Glaze's `_captureUserScript`.
+ * Read as text because it is injected into the page, not imported.
+ */
+const JANITOR_CAPTURE_PAGE_SCRIPT = fs.readFileSync(
+    new URL('./weavers-vault-janitor-capture-page.js', import.meta.url),
+    'utf8',
+);
 
 /**
  * Weaver's Vault — character library backend.
@@ -340,6 +364,49 @@ function janitorProfileDir() {
     return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janitor-profile');
 }
 
+/** @param {string} text @returns {string} */
+function tidyText(text) {
+    return String(text ?? '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Where a capture's pre-flight account snapshot lives (data root, never synced). */
+function janitorStatePath() {
+    return janitorAccountStatePath(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'));
+}
+
+/**
+ * The account's live state against the snapshot an interrupted capture left.
+ *
+ * Answering this must never start a browser: a stopped session reports "not
+ * checked" instead of a false "clean", which is the difference between "safe to
+ * capture" and "nobody looked".
+ * @returns {Promise<{checked: boolean, dirty: boolean, reason: string, diff: Array<object>, strays: Array<object>, state: object|null}>}
+ */
+async function janitorAccountState(req) {
+    const state = readJanitorAccountState(janitorStatePath());
+    if (!state) return { checked: true, dirty: false, reason: '', diff: [], strays: [], state: null };
+    const browser = janitorBrowserFor(req);
+    if (!browser.isRunning()) {
+        return {
+            checked: false,
+            dirty: true,
+            reason: 'An import was interrupted. The account cannot be checked until a browser session is running.',
+            diff: Array.isArray(state.diff) ? state.diff : [],
+            strays: [],
+            state,
+        };
+    }
+    try {
+        const auth = await janitorAuthHeaders(browser);
+        const live = await readJanitorApiSettings(browser, auth.headers);
+        const diff = janitorAccountDiff(state.snapshot, live.json);
+        const strays = janitorStrayPresets(live.json);
+        return { checked: true, dirty: diff.length > 0 || strays.length > 0, diff, strays, reason: janitorDirtyReason({ diff, strays }), state };
+    } catch (error) {
+        return { checked: false, dirty: true, reason: `Could not check the account: ${error.message}`, diff: [], strays: [], state };
+    }
+}
+
 function janitorBrowserFor(req) {
     return getJanitorBrowser({
         profileDir: path.resolve(janitorProfileDir()),
@@ -606,10 +673,29 @@ router.get('/janitor/status', async (req, res) => {
     // Only report an account when a session is already up: starting a browser to
     // answer a status probe would cost 3-10 s on every panel open.
     const browser = janitorBrowserFor(req);
-    if (!browser.isRunning()) return res.json({ ...base, running: false });
+    if (!browser.isRunning()) {
+        const state = readJanitorAccountState(janitorStatePath());
+        return res.json({
+            ...base,
+            running: false,
+            dirty: Boolean(state),
+            dirtyReason: state ? 'An import was interrupted. The account cannot be checked until a browser session is running.' : '',
+        });
+    }
     try {
         const account = await readJanitorAccount(browser);
-        return res.json({ ...base, running: true, signedIn: account.signedIn, account: account.name });
+        // A dirty account is part of the source's status: an interrupted import
+        // leaves every chat contextless, so it must be visible without asking.
+        const accountState = await janitorAccountState(req);
+        return res.json({
+            ...base,
+            running: true,
+            signedIn: account.signedIn,
+            account: account.name,
+            dirty: accountState.dirty,
+            dirtyReason: accountState.reason,
+            accountDiff: accountState.diff,
+        });
     } catch (error) {
         return res.json({ ...base, running: true, note: `Browser session error: ${error.message}` });
     }
@@ -623,6 +709,30 @@ router.get('/janitor/account', async (req, res) => {
         // Signed in: the window has done its job, hand the session back.
         if (account.signedIn) browser.release();
         return res.json({ ok: true, ...account });
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+    }
+});
+
+/**
+ * Sign out of JanitorAI so a different account can be used.
+ *
+ * Wipes the origin's cookies **and** web storage, because deleting the cookie
+ * alone leaves the site's persisted store behind and the next page load can look
+ * signed in again. The window is then revealed on `/login`, held open for the
+ * human step.
+ */
+router.post('/janitor/account/logout', async (req, res) => {
+    try {
+        const browser = janitorBrowserFor(req);
+        // Switching accounts is a human step that takes minutes.
+        browser.hold();
+        // Origin without the trailing slash: the CDP storage command wants a
+        // serialised origin, not a URL.
+        const cleared = await browser.clearOriginSession('https://janitorai.com');
+        await browser.navigate(JANITOR_LOGIN_URL);
+        const { revealed, running } = await browser.reveal();
+        return res.json({ ok: true, ...cleared, revealed, running, signedIn: false });
     } catch (error) {
         return res.status(503).json({ error: error.message, code: 'janitor_browser' });
     }
@@ -653,6 +763,198 @@ router.post('/janitor/browser/focus', async (req, res) => {
 router.post('/janitor/browser/close', async (req, res) => {
     await disposeJanitorBrowser();
     res.json({ ok: true });
+});
+
+/**
+ * The account's capture state: clean, or dirty with the exact diff.
+ *
+ * Read-only. It starts nothing, so it is safe to call on every panel open, and it
+ * is what the UI offers "Restore" from after a killed import.
+ */
+router.get('/janitor/account/state', async (req, res) => {
+    try {
+        return res.json({ ok: true, ...(await janitorAccountState(req)) });
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janitor_account_state' });
+    }
+});
+
+/**
+ * Put the account back from the snapshot a capture saved.
+ *
+ * The explicit action the plan owes the user: a killed capture leaves a dummy
+ * preset selected, `source: 'proxy'` and `context_length: 0`, and without this the
+ * only way back would be JanitorAI's own settings page.
+ */
+router.post('/janitor/account/restore', async (req, res) => {
+    try {
+        const file = janitorStatePath();
+        const state = readJanitorAccountState(file);
+        if (!state?.snapshot) {
+            return res.json({ ok: true, restored: true, nothing: true, problems: [], diff: [] });
+        }
+        const browser = janitorBrowserFor(req);
+        browser.hold();
+        try {
+            const auth = await janitorAuthHeaders(browser);
+            const result = await restoreJanitorAccount(browser, state.snapshot, {
+                presetId: state.presetId ?? null,
+                authHeaders: auth.headers,
+            });
+            if (result.restored) writeJanitorAccountState(file, null);
+            return res.json({ ok: true, ...result, state: result.restored ? null : state });
+        } finally {
+            browser.release();
+        }
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janitor_restore' });
+    }
+});
+
+/**
+ * Recover a hidden definition by driving the site's own prompt assembly.
+ *
+ * This mutates the account (a throwaway proxy preset, `source: 'proxy'`,
+ * `context_length: 0`) and puts it back afterwards; the snapshot is on disk
+ * before the first mutation so a kill is recoverable. One card per call, on the
+ * user's action — nothing here loops.
+ */
+router.post('/janitor/capture', async (req, res) => {
+    const id = String(req.body?.id ?? '').trim();
+    if (!/^[0-9a-f-]{8,}$/i.test(id)) {
+        return res.status(400).json({ error: 'A JanitorAI character id is required.', code: 'janitor_id' });
+    }
+    const phases = [];
+    let captureBrowser = null;
+    try {
+        const browser = janitorBrowserFor(req);
+        captureBrowser = browser;
+        // A capture takes one to three minutes; the idle teardown must not cut it.
+        browser.hold(20 * 60_000);
+        try {
+            const auth = await janitorAuthHeaders(browser);
+            if (!auth.signedIn) {
+                return res.status(401).json({
+                    error: 'Sign in to JanitorAI first — recovering a hidden definition runs as your account.',
+                    code: 'janitor_signed_out',
+                });
+            }
+
+            const detail = await browser.fetchText(janitorCharacterUrl(id), { accept: 'application/json', headers: auth.headers });
+            let meta = null;
+            try {
+                const parsed = JSON.parse(detail.body);
+                meta = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+            } catch {
+                meta = null;
+            }
+            if (detail.status === 404 || !meta?.id) {
+                return res.status(404).json({ error: 'JanitorAI has no character with that id.', code: 'janitor_missing' });
+            }
+            if (janitorBlockReason(meta) === 'unproxyable') {
+                return res.status(403).json({
+                    error: 'This creator turned off the proxy, so JanitorAI will not assemble a prompt for this character.',
+                    code: 'janitor_unproxyable',
+                });
+            }
+            if (janitorDefinitionPublic(meta)) {
+                return res.status(409).json({
+                    error: 'This definition is already public — no recovery needed.',
+                    code: 'janitor_public',
+                });
+            }
+
+            const capture = await captureJanitorCard({
+                browser,
+                characterId: id,
+                authHeaders: auth.headers,
+                pageScript: JANITOR_CAPTURE_PAGE_SCRIPT,
+                dataRoot: globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'),
+                onPhase: name => phases.push(name),
+                persist: state => writeJanitorAccountState(janitorStatePath(), state),
+            });
+
+            if (!tidyText(capture.card)) {
+                return res.status(502).json({
+                    error: 'The capture ran but produced no card text — JanitorAI may have changed its prompt layout.',
+                    code: 'janitor_capture_empty',
+                    phases,
+                    restored: capture.restored,
+                });
+            }
+
+            const character = janitorCapturedCardCharacter(meta, { capture });
+            let imageBuffer = null;
+            const avatarUrl = janitorAvatarUrl(meta.avatar);
+            if (avatarUrl) {
+                try {
+                    const avatar = await fetch(avatarUrl, { headers: { 'User-Agent': VAULT_UA } });
+                    if (avatar.ok) {
+                        const bytes = Buffer.from(await avatar.arrayBuffer());
+                        if (bytes.length > 8 && bytes.subarray(1, 4).toString() === 'PNG') {
+                            imageBuffer = bytes;
+                        } else {
+                            const mime = String(avatar.headers.get('content-type') ?? 'image/webp').split(';')[0];
+                            imageBuffer = await browser.convertImageToPng(`data:${mime};base64,${bytes.toString('base64')}`);
+                        }
+                    }
+                } catch (error) {
+                    console.warn("[Weaver's Vault] janitor capture avatar failed:", error.message);
+                }
+            }
+            if (!imageBuffer) imageBuffer = fs.readFileSync(path.join(serverDirectory, DEFAULT_AVATAR_PATH));
+            const cardBuffer = writeCardChunk(imageBuffer, JSON.stringify(character));
+
+            return res.json({
+                characterId: id,
+                recovered: true,
+                character,
+                meta,
+                phases,
+                // The two numbers that show the capture actually saw a prompt: the
+                // system content of the probe and of the trigger send.
+                report: {
+                    descriptionChars: String(character.data.description ?? '').length,
+                    firstMesChars: String(character.data.first_mes ?? '').length,
+                    alternateGreetings: character.data.alternate_greetings.length,
+                    scenarioChars: String(character.data.scenario ?? '').length,
+                    exampleChars: String(character.data.mes_example ?? '').length,
+                    closedLoreEntries: capture.entryCount,
+                    closedLoreChars: String(capture.lorebookText ?? '').length,
+                    probeSystemChars: capture.probeSystemChars,
+                    triggerSystemChars: capture.triggerSystemChars,
+                    restored: capture.restored,
+                },
+                file: {
+                    buffer: cardBuffer.toString('base64'),
+                    fileName: `${String(character.data.name).replace(/[\\/:*?"<>|]/g, '_')}.png`,
+                    fileType: 'image/png',
+                },
+                avatarDataUrl: `data:image/png;base64,${cardBuffer.toString('base64')}`,
+            });
+        } finally {
+            browser.release();
+        }
+    } catch (error) {
+        if (error instanceof JanitorBrowserUnavailable) {
+            return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+        }
+        if (error?.code === 'janitor_profile_required') {
+            // The fix is a human step in the browser we already own, so open it and
+            // keep it alive instead of handing back an error the user cannot act on.
+            try {
+                await captureBrowser?.reveal();
+                captureBrowser?.hold(20 * 60_000);
+            } catch { /* the message still explains the task */ }
+            return res.status(409).json({ error: error.message, code: 'janitor_profile_required', phases });
+        }
+        console.warn("[Weaver's Vault] janitor capture failed:", error.message);
+        return res.status(502).json({
+            error: error.message,
+            code: error.message.includes('interrupted import') || error.message.includes('capture preset') ? 'janitor_account_dirty' : 'janitor_capture',
+            phases,
+        });
+    }
 });
 
 /**

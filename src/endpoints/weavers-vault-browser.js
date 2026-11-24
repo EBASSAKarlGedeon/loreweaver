@@ -485,6 +485,8 @@ export class VaultBrowser {
         this.targets = new Map();
         /** Epoch ms until which the idle teardown must not fire. */
         this.holdUntil = 0;
+        /** Identifiers of document-start scripts currently installed. */
+        this.initScripts = [];
     }
 
     /**
@@ -559,6 +561,46 @@ export class VaultBrowser {
             }
             return result;
         });
+    }
+
+    /**
+     * Install a script that runs before any page script, on every navigation.
+     *
+     * `Page.addScriptToEvaluateOnNewDocument` is the only way to hook `fetch`
+     * before the site's own bundle keeps a reference to it — installing it after
+     * load is too late for the JanitorAI capture, which wraps the network calls
+     * that produce the assembled prompt.
+     * @param {string} source
+     * @returns {Promise<string|null>} the identifier to remove it again
+     */
+    async addInitScript(source) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            // `Page.enable` first, and this is not decoration: without it the call
+            // below returns an identifier and the script is never applied, so the
+            // page silently has none of our functions (measured — the same call
+            // with Page.enable defined __glazeSend, without it nothing existed).
+            await this.page.send('Page.enable', {}, 15_000);
+            // `send` lives on the page connection; the session has no such method
+            // (the same mistake as `browser.evaluate`, see PITFALLS #15).
+            const result = await this.page.send('Page.addScriptToEvaluateOnNewDocument', { source }, 15_000);
+            const identifier = result?.identifier ?? null;
+            if (!this.initScripts) this.initScripts = [];
+            if (identifier) this.initScripts.push(identifier);
+            return identifier;
+        });
+    }
+
+    /** Remove every script installed by `addInitScript`. */
+    async clearInitScripts() {
+        const identifiers = Array.isArray(this.initScripts) ? [...this.initScripts] : [];
+        this.initScripts = [];
+        for (const identifier of identifiers) {
+            try {
+                await this.page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }, 10_000);
+            } catch { /* the page may be gone */ }
+        }
+        return identifiers.length;
     }
 
     /**
@@ -1013,6 +1055,125 @@ export class VaultBrowser {
             try {
                 await this.page.evaluate(`location.href = ${JSON.stringify(url)}`, { awaitPromise: false, timeoutMs: 10_000 });
             } catch { /* navigation destroys the context */ }
+            await new Promise(r => setTimeout(r, 800));
+            await this.waitForPage();
+        });
+        return Boolean(this.page);
+    }
+
+    /**
+     * A PNG of what the page currently shows, base64.
+     *
+     * Diagnostics only: when a capture fails, the page is the evidence. Screenshots
+     * of the desktop are useless here (other windows cover ours), so this goes
+     * through CDP.
+     * @returns {Promise<string>}
+     */
+    screenshot() {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            const result = await this.page.send('Page.captureScreenshot', { format: 'png' }, 30_000);
+            return String(result?.data ?? '');
+        });
+    }
+
+    /**
+     * A real mouse click at viewport coordinates.
+     *
+     * `Input.dispatchMouseEvent` produces *trusted* events, which is the whole
+     * point: the ported WebView script has to fake a click with `element.click()`
+     * and type with a React setter trick, and JanitorAI's editor ignores both —
+     * the composer kept the text and the Send button stayed disabled. CDP can do
+     * what a WebView cannot.
+     * @param {number} x
+     * @param {number} y
+     */
+    clickPoint(x, y) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            const point = { x: Math.round(Number(x)), y: Math.round(Number(y)), button: 'left', clickCount: 1 };
+            await this.page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point }, 15_000);
+            await this.page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point }, 15_000);
+            return true;
+        });
+    }
+
+    /**
+     * Type text into the focused element as a trusted insertion.
+     * @param {string} text
+     */
+    insertText(text) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            await this.page.send('Input.insertText', { text: String(text ?? '') }, 30_000);
+            return true;
+        });
+    }
+
+    /**
+     * A trusted key press (Enter/Escape), with the key codes legacy handlers read.
+     * @param {{key: string, code?: string, windowsVirtualKeyCode?: number, text?: string}} options
+     */
+    pressKey({ key, code = null, windowsVirtualKeyCode = null, text = '' }) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            const base = {
+                key,
+                code: code ?? key,
+                windowsVirtualKeyCode: windowsVirtualKeyCode ?? null,
+                nativeVirtualKeyCode: windowsVirtualKeyCode ?? null,
+            };
+            await this.page.send('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...base, text }, 15_000);
+            await this.page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }, 15_000);
+            return true;
+        });
+    }
+
+    /**
+     * Forget everything the site stored for one origin: cookies and web storage.
+     *
+     * Signing out of a site is not just "delete the cookie": JanitorAI keeps the
+     * Supabase session in chunked cookies *and* a large persisted store in
+     * `localStorage`, and a stale store survives a cookie wipe. Clearing the
+     * origin's storage as well is what makes a genuine account switch possible
+     * without throwing away the whole Chrome profile.
+     * @param {string} origin e.g. `https://janitorai.com`
+     * @returns {Promise<{cookies: boolean, storage: boolean}>}
+     */
+    async clearOriginSession(origin) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            let cookies = false;
+            let storage = false;
+            try {
+                await this.page.send('Network.clearBrowserCookies', {}, 15_000);
+                cookies = true;
+            } catch { /* reported below */ }
+            try {
+                await this.page.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' }, 15_000);
+                storage = true;
+            } catch { /* reported below */ }
+            return { cookies, storage };
+        });
+    }
+
+    /**
+     * Reload the page that is currently loaded.
+     *
+     * Distinct from `reload()`, which navigates to the *origin* to re-run a Cloudflare
+     * challenge. The capture needs this one: JanitorAI caches the selected proxy
+     * preset in its client store, so a chat is loaded twice — and reloading it to
+     * the origin instead silently replaced the chat with the home page, which is
+     * how "composer never appeared" happened with a page that had no composer in
+     * it at all.
+     * @returns {Promise<boolean>}
+     */
+    async reloadPage() {
+        await this.enqueue(async () => {
+            await this.ensureStarted();
+            try {
+                await this.page.send('Page.reload', {}, 15_000);
+            } catch { /* a reload destroys the context by design */ }
             await new Promise(r => setTimeout(r, 800));
             await this.waitForPage();
         });
