@@ -83,7 +83,10 @@ describe('janitorCardCharacter', () => {
         expect(card.data.extensions.janitor.retrievedAt).toBe('2026-11-24T00:00:00.000Z');
         // The body is the definition, never the listing bio.
         expect(card.data.description).toContain('public');
-        expect(card.data.creator_notes).toContain('a public bio');
+        // The bio keeps its formatting now (janitor-html.js), so it arrives as
+        // HTML with the credit line — the words are still there.
+        expect(card.data.creator_notes).toContain('a <strong>public</strong> bio');
+        expect(card.data.creator_notes).toContain('Original bot by @kamuisuki on JanitorAI');
         expect(card.data.personality).toBe('');
     });
 });
@@ -200,7 +203,7 @@ describe('janitorCardFields', () => {
     test('the body is personality, never the public bio', () => {
         const fields = janitorCardFields({ ...closedCard(), personality: 'THE BODY', showdefinition: true });
         expect(fields.description).toBe('THE BODY');
-        expect(fields.creator_notes).toBe('a public bio');
+        expect(fields.creator_notes).toContain('a <strong>public</strong> bio');
         expect(fields.creator_notes).not.toContain('THE BODY');
         expect(fields.personality).toBe('');
     });
@@ -213,7 +216,25 @@ describe('janitorCardFields', () => {
     test('a closed card yields an empty body rather than the bio', () => {
         const fields = janitorCardFields(closedCard());
         expect(fields.description).toBe('');
-        expect(fields.creator_notes).toBe('a public bio');
+        expect(fields.creator_notes).toContain('a <strong>public</strong> bio');
+    });
+
+    test('the bio keeps its formatting and gets the credit line', () => {
+        // S6: the bio is converted, not flattened — a card whose bio used bold,
+        // links and images kept none of that before.
+        const fields = janitorCardFields({
+            ...closedCard(),
+            creator_name: 'Someone',
+            description: '<p>Look at <strong>this</strong> <a href="/external-link?to=https%3A%2F%2Fexample.com">link</a></p>',
+        });
+        expect(fields.creator_notes).toContain('<strong>this</strong>');
+        expect(fields.creator_notes).toContain('href="https://example.com"');
+        expect(fields.creator_notes).toContain('Original bot by @Someone on JanitorAI');
+        expect(fields.creator_notes).not.toContain('class=');
+    });
+
+    test('an empty bio stays empty instead of becoming a credit-only card', () => {
+        expect(janitorCardFields({ ...closedCard(), description: '' }).creator_notes).toBe('');
     });
 
     test('greetings: first_message primary, the rest become alternates', () => {

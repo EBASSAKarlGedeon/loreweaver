@@ -38,7 +38,7 @@ import {
     janitorRestorePlan,
     janitorStrayPresets,
 } from './weavers-vault-janitor-account.js';
-import { JANITOR_API, janitorAvatarUrl, janitorPublicUrl } from './weavers-vault-janitor.js';
+import { JANITOR_API, janitorAvatarUrl, janitorBioToNotes, janitorPublicUrl } from './weavers-vault-janitor.js';
 import {
     extractCard,
     extractCharName,
@@ -856,7 +856,8 @@ export function janitorCapturedCardCharacter(meta, { capture, retrievedAt = new 
             scenario: tidy(capture.scenario || String(meta?.scenario ?? '')),
             first_mes: capture.firstMes,
             mes_example: tidy(capture.example || String(meta?.example_dialogs ?? meta?.mes_example ?? '')),
-            creator_notes: String(meta?.description ?? '').trim(),
+            // Same converter as the public path: the bio keeps its formatting.
+            creator_notes: janitorBioToNotes(String(meta?.description ?? ''), String(meta?.creator_name ?? meta?.creator ?? '')),
             creator: String(meta?.creator_name ?? meta?.creator ?? ''),
             creatorId: String(meta?.creator_id ?? ''),
             system_prompt: '',

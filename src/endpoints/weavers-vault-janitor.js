@@ -1,3 +1,5 @@
+import { convertJanitorBio } from './weavers-vault-janitor-html.js';
+
 /**
  * Weaver's Vault — JanitorAI source logic.
  *
@@ -153,10 +155,10 @@ export function janitorCardState(meta) {
 /**
  * Strip tags from the catalog bio, Glaze's `_htmlToText`.
  *
- * Only a fallback: the browser-side converter (public/scripts/extensions/
- * weavers-vault/janitor-html.js) keeps the formatting. This exists so an
- * import can never carry raw markup into a field when the converter is
- * unavailable.
+ * Only a fallback: `janitorBioToNotes` converts the bio with
+ * `weavers-vault-janitor-html.js` and keeps its formatting. This exists so that
+ * a bio the converter cannot parse still reaches the card as readable text
+ * rather than as raw markup.
  * @param {string} html
  * @returns {string}
  */
@@ -216,6 +218,29 @@ function dedupeTags(tags) {
     return out;
 }
 
+/**
+ * The bio, converted and credited.
+ *
+ * The author name is passed in; the profile URL is taken from the bio's own
+ * profile link, exactly as janitor2st.py's `_extract_author` does — the detail
+ * payload carries no profile URL (`creator_display_prefs` is null, measured), so
+ * inventing `https://janitorai.com/profiles/<uuid>` would ship a dead link.
+ * @param {string} html
+ * @param {string} author
+ * @returns {string}
+ */
+export function janitorBioToNotes(html, author = '') {
+    const source = String(html ?? '').trim();
+    if (!source) return '';
+    try {
+        return convertJanitorBio(source, { author }).html;
+    } catch (error) {
+        // A bio the converter cannot read must still reach the card as text.
+        console.warn("[Weaver's Vault] janitor bio conversion failed, using plain text:", error.message);
+        return janitorHtmlToText(source);
+    }
+}
+
 export function janitorCardFields(meta, { body = '' } = {}) {
     const source = meta && typeof meta === 'object' ? meta : {};
     const text = value => (typeof value === 'string' ? value : '');
@@ -237,8 +262,10 @@ export function janitorCardFields(meta, { body = '' } = {}) {
         scenario: text(source.scenario),
         first_mes: primaryFirst,
         mes_example: text(source.example_dialogs) || text(source.mes_example),
-        // The listing `description` is a public bio, never the card body.
-        creator_notes: janitorHtmlToText(text(source.description)),
+        // The listing `description` is a public bio, never the card body. It keeps
+        // its formatting: the converter is a port of the user's own janitor2st.py
+        // (see janitor-html.js), which is what ~40 manual conversions settled on.
+        creator_notes: janitorBioToNotes(text(source.description), text(source.creator_name) || text(source.creator)),
         creator: text(source.creator_name) || text(source.creator),
         creatorId: text(source.creator_id),
         tags: dedupeTags(tags),

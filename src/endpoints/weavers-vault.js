@@ -44,6 +44,7 @@ import {
     janitorDefinitionPublic,
     janitorPublicUrl,
     janitorSearchUrl,
+    janitorBioToNotes,
     janitorSortParam,
     normalizeJanitorRow,
 } from './weavers-vault-janitor.js';
@@ -1102,10 +1103,17 @@ router.post('/janitor/card', async (req, res) => {
             publicUrl: janitorPublicUrl(id),
         };
 
-        // A closed definition cannot be read without the capture pipeline, which
-        // does not exist yet; say so instead of returning an empty card.
+        // A closed definition has no text to import; the capture pipeline is the
+        // only way to get it, so the sheet offers that instead of an empty card.
         if (!janitorDefinitionPublic(meta)) {
-            return res.json({ ...base, definitionPublic: false, needsCapture: true, meta });
+            // The bio is HTML on the site. Convert it here, with the same module
+            // that fills `creator_notes`, so the sheet shows the card's real
+            // formatting instead of a flattened paragraph — and so the client
+            // needs no second copy of the converter.
+            const bioHtml = janitorBioToNotes(String(meta.description ?? ''), String(meta.creator_name ?? meta.creator ?? ''))
+                .replace(/<hr>\s*<p style="text-align: center; font-size: 0\.85em; opacity: 0\.7;">[\s\S]*?<\/p>\s*$/i, '')
+                .trim();
+            return res.json({ ...base, definitionPublic: false, needsCapture: true, bioHtml, meta });
         }
 
         const fields = janitorCardFields(meta);
