@@ -46,7 +46,9 @@ import {
     janitorSearchUrl,
     janitorBioToNotes,
     janitorSortParam,
+    normalizeJanitorHit,
     normalizeJanitorRow,
+    resolveJanitorTagIds,
 } from './weavers-vault-janitor.js';
 import { janitorCatalog, janitorTagsUrl } from './weavers-vault-janitor-tags.js';
 import {
@@ -999,20 +1001,43 @@ router.get('/janitor/tags', async (req, res) => {
 router.get('/janitor/search', async (req, res) => {
     try {
         const query = req.query ?? {};
+        const dataRoot = globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data');
         // `sort=all` is a 400 on the live site, so the whitelist rejects rather
         // than forwards; anything unrecognised falls back to the default sort.
         const sort = janitorSortParam(query.sort);
         const asList = value => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value])
             .map(item => String(item).trim())
             .filter(Boolean);
+        // Numeric ids only: `tag_id[]=0` silently matches nothing, so a
+        // stray zero must never reach the site.
+        const explicitIds = asList(query.tagIds ?? query['tagIds[]']).filter(id => /^[1-9]\d*$/.test(id));
+        // The sheet stores names (it is source-agnostic); the listing accepts ids.
+        // Resolve through the cached catalogue rather than making the client know
+        // this provider's numbering.
+        const names = asList(query.tags ?? query['tags[]'] ?? query.tagNames);
+        let tagIds = explicitIds;
+        let unknownTags = [];
+        if (names.length) {
+            const catalog = await janitorCatalog({
+                dataRoot,
+                fetchTags: async () => {
+                    const tagBrowser = janitorBrowserFor(req);
+                    const tagAuth = await janitorAuthHeaders(tagBrowser);
+                    const page = await tagBrowser.fetchText(janitorTagsUrl(), { accept: 'application/json', headers: tagAuth.headers });
+                    if (page.status < 200 || page.status >= 300) throw new Error(`JanitorAI answered HTTP ${page.status} for its tag list.`);
+                    return JSON.parse(page.body);
+                },
+            });
+            const resolved = resolveJanitorTagIds(names, catalog.tags);
+            tagIds = [...new Set([...explicitIds, ...resolved.ids])];
+            unknownTags = resolved.unknown;
+        }
         const url = janitorSearchUrl({
             page: Number(query.page) || 1,
             sort,
             mode: String(query.mode ?? 'all'),
             search: String(query.search ?? '').trim(),
-            // Numeric ids only: `tag_id[]=0` silently matches nothing, so a
-            // stray zero must never reach the site.
-            tagIds: asList(query.tagIds ?? query['tagIds[]']).filter(id => /^[1-9]\d*$/.test(id)),
+            tagIds,
             customTags: asList(query.customTags ?? query['customTags[]']),
             userIds: asList(query.userIds ?? query['userIds[]']).filter(id => /^[0-9a-f-]{8,}$/i.test(id)),
         });
@@ -1038,9 +1063,14 @@ router.get('/janitor/search', async (req, res) => {
                 : Array.isArray(payload) ? payload
                     : [];
         return res.json({
-            items: rows.map(normalizeJanitorRow).filter(row => row.id),
+            // Grid items key on `fullPath`/`avatarUrl`/`description`, exactly like
+            // JannyAI's hits, so the renderer needs no per-source branch.
+            items: rows.map(normalizeJanitorHit).filter(row => row.id),
             page: Number(query.page) || 1,
             sort,
+            // A tag name the catalogue no longer knows is reported, not ignored:
+            // silently dropping it would filter on nothing and look like a match.
+            unknownTags,
             // The payload carries no total (measured), so a full page is the only
             // end-of-results signal there is.
             hasMore: rows.length >= 30,

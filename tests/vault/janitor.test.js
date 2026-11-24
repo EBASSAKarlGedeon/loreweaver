@@ -9,6 +9,8 @@ import {
     janitorCardFields,
     janitorCardState,
     janitorCharacterUrl,
+    normalizeJanitorHit,
+    resolveJanitorTagIds,
     janitorDefinitionPublic,
     janitorHtmlToText,
     janitorPublicUrl,
@@ -88,6 +90,69 @@ describe('janitorCardCharacter', () => {
         expect(card.data.creator_notes).toContain('a <strong>public</strong> bio');
         expect(card.data.creator_notes).toContain('Original bot by @kamuisuki on JanitorAI');
         expect(card.data.personality).toBe('');
+    });
+});
+
+describe('normalizeJanitorHit', () => {
+    // The grid reads `fullPath`/`avatarUrl`/`description`/`chatCount` — the same
+    // keys JannyAI's hits use — so the renderer needs no per-source branch.
+    test('a listing row becomes a grid item', () => {
+        const hit = normalizeJanitorHit({
+            id: 'abc-123',
+            name: 'Sobo gym guy',
+            description: '<p>Husband <strong>material</strong></p>',
+            avatar: 'key.webp',
+            total_tokens: 2742,
+            stats: { chat: 25, message: 136 },
+            is_nsfw: true,
+            tags: [{ id: 1, name: 'Male' }],
+            custom_tags: ['oc'],
+            created_at: '2026-11-20T10:00:00.000Z',
+        });
+        expect(hit.fullPath).toBe('abc-123');
+        expect(hit.avatarUrl).toBe('https://ella.janitorai.com/bot-avatars/key.webp?width=400');
+        // The card blurb is text; the HTML belongs to the detail sheet.
+        expect(hit.description).toBe('Husband material');
+        expect(hit.tokens).toBe(2742);
+        expect(hit.chatCount).toBe(25);
+        expect(hit.nsfw).toBe(true);
+        expect(hit.tagIds).toEqual(['1']);
+        // The site sends tag objects; the grid draws their names.
+        expect(hit.tags).toEqual(['Male']);
+        expect(hit.customTags).toEqual(['oc']);
+        expect(hit.createdAt).toBe(Date.parse('2026-11-20T10:00:00.000Z'));
+    });
+
+    test('a row without a usable date reports 0 rather than NaN', () => {
+        expect(normalizeJanitorHit({ id: 'x', name: 'n' }).createdAt).toBe(0);
+    });
+});
+
+describe('resolveJanitorTagIds', () => {
+    const catalog = [
+        { id: 1, name: '👨 Male', slug: 'male' },
+        { id: 49, name: '🕊🗡 Dead Dove', slug: 'dead-dove' },
+    ];
+
+    test('names and slugs both resolve to the site ids', () => {
+        expect(resolveJanitorTagIds(['👨 Male', 'dead-dove'], catalog).ids).toEqual(['1', '49']);
+    });
+
+    test('matching is case-insensitive', () => {
+        expect(resolveJanitorTagIds(['👨 male'], catalog).ids).toEqual(['1']);
+    });
+
+    test('an unknown name is reported, not silently dropped', () => {
+        // Dropping it would filter on nothing and still look like a successful
+        // search — the exact silent no-op the sheet must not produce.
+        const resolved = resolveJanitorTagIds(['👨 Male', 'Gone Tag'], catalog);
+        expect(resolved.ids).toEqual(['1']);
+        expect(resolved.unknown).toEqual(['Gone Tag']);
+    });
+
+    test('duplicates collapse and junk is ignored', () => {
+        expect(resolveJanitorTagIds(['👨 Male', '👨 Male', '', null], catalog).ids).toEqual(['1']);
+        expect(resolveJanitorTagIds(null, catalog)).toEqual({ ids: [], unknown: [] });
     });
 });
 

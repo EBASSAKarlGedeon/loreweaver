@@ -219,6 +219,56 @@ function dedupeTags(tags) {
 }
 
 /**
+ * A listing row → the grid's item shape.
+ *
+ * The vault's grid, kebab menu and detail path all key items by `fullPath` and
+ * read `avatarUrl`/`description`/`chatCount`; JannyAI's hits use exactly those
+ * names (see `normalizeJannyHit`). Aliasing here keeps the renderer free of
+ * per-source branches instead of teaching it a second vocabulary.
+ * @param {object} row
+ */
+export function normalizeJanitorHit(row) {
+    const item = normalizeJanitorRow(row);
+    const created = Date.parse(String(row?.created_at ?? ''));
+    return {
+        ...item,
+        fullPath: item.id,
+        // The grid draws a one-line blurb as text; the HTML belongs to the sheet.
+        description: janitorHtmlToText(item.blurb),
+        avatarUrl: item.avatar,
+        chatCount: item.chats,
+        createdAt: Number.isFinite(created) ? created : 0,
+    };
+}
+
+/**
+ * Resolve the sheet's tag *names* to the site's numeric tag ids.
+ *
+ * The filter sheet is source-agnostic and stores names (the user picks what the
+ * site calls a tag, e.g. "⚔️ Enemies to Lovers"); the listing API only accepts
+ * `tag_id[]` numbers. Unknown names are dropped and reported, so a stale
+ * selection cannot turn into a silent no-op filter.
+ * @param {string[]} names
+ * @param {Array<{id: number|string, name: string, slug: string}>} catalog
+ * @returns {{ids: string[], unknown: string[]}}
+ */
+export function resolveJanitorTagIds(names, catalog) {
+    const ids = [];
+    const unknown = [];
+    for (const raw of Array.isArray(names) ? names : []) {
+        const name = String(raw ?? '').trim();
+        if (!name) continue;
+        const lower = name.toLowerCase();
+        const found = (catalog ?? []).find(tag =>
+            String(tag.name ?? '').toLowerCase() === lower
+            || String(tag.slug ?? '').toLowerCase() === lower);
+        if (found) ids.push(String(found.id));
+        else unknown.push(name);
+    }
+    return { ids: [...new Set(ids)], unknown };
+}
+
+/**
  * The bio, converted and credited.
  *
  * The author name is passed in; the profile URL is taken from the bio's own
@@ -404,8 +454,12 @@ export function normalizeJanitorRow(row) {
     const source = row && typeof row === 'object' ? row : {};
     const stats = source.stats && typeof source.stats === 'object' ? source.stats : {};
     const id = String(source.id ?? '').trim();
-    const cardTags = [];
     const customTags = Array.isArray(source.custom_tags) ? source.custom_tags : [];
+    // The site sends full tag objects (`{id, name: "👨 Male", slug}`), not ids, so
+    // leaving `tags` empty made every grid card render without its chips.
+    const cardTags = Array.isArray(source.tags)
+        ? source.tags.map(tag => String((tag && typeof tag === 'object' ? tag.name ?? tag.slug : tag) ?? '').trim()).filter(Boolean)
+        : [];
     const tagIds = Array.isArray(source.tags) ? source.tags.map(tag => String(tag?.id ?? tag ?? '')).filter(Boolean) : [];
     return {
         source: 'janitor',
