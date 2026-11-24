@@ -519,6 +519,80 @@ export function normalizeJanitorRow(row) {
 export const JANITOR_SCRIPT_TYPES = Object.freeze(['lorebook', 'advanced']);
 
 /**
+ * The reasons a JanitorAI read or import can fail, as ledger tokens (S9).
+ *
+ * One vocabulary for the server, the client and the ledger: the plan asks that
+ * every failure state *why*, and "it failed" with a raw HTTP code is not a
+ * reason a user (or a later debugging session) can act on. The strings are the
+ * ones the plan names (`unproxyable`, `closed-capture-failed`, `challenge`,
+ * `signed-out`, `rate-limited`) plus the ones these routes measured.
+ */
+export const JANITOR_FAILURE_REASONS = Object.freeze([
+    'unproxyable',          // creator turned the proxy off
+    'private',              // the character, or one of its lorebooks, is not public
+    'deleted',              // 404 / softly deleted
+    'missing',              // JanitorAI has no such character
+    'no-definition',        // public page, hidden definition → capture needed
+    'closed-capture-failed',// the recovery drive did not produce a card
+    'profile-required',     // JanitorAI will not generate without a persona
+    'challenge',            // Cloudflare/browser check unfinished
+    'signed-out',           // no usable session
+    'rate-limited',         // 429
+    'transport',            // the request never completed
+    'no-browser',           // no Chrome/Edge binary to drive
+    'unparseable',          // answered something that is not JSON
+    'server',               // 5xx from the site
+    'bad-id',               // the id we were given is not an id
+]);
+
+/**
+ * Map a route's `code` (or a status) onto a ledger reason.
+ *
+ * The route codes are the transport's words (`janitor_challenge`); the ledger
+ * wants the phenomenon (`challenge`). Keeping the mapping here means the client
+ * never invents a second vocabulary, and a test can pin every pair.
+ * @param {{code?: string, status?: number, challenged?: boolean}} failure
+ * @returns {string} one of [JANITOR_FAILURE_REASONS]
+ */
+export function janitorFailureReason({ code = '', status = 0, challenged = false } = {}) {
+    if (challenged) return 'challenge';
+    switch (String(code ?? '').trim().toLowerCase()) {
+        case 'janitor_challenge': return 'challenge';
+        case 'janitor_signed_out': return 'signed-out';
+        case 'janitor_rate_limited': return 'rate-limited';
+        case 'janitor_missing': return 'missing';
+        case 'janitor_unreachable':
+        case 'janitor_card':
+        case 'janitor_lorebooks':
+        case 'janitor_capture':
+        case 'janitor_flow':
+            // `janitor_capture` is the recovery drive failing to produce a card.
+            return code === 'janitor_capture' ? 'closed-capture-failed' : 'transport';
+        case 'janitor_parse': return 'unparseable';
+        case 'janitor_browser': return 'no-browser';
+        case 'janitor_id': return 'bad-id';
+        case 'janitor_profile_required': return 'profile-required';
+        case 'janitor_unproxyable': return 'unproxyable';
+        case 'janitor_private': return 'private';
+        case 'janitor_deleted': return 'deleted';
+        case 'janitor_error': return 'server';
+        default: break;
+    }
+    // A block reason travels as the code in some paths (`unproxyable`, …).
+    if (JANITOR_FAILURE_REASONS.includes(String(code ?? '').trim().toLowerCase())) {
+        return String(code).trim().toLowerCase();
+    }
+    if (status === 429) return 'rate-limited';
+    if (status === 401 || status === 403) return 'signed-out';
+    if (status === 404) return 'missing';
+    if (status >= 500) return 'server';
+    // -1 is the driver's "the request never completed"; 0 means "no status was
+    // reported", which is not a reason and must not masquerade as one.
+    if (status === -1) return 'transport';
+    return status > 0 ? `http-${status}` : 'unknown';
+}
+
+/**
  * One lorebook (`script`) record. Measured: a public book answers 200 here with
  * the entries as a JSON array inside `script`; a private one answers 404
  * `{"message":"script not found"}`.

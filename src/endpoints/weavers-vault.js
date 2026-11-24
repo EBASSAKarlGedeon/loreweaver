@@ -47,6 +47,7 @@ import {
     janitorBioToNotes,
     janitorSortParam,
     janitorLorebookRefs,
+    janitorFailureReason,
     janitorLorebookName,
     janitorScriptUrl,
     janitorScriptToCharacterBook,
@@ -100,6 +101,28 @@ const JANITOR_CAPTURE_PAGE_SCRIPT = fs.readFileSync(
  */
 
 export const router = express.Router();
+
+/**
+ * Give every JanitorAI error response the ledger's reason (S9).
+ *
+ * The plan asks that every failure state *why*, in one vocabulary
+ * (`unproxyable`, `closed-capture-failed`, `challenge`, `signed-out`,
+ * `rate-limited`, …). The routes already carry a transport `code`
+ * (`janitor_challenge`); this stamps the phenomenon (`challenge`) beside it so
+ * the client records a reason instead of translating codes in ten places — and
+ * so a new route cannot forget to.
+ */
+router.use((req, res, next) => {
+    if (!req.path.startsWith('/janitor/')) return next();
+    const json = res.json.bind(res);
+    res.json = (body) => {
+        if (body && typeof body === 'object' && body.error && body.code && !body.reason) {
+            body.reason = janitorFailureReason({ code: body.code, status: res.statusCode });
+        }
+        return json(body);
+    };
+    next();
+});
 
 // M5 · DataCat lives in its own module (routes + I/O); mount it before the chub
 // routes so its paths are unambiguous.
