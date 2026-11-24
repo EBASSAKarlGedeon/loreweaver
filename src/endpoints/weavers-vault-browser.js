@@ -698,6 +698,21 @@ export class VaultBrowser {
         // to reallocate the compositor's output.
         await this.nudgeWindowSize();
         await this.focusPage();
+        // A revealed window is on screen and in front, so it does not need a
+        // taskbar button as well — and leaving one is exactly what the user sees
+        // as a stray Chrome icon while using the vault. Measured 2026-11-26 on the
+        // live janitor window: after reveal() the extended style was 0x00240100
+        // (WS_EX_APPWINDOW, tool=False), i.e. a taskbar button, and the only code
+        // that ever put TOOLWINDOW back was release()->park(). A sticky hold (the
+        // persona wall) blocks release() for its whole TTL, so the button then sat
+        // there for 20 minutes. hideWindow() only restyles: it neither moves nor
+        // hides the window, so the human can keep typing into it.
+        this.taskbarHidden = false;
+        await this.hideWindow();
+        // The shell can add the button a beat after the window is shown, so apply
+        // it once more after things settle (hideWindow's no-op branch re-toggles
+        // the style, which is what forces the shell to re-evaluate).
+        setTimeout(() => { this.hideWindow().catch(() => {}); }, 1_500).unref?.();
         return { revealed: placed ? 1 : 0, raised, running: this.isRunning() };
     }
 

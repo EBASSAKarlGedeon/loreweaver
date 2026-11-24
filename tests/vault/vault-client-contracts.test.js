@@ -1,0 +1,68 @@
+import { describe, test, expect } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * Contract guards for the vault client and the automation window.
+ *
+ * The client has no DOM harness: `index.js` runs inside the page and reads
+ * SillyTavern globals at import time, so its behaviour is verified in the real UI
+ * (see docs/PITFALLS.md checks). What *can* be pinned here is the exact contract
+ * that broke, so the same regression cannot come back unnoticed:
+ *
+ *  - PITFALLS #33: the JanitorAI search must send `mode`, or "Show NSFW off" is
+ *    only a label.
+ *  - PITFALLS #34: the HTML guard must contain the two characters `\` `b`, not a
+ *    stray control byte (a regex with a literal backspace compiles and never
+ *    matches).
+ *  - The NSFW artwork blur is gone for good (user decision, 2026-11-26).
+ *  - PITFALLS #35: `reveal()` must re-apply the taskbar style it just removed.
+ */
+
+const clientDir = path.resolve('public/scripts/extensions/weavers-vault');
+const clientJs = fs.readFileSync(path.join(clientDir, 'index.js'), 'utf8');
+const clientCss = fs.readFileSync(path.join(clientDir, 'style.css'), 'utf8');
+const browserJs = fs.readFileSync(path.resolve('src/endpoints/weavers-vault-browser.js'), 'utf8');
+
+describe('janitor search request', () => {
+    test('sends the SFW/NSFW switch as the site mode parameter', () => {
+        // The branch that builds the janitor query string.
+        const start = clientJs.indexOf("params.set('mode'");
+        expect(start).toBeGreaterThan(-1);
+        const line = clientJs.slice(start, clientJs.indexOf('\n', start));
+        expect(line).toMatch(/mode.*sfw.*all|all.*sfw/);
+        // And it reads the switch, not a constant.
+        expect(line).toMatch(/f\.nsfw/);
+        // The grid refuses NSFW rows while the switch is off, whatever the site
+        // chooses to list.
+        expect(clientJs).toMatch(/if \(item\.nsfw && !state\.filters\?\.nsfw\) continue;/);
+    });
+});
+
+describe('converted janitor bio', () => {
+    test('the HTML guard uses a real word boundary, not a control byte', () => {
+        const guard = clientJs.match(/const isHtml = [^\n]+/)?.[0] ?? '';
+        expect(guard).toContain('blockquote');
+        expect(guard).toContain('\\b');
+        expect(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(clientJs)).toBe(false);
+    });
+});
+
+describe('nsfw artwork', () => {
+    test('is never blurred', () => {
+        expect(clientJs).not.toMatch(/wv-blur|wv-reveal|wv-blurred/);
+        expect(clientCss).not.toMatch(/wv-blur|wv-reveal|blur\(16px\)/);
+        // The kebab no longer offers an unblur action.
+        expect(clientJs).not.toMatch(/Unblur NSFW/);
+    });
+});
+
+describe('revealed automation window', () => {
+    test('re-applies the taskbar style after a human step', () => {
+        const reveal = browserJs.slice(browserJs.indexOf('async reveal()'));
+        const body = reveal.slice(0, reveal.indexOf('async placeWindowOnScreen'));
+        // The reveal must end by hiding the taskbar button again, or a sticky
+        // hold leaves a Chrome icon up for its whole TTL.
+        expect(body).toMatch(/this\.taskbarHidden = false;[\s\S]{0,400}await this\.hideWindow\(\)/);
+    });
+});
