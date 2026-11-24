@@ -46,6 +46,11 @@ import {
     janitorSearchUrl,
     janitorBioToNotes,
     janitorSortParam,
+    janitorLorebookRefs,
+    janitorLorebookName,
+    janitorScriptUrl,
+    janitorScriptToCharacterBook,
+    classifyJanitorLorebook,
     normalizeJanitorHit,
     normalizeJanitorRow,
     resolveJanitorTagIds,
@@ -1193,6 +1198,103 @@ router.post('/janitor/card', async (req, res) => {
         }
         console.warn("[Weaver's Vault] janitor card failed:", error.message);
         return res.status(502).json({ error: error.message, code: 'janitor_card' });
+    }
+});
+
+/**
+ * A character's lorebooks (`scripts[]`), classified and — for the public ones —
+ * converted to a characterBook the client can hand straight to
+ * `convertCharacterBook` + `saveWorldInfo`.
+ *
+ * Per book, `kind` is `public` (convertible, no LLM), `scripted` (JavaScript
+ * source, needs the rebuild), `closed` (private or empty — the site said no) or
+ * `failed` with a `reason`. A failure is NEVER reported as `closed`: a transport
+ * error, an expired session or a rate limit are different things and the UI must
+ * be able to say which one happened.
+ *
+ * Requests are bounded by the card's own book count (measured: 1-3 per card),
+ * and a private book costs none at all — its `is_public:false` is authoritative.
+ */
+router.post('/janitor/lorebooks', async (req, res) => {
+    const id = String(req.body?.id ?? '').trim();
+    if (!/^[0-9a-f-]{8,}$/i.test(id)) {
+        return res.status(400).json({ error: 'A JanitorAI character id is required.', code: 'janitor_id' });
+    }
+    // Optional: restrict to these script ids (the UI's per-book choice), and let
+    // the caller name the character when it already knows a better name.
+    const only = Array.isArray(req.body?.only) && req.body.only.length
+        ? new Set(req.body.only.map(value => String(value)))
+        : null;
+    const knownName = String(req.body?.name ?? '').trim();
+
+    try {
+        const browser = janitorBrowserFor(req);
+        const auth = await janitorAuthHeaders(browser);
+        const page = await browser.fetchText(janitorCharacterUrl(id), { accept: 'application/json', headers: auth.headers });
+        if (page.challenged || page.status === 403 || page.status === 503) {
+            return res.status(403).json({
+                error: classifyJanitorError({ status: page.status, body: page.body, challenged: true }).message,
+                code: 'janitor_challenge',
+            });
+        }
+        if (page.status === 404) {
+            return res.status(404).json({ error: 'JanitorAI has no character with that id.', code: 'janitor_missing' });
+        }
+        if (page.status < 200 || page.status >= 300) {
+            const classified = classifyJanitorError({ status: page.status, body: page.body });
+            return res.status(502).json({ error: classified.message, code: classified.code });
+        }
+        let meta = null;
+        try {
+            const payload = JSON.parse(page.body);
+            meta = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+        } catch {
+            return res.status(502).json({ error: 'JanitorAI returned something that is not JSON.', code: 'janitor_parse' });
+        }
+
+        const refs = janitorLorebookRefs(meta).filter(ref => !only || only.has(ref.id));
+        const characterName = knownName || String(meta?.name ?? '').trim();
+        const books = [];
+        for (const ref of refs) {
+            const name = janitorLorebookName(characterName, ref.title);
+            // A private book is closed on the ref's own word: no request.
+            if (!ref.isPublic) {
+                const classified = classifyJanitorLorebook(ref, {});
+                books.push({ ...classified, name });
+                continue;
+            }
+            const record = await browser.fetchText(janitorScriptUrl(ref.id), {
+                accept: 'application/json',
+                headers: auth.headers,
+            });
+            const classified = classifyJanitorLorebook(ref, {
+                status: record.status,
+                body: record.body,
+                challenged: record.challenged,
+            });
+            books.push({
+                ...classified,
+                name,
+                description: classified.description || ref.description,
+                // Public books ship the converted characterBook; scripted ones
+                // ship their source as data (the LLM call is the client's, on the
+                // host's own quiet-prompt path). Neither is sent for a failure.
+                book: classified.kind === 'public'
+                    ? janitorScriptToCharacterBook(classified.entries, { name })
+                    : null,
+                entries: undefined,
+            });
+            console.log(`[Weaver's Vault] janitor lorebook "${ref.title}": ${classified.kind}`
+                + `${classified.reason ? ` (${classified.reason})` : ''}, ${classified.entryCount} entries`);
+        }
+
+        return res.json({ characterId: id, characterName, books });
+    } catch (error) {
+        if (error instanceof JanitorBrowserUnavailable) {
+            return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+        }
+        console.warn("[Weaver's Vault] janitor lorebooks failed:", error.message);
+        return res.status(502).json({ error: error.message, code: 'janitor_lorebooks' });
     }
 });
 

@@ -519,6 +519,17 @@ export function normalizeJanitorRow(row) {
 export const JANITOR_SCRIPT_TYPES = Object.freeze(['lorebook', 'advanced']);
 
 /**
+ * One lorebook (`script`) record. Measured: a public book answers 200 here with
+ * the entries as a JSON array inside `script`; a private one answers 404
+ * `{"message":"script not found"}`.
+ * @param {string} id script id from the card's `scripts[]`
+ * @returns {string}
+ */
+export function janitorScriptUrl(id) {
+    return `${JANITOR_API}/script/${encodeURIComponent(String(id ?? ''))}`;
+}
+
+/**
  * The lorebook references attached to a character.
  * @param {any} meta a `/hampter/characters/{id}` payload
  * @returns {Array<{id: string, title: string, description: string, type: string, isPublic: boolean}>}
