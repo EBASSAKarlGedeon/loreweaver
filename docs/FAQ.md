@@ -371,3 +371,50 @@ Built-in Extensions list (the real one is listed under its own installed entry).
 in code without moving the dev clone out of `public/scripts/extensions/` (tracked for a future
 reorganization).
 
+
+## Weaver's Vault: a JanitorAI card that *is* public reads as "closed" in the sandbox
+
+**Symptom**: importing a well-known public JanitorAI card through the sandbox server (port
+8001, Testing data) opens the closed-card sheet — "this character's definition is hidden" — and
+offers *Recover definition* instead of *Import to library*. The same card imports normally from
+the live server.
+
+**Cause**: `showdefinition` is **account-dependent**. Measured 2026-11-26: the same
+`GET /hampter/characters/d818757e-…` answers `showdefinition: true` for the signed-in session and
+`false` for an anonymous one, so the server's `janitorCardState()` correctly sees a closed card.
+The sandbox profile lives at `<dataRoot>/_vault-janitor-profile`, which for `--dataRoot
+…/Loreweaver-testing/data` is a *different* profile dir from the live server's — a fresh one is
+anonymous.
+
+**Fix**: give the sandbox a signed-in session before importing. Copy the session out of the live
+profile (Chrome ≥ 96 keeps cookies under `Default/Network/`):
+
+```bash
+SRC=data/_vault-janitor-profile; DST=../Loreweaver-testing/data/_vault-janitor-profile
+mkdir -p "$DST/Default/Network"
+cp -f "$SRC/Local State" "$DST/Local State"
+cp -f "$SRC/Default/Network/Cookies" "$DST/Default/Network/Cookies"
+cp -f "$SRC/Default/Preferences" "$DST/Default/Preferences"
+rm -f "$DST/Default/Network/Cookies-journal"
+```
+
+Verify before trusting it (`readJanitorSession` in a probe, or `signedIn: true` with a name).
+Delete the copied profile afterwards — it holds the account's session.
+
+## Weaver's Vault: `POST /api/weavers-vault/janitor/...` answers 404 with no JSON
+
+**Symptom**: the vault UI reports `JanitorAI answered 404` while the sandbox log shows no janitor
+request at all, and no route ever runs.
+
+**Cause**: the sandbox was started from the **`Loreweaver-testing` worktree**
+(`cd ../Loreweaver-testing && node server.js …`). That worktree is a checkout of the `Testing`
+branch, whose `src/` predates the newer routes, so Express answers with its HTML `Cannot POST …`
+404; `r.json()` then fails and the client falls back to the bare status text.
+
+**Fix**: run the sandbox from the **main checkout** and point `--dataRoot` at the Testing data —
+that is the documented form, and it keeps the newest server code against the git-tracked test data:
+
+```bash
+SILLYTAVERN_SYNC_ENABLED=false nohup node server.js --port 8001 \
+  --dataRoot "C:/Users/Gedeon/Documents/Coding/Loreweaver-testing/data"
+```
