@@ -323,7 +323,15 @@ export function normalizeJanitorRow(row) {
         customTags,
         tagIds,
         nsfw: source.is_nsfw === true,
-        tokens: Number(source.total_tokens ?? stats.total_tokens ?? 0) || 0,
+        // A listing row carries `total_tokens`; a detail payload carries it under
+        // `token_counts` and leaves the flat field undefined (measured: a public
+        // card reported 0 tokens while token_counts.total_tokens was 2742).
+        tokens: Number(
+            source.total_tokens
+            ?? stats.total_tokens
+            ?? (source.token_counts && source.token_counts.total_tokens)
+            ?? 0,
+        ) || 0,
         chats: Number(stats.chat ?? 0) || 0,
         messages: Number(stats.message ?? 0) || 0,
         showDefinition: source.showdefinition === true,

@@ -543,27 +543,50 @@ export class VaultBrowser {
     /**
      * GET a URL from inside the parked page.
      * @param {string} url
-     * @param {{accept?: string, timeoutMs?: number}} [options] `accept` must be
-     *   the type the endpoint serves: JanitorAI's API is JSON.
+     * @param {{accept?: string, timeoutMs?: number, headers?: Record<string,string>|null}} [options]
+     *   `accept` must be the type the endpoint serves: JanitorAI's API is JSON;
+     *   `headers` carries an Authorization bearer when the source needs one.
      * @returns {Promise<{status: number, body: string, challenged: boolean}>}
      */
-    fetchText(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000 } = {}) {
+    fetchText(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000, headers = null } = {}) {
         return this.enqueue(async () => {
             await this.ensureStarted();
-            let result = await this.rawFetch(url, { accept, timeoutMs });
+            let result = await this.rawFetch(url, { accept, timeoutMs, headers });
             if (result.challenged) {
                 this.logger.warn?.(`[Weaver's Vault] ${this.label}: challenge on fetch — reloading session`);
                 await this.reload();
-                result = await this.rawFetch(url, { accept, timeoutMs });
+                result = await this.rawFetch(url, { accept, timeoutMs, headers });
             }
             return result;
         });
     }
 
-    async rawFetch(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000 } = {}) {
+    /**
+     * Run an expression in the parked page.
+     *
+     * Queued like a fetch, so it never races a navigation, and it starts the
+     * session if needed. `evaluate` itself lives on the page connection, not on
+     * this class — reaching for `browser.evaluate` is a mistake this method
+     * exists to prevent (it failed with "browser.evaluate is not a function").
+     * @param {string} expression
+     * @param {{timeoutMs?: number}} [options]
+     * @returns {Promise<unknown>}
+     */
+    evaluateInPage(expression, { timeoutMs = 30_000 } = {}) {
+        return this.enqueue(async () => {
+            await this.ensureStarted();
+            return this.page.evaluate(expression, { timeoutMs });
+        });
+    }
+
+    async rawFetch(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000, headers = null } = {}) {
+        // JanitorAI's API ignores cookies and wants the Supabase session as a
+        // bearer token (measured: 401 with cookies, 200 with the same header), so
+        // callers must be able to add headers.
+        const extra = headers && typeof headers === 'object' ? headers : {};
         const expression = `(() => {
             return fetch(${JSON.stringify(url)}, {
-                headers: { "Accept": ${JSON.stringify(accept)} },
+                headers: Object.assign({ "Accept": ${JSON.stringify(accept)} }, ${JSON.stringify(extra)}),
                 credentials: "include",
             }).then(async r => ({
                 status: r.status,

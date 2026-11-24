@@ -40,6 +40,22 @@ function closedCard() {
     };
 }
 
+describe('normalizeJanitorRow', () => {
+    test('reads a token count from a detail payload, which only has token_counts', () => {
+        // Measured on a live public card: the flat field is undefined and the
+        // count lives under token_counts, so a listing-shaped reader reports 0.
+        const row = normalizeJanitorRow({
+            id: '1f452a1d-8d88-4065-83b3-d7697c7aad35',
+            name: 'Andy and Nate',
+            token_counts: { personality_tokens: 1796, first_message_tokens: 946, total_tokens: 2742 },
+        });
+        expect(row.tokens).toBe(2742);
+        // A listing row still uses its own flat field.
+        expect(normalizeJanitorRow({ id: 'x', total_tokens: 1234 }).tokens).toBe(1234);
+        expect(normalizeJanitorRow({ id: 'x' }).tokens).toBe(0);
+    });
+});
+
 describe('janitorSortParam', () => {
     test('accepts only the sorts the site accepts', () => {
         for (const sort of JANITOR_SORTS) expect(janitorSortParam(sort)).toBe(sort);

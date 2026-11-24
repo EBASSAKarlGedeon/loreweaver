@@ -35,13 +35,22 @@ import {
     JANITOR_ORIGIN,
     JANITOR_LOGIN_URL,
     classifyJanitorError,
+    janitorBlockReason,
+    janitorCardFields,
     janitorCardState,
+    janitorCharacterUrl,
+    janitorDefinitionPublic,
     janitorPublicUrl,
+    janitorSearchUrl,
+    janitorSortParam,
+    normalizeJanitorRow,
 } from './weavers-vault-janitor.js';
+import { janitorCatalog, janitorTagsUrl } from './weavers-vault-janitor-tags.js';
 import {
     disposeJanitorBrowser,
     findBrowserBinary as findJanitorBrowserBinary,
     getJanitorBrowser,
+    janitorAuthHeaders,
     readJanitorAccount,
 } from './weavers-vault-janitor-browser.js';
 import { resolveJannyTagIds } from './weavers-vault-janny.js';
@@ -642,6 +651,201 @@ router.post('/janitor/browser/focus', async (req, res) => {
 router.post('/janitor/browser/close', async (req, res) => {
     await disposeJanitorBrowser();
     res.json({ ok: true });
+});
+
+/**
+ * The tag sheet's vocabulary.
+ *
+ * `/hampter/tags` is a bare array of 53 tags with emoji names, cached for 7 days
+ * at the data root. A failed refresh serves the cached vocabulary marked
+ * `stale` rather than emptying the sheet.
+ */
+router.get('/janitor/tags', async (req, res) => {
+    try {
+        const force = String(req.query.refresh ?? '') === '1';
+        const catalog = await janitorCatalog({
+            dataRoot: globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'),
+            force,
+            fetchTags: async () => {
+                const browser = janitorBrowserFor(req);
+                const auth = await janitorAuthHeaders(browser);
+                const page = await browser.fetchText(janitorTagsUrl(), { accept: 'application/json', headers: auth.headers });
+                if (page.status < 200 || page.status >= 300) {
+                    throw new Error(`JanitorAI answered HTTP ${page.status} for its tag list.`);
+                }
+                return JSON.parse(page.body);
+            },
+        });
+        return res.json({ tags: catalog.tags, source: catalog.source, fetchedAt: catalog.fetchedAt });
+    } catch (error) {
+        console.warn("[Weaver's Vault] janitor tags failed:", error.message);
+        return res.status(502).json({ error: error.message, code: 'janitor_tags' });
+    }
+});
+
+/**
+ * Browse and search.
+ *
+ * A GET with query parameters because that is the endpoint's own contract: JSON
+ * over `GET /hampter/characters?...`, read inside the browser session.
+ */
+router.get('/janitor/search', async (req, res) => {
+    try {
+        const query = req.query ?? {};
+        // `sort=all` is a 400 on the live site, so the whitelist rejects rather
+        // than forwards; anything unrecognised falls back to the default sort.
+        const sort = janitorSortParam(query.sort);
+        const asList = value => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value])
+            .map(item => String(item).trim())
+            .filter(Boolean);
+        const url = janitorSearchUrl({
+            page: Number(query.page) || 1,
+            sort,
+            mode: String(query.mode ?? 'all'),
+            search: String(query.search ?? '').trim(),
+            // Numeric ids only: `tag_id[]=0` silently matches nothing, so a
+            // stray zero must never reach the site.
+            tagIds: asList(query.tagIds ?? query['tagIds[]']).filter(id => /^[1-9]\d*$/.test(id)),
+            customTags: asList(query.customTags ?? query['customTags[]']),
+            userIds: asList(query.userIds ?? query['userIds[]']).filter(id => /^[0-9a-f-]{8,}$/i.test(id)),
+        });
+        const browser = janitorBrowserFor(req);
+        const auth = await janitorAuthHeaders(browser);
+        const page = await browser.fetchText(url, { accept: 'application/json', headers: auth.headers });
+        if (page.challenged) {
+            return res.status(403).json({ error: 'JanitorAI presented a challenge for this search.', code: 'janitor_challenge' });
+        }
+        if (page.status < 200 || page.status >= 300) {
+            const classified = classifyJanitorError({ status: page.status, body: page.body, challenged: page.challenged });
+            return res.status(classified.code === 'janitor_signed_out' ? 401 : 502)
+                .json({ error: classified.message, code: classified.code });
+        }
+        let payload;
+        try {
+            payload = JSON.parse(page.body);
+        } catch {
+            return res.status(502).json({ error: 'JanitorAI returned something that is not JSON.', code: 'janitor_parse' });
+        }
+        const rows = Array.isArray(payload?.data) ? payload.data
+            : Array.isArray(payload?.characters) ? payload.characters
+                : Array.isArray(payload) ? payload
+                    : [];
+        return res.json({
+            items: rows.map(normalizeJanitorRow).filter(row => row.id),
+            page: Number(query.page) || 1,
+            sort,
+            // The payload carries no total (measured), so a full page is the only
+            // end-of-results signal there is.
+            hasMore: rows.length >= 30,
+        });
+    } catch (error) {
+        console.warn("[Weaver's Vault] janitor search failed:", error.message);
+        return res.status(502).json({ error: error.message, code: 'janitor_search' });
+    }
+});
+
+/**
+ * One card: fetch its detail and say what can be done with it.
+ *
+ * The detail payload is the only honest source of truth. Measured: a
+ * `showdefinition: false` card returns `personality`, `scenario`,
+ * `first_message`, `example_dialogs` and `scripts` as `null` with every
+ * `token_counts.*` at 0, and 0 of 102 cards across three sorts were public. So
+ * this states the classification instead of pretending a closed card is
+ * importable, and turns a public one into the same PNG the import path uses.
+ */
+router.post('/janitor/card', async (req, res) => {
+    const id = String(req.body?.id ?? '').trim();
+    if (!/^[0-9a-f-]{8,}$/i.test(id)) {
+        return res.status(400).json({ error: 'A JanitorAI character id is required.', code: 'janitor_id' });
+    }
+    try {
+        const browser = janitorBrowserFor(req);
+        const auth = await janitorAuthHeaders(browser);
+        const page = await browser.fetchText(janitorCharacterUrl(id), { accept: 'application/json', headers: auth.headers });
+        if (page.challenged || page.status === 403 || page.status === 503) {
+            return res.status(403).json({
+                error: classifyJanitorError({ status: page.status, body: page.body, challenged: true }).message,
+                code: 'janitor_challenge',
+            });
+        }
+        if (page.status === 404) {
+            return res.status(404).json({ error: 'JanitorAI has no character with that id.', code: 'janitor_missing' });
+        }
+        if (page.status < 200 || page.status >= 300) {
+            const classified = classifyJanitorError({ status: page.status, body: page.body });
+            return res.status(502).json({ error: classified.message, code: classified.code });
+        }
+        let payload;
+        try {
+            payload = JSON.parse(page.body);
+        } catch {
+            return res.status(502).json({ error: 'JanitorAI returned something that is not JSON.', code: 'janitor_parse' });
+        }
+        const meta = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+        if (!meta || typeof meta !== 'object' || !String(meta.id ?? '').trim()) {
+            return res.status(404).json({ error: 'JanitorAI returned no character for that id.', code: 'janitor_missing' });
+        }
+
+        const row = normalizeJanitorRow({ ...meta, id: String(meta.id) });
+        const base = {
+            characterId: id,
+            state: janitorCardState(meta),
+            blockReason: janitorBlockReason(meta),
+            row,
+            publicUrl: janitorPublicUrl(id),
+        };
+
+        // A closed definition cannot be read without the capture pipeline, which
+        // does not exist yet; say so instead of returning an empty card.
+        if (!janitorDefinitionPublic(meta)) {
+            return res.json({ ...base, definitionPublic: false, needsCapture: true, meta });
+        }
+
+        const fields = janitorCardFields(meta);
+        let imageBuffer = null;
+        const avatarUrl = String(meta.avatar ?? '').trim();
+        if (avatarUrl) {
+            try {
+                const avatar = await fetch(avatarUrl, { headers: { 'User-Agent': VAULT_UA } });
+                if (avatar.ok) {
+                    const bytes = Buffer.from(await avatar.arrayBuffer());
+                    if (bytes.length > 8 && bytes.subarray(1, 4).toString() === 'PNG') {
+                        imageBuffer = bytes;
+                    } else {
+                        const mime = String(avatar.headers.get('content-type') ?? 'image/webp').split(';')[0];
+                        imageBuffer = await browser.convertImageToPng(`data:${mime};base64,${bytes.toString('base64')}`);
+                    }
+                }
+            } catch (error) {
+                console.warn("[Weaver's Vault] janitor avatar failed:", error.message);
+            }
+        }
+        if (!imageBuffer) {
+            imageBuffer = fs.readFileSync(path.join(serverDirectory, DEFAULT_AVATAR_PATH));
+        }
+        const character = { spec: 'chara_card_v2', spec_version: '2.0', data: fields };
+        const cardBuffer = writeCardChunk(imageBuffer, JSON.stringify(character));
+        return res.json({
+            ...base,
+            definitionPublic: true,
+            needsCapture: false,
+            character,
+            meta,
+            file: {
+                buffer: cardBuffer.toString('base64'),
+                fileName: `${String(fields.name).replace(/[\\/:*?"<>|]/g, '_')}.png`,
+                fileType: 'image/png',
+            },
+            avatarDataUrl: `data:image/png;base64,${cardBuffer.toString('base64')}`,
+        });
+    } catch (error) {
+        if (error instanceof JanitorBrowserUnavailable) {
+            return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+        }
+        console.warn("[Weaver's Vault] janitor card failed:", error.message);
+        return res.status(502).json({ error: error.message, code: 'janitor_card' });
+    }
 });
 
 // ---------------------------------------------------------------------------
