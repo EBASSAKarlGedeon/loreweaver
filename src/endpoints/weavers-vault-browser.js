@@ -222,54 +222,56 @@ function repairExitState(profileDir) {
 }
 
 /**
- * Move the browser windows onto the screen and to the front.
+ * Make our browser windows ordinary windows again (Windows only).
  *
- * The window is parked offscreen *and* marked as a tool window, so it has no
- * taskbar button and cannot be reached — which is what we want until a challenge
- * needs one human click. On those failures the user must be able to see and
- * click it, so this brings it back: normal size, centred, foreground, still a
- * tool window (it disappears from the taskbar again as soon as it closes).
+ * The opposite of `hideProfileWindows`: APPWINDOW set, TOOLWINDOW cleared. A
+ * tool window is right for an unattended session and wrong for one the user has
+ * to type into — it has no taskbar button and does not appear in Alt-Tab, which
+ * reads as "a window I cannot reach".
  * @param {string} profileDir
- * @returns {Promise<number>} windows revealed
+ * @returns {Promise<number>} windows restyled
  */
-function revealProfileWindows(profileDir) {
+function normalizeProfileWindows(profileDir) {
     if (process.platform !== 'win32') return Promise.resolve(-1);
     const base = path.basename(path.resolve(profileDir)).replace(/'/g, "''");
     const script = `
-Add-Type -Namespace Wv -Name V -MemberDefinition @'
+Add-Type -Namespace Wv -Name N -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
 public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll", EntryPoint="GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+[DllImport("user32.dll", EntryPoint="SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
 [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
 '@
-Add-Type -AssemblyName System.Windows.Forms
-$area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$w = [Math]::Min(1200, [int]($area.Width * 0.8))
-$hh = [Math]::Min(860, [int]($area.Height * 0.85))
-$x = [int]($area.X + ($area.Width - $w) / 2)
-$y = [int]($area.Y + ($area.Height - $hh) / 2)
 $pids = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" |
     Where-Object { $_.CommandLine -and $_.CommandLine -like '*${base}*' } |
     ForEach-Object { [uint32]$_.ProcessId })
 if ($pids.Count -eq 0) { Write-Output 0; exit }
 $script:n = 0
-$cb = [Wv.V+EnumWindowsProc]{
+$cb = [Wv.N+EnumWindowsProc]{
     param($h, $l)
     $procId = [uint32]0
-    [void][Wv.V]::GetWindowThreadProcessId($h, [ref]$procId)
-    if ($pids -contains $procId) {
-        [void][Wv.V]::ShowWindow($h, 9)          # SW_RESTORE
-        [void][Wv.V]::SetWindowPos($h, [IntPtr](-1), $x, $y, $w, $hh, 0x40)  # HWND_TOP | SWP_SHOWWINDOW
-        [void][Wv.V]::SetForegroundWindow($h)
-        $script:n++
+    [void][Wv.N]::GetWindowThreadProcessId($h, [ref]$procId)
+    if (($pids -contains $procId) -and [Wv.N]::IsWindowVisible($h)) {
+        $ex = [int64][Wv.N]::GetWindowLongPtr($h, -20)
+        $new = ($ex -bor 0x40000) -band (-bnot 0x80)
+        if ($new -ne $ex) {
+            [void][Wv.N]::SetWindowLongPtr($h, -20, [IntPtr]$new)
+            [void][Wv.N]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+            $script:n++
+        }
     }
     return $true
 }
-[void][Wv.V]::EnumWindows($cb, [IntPtr]::Zero)
+[void][Wv.N]::EnumWindows($cb, [IntPtr]::Zero)
 Write-Output $script:n
 `;
+    return runPowerShellCount(script);
+}
+
+/** Shared runner for the window helpers: last number printed, or -1. */
+function runPowerShellCount(script) {
     return new Promise(resolve => {
         let out = '';
         const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
@@ -281,6 +283,73 @@ Write-Output $script:n
             resolve(Number.isFinite(n) ? n : -1);
         });
     });
+}
+
+/**
+ * Raise our browser window to the foreground.
+ *
+ * Placement is Chrome's job (see `placeWindowOnScreen`); this is only about the
+ * OS deciding which window the user sees. Two measured lessons are baked in:
+ *  - a window with no title is one of Chrome's helpers, and raising those was
+ *    how the user ended up staring at a blank white window, so untitled windows
+ *    are skipped entirely;
+ *  - `SetForegroundWindow` alone is refused when the caller is not the foreground
+ *    app, so the input queues are attached first, which is the documented bypass.
+ * @param {string} profileDir
+ * @param {{titleHint?: string|null}} [options] Prefer windows whose title matches
+ * @returns {Promise<number>} windows raised
+ */
+function raiseProfileWindows(profileDir, { titleHint = null } = {}) {
+    if (process.platform !== 'win32') return Promise.resolve(-1);
+    const base = path.basename(path.resolve(profileDir)).replace(/'/g, "''");
+    const hint = (titleHint ?? '').replace(/'/g, "''");
+    const script = `
+Add-Type -Namespace Wv -Name R -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, System.Text.StringBuilder s, int n);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
+[DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+'@
+$pids = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like '*${base}*' } |
+    ForEach-Object { [uint32]$_.ProcessId })
+if ($pids.Count -eq 0) { Write-Output 0; exit }
+$fg = [Wv.R]::GetForegroundWindow()
+$fgThread = [Wv.R]::GetWindowThreadProcessId($fg, [IntPtr]::Zero)
+$script:n = 0
+$cb = [Wv.R+EnumWindowsProc]{
+    param($h, $l)
+    $procId = [uint32]0
+    [void][Wv.R]::GetWindowThreadProcessId($h, [ref]$procId)
+    if (($pids -contains $procId) -and [Wv.R]::IsWindowVisible($h)) {
+        $sb = New-Object System.Text.StringBuilder 512
+        [void][Wv.R]::GetWindowTextW($h, $sb, 512)
+        $title = $sb.ToString()
+        if ($title -and $title.Trim().Length -gt 0) {
+            if (-not '${hint}' -or $title -like '*${hint}*') {
+                [void][Wv.R]::ShowWindow($h, 9)
+                $myThread = [Wv.R]::GetWindowThreadProcessId($h, [IntPtr]::Zero)
+                [void][Wv.R]::AttachThreadInput($fgThread, $myThread, $true)
+                [void][Wv.R]::BringWindowToTop($h)
+                [void][Wv.R]::SetForegroundWindow($h)
+                [void][Wv.R]::AttachThreadInput($fgThread, $myThread, $false)
+                $script:n++
+            }
+        }
+    }
+    return $true
+}
+[void][Wv.R]::EnumWindows($cb, [IntPtr]::Zero)
+Write-Output $script:n
+`;
+    return runPowerShellCount(script);
 }
 
 /**
@@ -434,6 +503,9 @@ export class VaultBrowser {
     /** Give the session back to the idle teardown. */
     release() {
         this.holdUntil = 0;
+        // The human step is done, so the window goes back offscreen; otherwise a
+        // signed-in session leaves a normal window on the desktop.
+        this.park().catch(() => {});
         this.scheduleIdleShutdown();
     }
 
@@ -529,14 +601,78 @@ export class VaultBrowser {
     async reveal() {
         await this.ensureStarted();
         await this.focusPage();
-        const revealed = await revealProfileWindows(this.profileDir);
-        // Showing the window must not put it back in the taskbar: the tool-window
-        // style only affects the shell's lists, so the user can still see and
-        // click it while it stays out of the taskbar (measured: revealing alone
-        // gave it a button again).
-        await hideProfileWindows(this.profileDir);
-        this.taskbarHidden = true;
-        return { revealed, running: this.isRunning() };
+        // Chrome places its own window. Moving a window that was born at
+        // -32000,-32000 with SetWindowPos leaves the compositor holding a stale
+        // surface: the renderer paints (verified: first-contentful-paint, a 44 kB
+        // frame) while the window itself stays blank white. `Browser.setWindowBounds`
+        // goes through Chrome's own window management, which rebuilds the surface.
+        const placed = await this.placeWindowOnScreen();
+        // A window the user must type into has to behave like a normal window.
+        await normalizeProfileWindows(this.profileDir);
+        this.taskbarHidden = false;
+        const raised = await raiseProfileWindows(this.profileDir, { titleHint: 'janitor' });
+        // Belt and braces for the stale surface: a one-pixel resize forces Chrome
+        // to reallocate the compositor's output.
+        await this.nudgeWindowSize();
+        await this.focusPage();
+        return { revealed: placed ? 1 : 0, raised, running: this.isRunning() };
+    }
+
+    /**
+     * Ask Chrome to put its window on screen, in front, at a usable size.
+     * @returns {Promise<boolean>} whether a bound was applied
+     */
+    async placeWindowOnScreen() {
+        if (!this.page) return false;
+        try {
+            const size = await this.page.evaluate(
+                '({ w: Math.min(1280, screen.availWidth - 80), h: Math.min(900, screen.availHeight - 80) })',
+                { awaitPromise: false, timeoutMs: 5_000 },
+            );
+            const width = Math.max(600, Math.round(Number(size?.w) || 1200));
+            const height = Math.max(500, Math.round(Number(size?.h) || 820));
+            const { windowId } = await this.page.send('Browser.getWindowForTarget', {});
+            // `normal` first: a maximised or minimised window ignores left/top.
+            await this.page.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+            await this.page.send('Browser.setWindowBounds', {
+                windowId,
+                bounds: { left: 40, top: 40, width, height },
+            });
+            this.windowId = windowId;
+            return true;
+        } catch (error) {
+            this.logger.warn?.(`[Weaver's Vault] ${this.label}: could not place the window (${error.message})`);
+            return false;
+        }
+    }
+
+    /** One-pixel resize there and back: forces a fresh compositor surface. */
+    async nudgeWindowSize() {
+        if (!this.page || !this.windowId) return;
+        try {
+            const { bounds } = await this.page.send('Browser.getWindowBounds', { windowId: this.windowId });
+            const width = Math.max(600, Number(bounds?.width) || 1200);
+            const height = Math.max(500, Number(bounds?.height) || 820);
+            const left = Number(bounds?.left) || 40;
+            const top = Number(bounds?.top) || 40;
+            await this.page.send('Browser.setWindowBounds', { windowId: this.windowId, bounds: { left, top, width: width - 1, height } });
+            await new Promise(r => setTimeout(r, 120));
+            await this.page.send('Browser.setWindowBounds', { windowId: this.windowId, bounds: { left, top, width, height } });
+        } catch { /* cosmetic */ }
+    }
+
+    /**
+     * Park the window again after a human step finishes: offscreen, out of the
+     * taskbar, so a lingering session is invisible.
+     * @returns {Promise<void>}
+     */
+    async park() {
+        if (!this.page || !this.windowId) return;
+        try {
+            await this.page.send('Browser.setWindowBounds', { windowId: this.windowId, bounds: { left: -32000, top: -32000 } });
+        } catch { /* cosmetic */ }
+        this.taskbarHidden = false;
+        await this.hideWindow();
     }
 
     /**
@@ -598,6 +734,10 @@ export class VaultBrowser {
             '--no-first-run',
             '--no-default-browser-check',
             '--disable-blink-features=AutomationControlled',
+            // Chrome shows an "unsupported command-line flag" infobar for the flag
+            // above, which looks like a broken browser in a window the user is
+            // meant to type into. `--test-type` suppresses exactly that banner.
+            '--test-type',
             '--disable-background-timer-throttling',
             '--disable-renderer-backgrounding',
             // An unfocused or covered window throttles its timers, which stalls
