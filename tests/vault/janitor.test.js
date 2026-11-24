@@ -3,7 +3,9 @@ import {
     JANITOR_SORTS,
     classifyJanitorError,
     janitorAccount,
+    janitorAvatarUrl,
     janitorBlockReason,
+    janitorCardCharacter,
     janitorCardFields,
     janitorCardState,
     janitorCharacterUrl,
@@ -39,6 +41,52 @@ function closedCard() {
         stats: { chat: 458, message: 4401 },
     };
 }
+
+/** The same payload with a visible definition (measured: the first trending row). */
+function publicMeta() {
+    return {
+        ...closedCard(),
+        showdefinition: true,
+        personality: 'the <strong>public</strong> definition body',
+        first_message: 'hello',
+        first_messages: ['hello', 'second greeting'],
+        scenario: 'a room',
+    };
+}
+
+describe('janitorAvatarUrl', () => {
+    test('resolves the bare CDN key the payload actually carries', () => {
+        // Measured: `avatar` is "OGVQcCrx4bguJ-8eKoXm9.webp", not a URL. Fetched
+        // as-is it threw and every card silently took the default avatar.
+        expect(janitorAvatarUrl('OGVQcCrx4bguJ-8eKoXm9.webp'))
+            .toBe('https://ella.janitorai.com/bot-avatars/OGVQcCrx4bguJ-8eKoXm9.webp?width=400');
+        expect(janitorAvatarUrl('https://cdn.example/x.webp')).toBe('https://cdn.example/x.webp');
+        expect(janitorAvatarUrl('/user-avatars/a.png')).toBe('https://ella.janitorai.com/user-avatars/a.png?width=400');
+        expect(janitorAvatarUrl('bot-avatars/deep/x.webp')).toBe('https://ella.janitorai.com/bot-avatars/deep/x.webp?width=400');
+        expect(janitorAvatarUrl('')).toBe('');
+        expect(janitorAvatarUrl(null)).toBe('');
+    });
+
+    test('a listing row exposes the resolved URL, not the key', () => {
+        expect(normalizeJanitorRow({ id: 'x', avatar: 'abc.webp' }).avatar)
+            .toBe('https://ella.janitorai.com/bot-avatars/abc.webp?width=400');
+    });
+});
+
+describe('janitorCardCharacter', () => {
+    test('carries its own provenance inside the card, like the janny path', () => {
+        const card = janitorCardCharacter({ ...publicMeta(), id: '1f452a1d-8d88-4065-83b3-d7697c7aad35' }, { retrievedAt: '2026-11-24T00:00:00.000Z' });
+        expect(card.spec).toBe('chara_card_v2');
+        expect(card.data.extensions.vault_source).toBe('janitor');
+        expect(card.data.extensions.vault_url).toBe('https://janitorai.com/characters/1f452a1d-8d88-4065-83b3-d7697c7aad35');
+        expect(card.data.extensions.vault_full_path).toBe('1f452a1d-8d88-4065-83b3-d7697c7aad35');
+        expect(card.data.extensions.janitor.retrievedAt).toBe('2026-11-24T00:00:00.000Z');
+        // The body is the definition, never the listing bio.
+        expect(card.data.description).toContain('public');
+        expect(card.data.creator_notes).toContain('a public bio');
+        expect(card.data.personality).toBe('');
+    });
+});
 
 describe('normalizeJanitorRow', () => {
     test('reads a token count from a detail payload, which only has token_counts', () => {

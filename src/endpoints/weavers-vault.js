@@ -36,6 +36,8 @@ import {
     JANITOR_LOGIN_URL,
     classifyJanitorError,
     janitorBlockReason,
+    janitorAvatarUrl,
+    janitorCardCharacter,
     janitorCardFields,
     janitorCardState,
     janitorCharacterUrl,
@@ -804,7 +806,9 @@ router.post('/janitor/card', async (req, res) => {
 
         const fields = janitorCardFields(meta);
         let imageBuffer = null;
-        const avatarUrl = String(meta.avatar ?? '').trim();
+        // `meta.avatar` is a bare CDN key, so it has to be resolved before it can
+        // be fetched (fetching the key threw and every card fell back to default).
+        const avatarUrl = janitorAvatarUrl(meta.avatar ?? meta.image);
         if (avatarUrl) {
             try {
                 const avatar = await fetch(avatarUrl, { headers: { 'User-Agent': VAULT_UA } });
@@ -824,7 +828,9 @@ router.post('/janitor/card', async (req, res) => {
         if (!imageBuffer) {
             imageBuffer = fs.readFileSync(path.join(serverDirectory, DEFAULT_AVATAR_PATH));
         }
-        const character = { spec: 'chara_card_v2', spec_version: '2.0', data: fields };
+        // Provenance rides inside the PNG (vault_source/vault_url), exactly as the
+        // JannyAI path does, so nothing re-stamps the card after import.
+        const character = janitorCardCharacter(meta, { avatarUrl, retrievedAt: new Date().toISOString() });
         const cardBuffer = writeCardChunk(imageBuffer, JSON.stringify(character));
         return res.json({
             ...base,

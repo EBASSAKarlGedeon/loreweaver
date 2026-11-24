@@ -77,6 +77,28 @@ export function janitorCharacterUrl(id) {
     return `${JANITOR_API}/characters/${clean}`;
 }
 
+export const JANITOR_IMAGE_BASE = 'https://ella.janitorai.com/bot-avatars/';
+
+/**
+ * Resolve a card's avatar to a URL.
+ *
+ * The payload's `avatar` is a bare CDN key (`"OGVQcCrx4bguJ-8eKoXm9.webp"`), not
+ * a URL — fetched as-is it throws, which silently fell back to the default
+ * avatar for every card. Glaze's `resolveJanitorAvatar` is the contract:
+ * `http…` unchanged, leading `/` under the CDN root, no slash under
+ * `/bot-avatars/`, anything else under the CDN root, all with `?width=400`.
+ * @param {unknown} avatar
+ * @returns {string} a URL, or '' when there is no avatar
+ */
+export function janitorAvatarUrl(avatar) {
+    const raw = String(avatar ?? '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/')) return `https://ella.janitorai.com${raw}?width=400`;
+    if (!raw.includes('/')) return `${JANITOR_IMAGE_BASE}${raw}?width=400`;
+    return `https://ella.janitorai.com/${raw}?width=400`;
+}
+
 /** @returns {string} the public page a user would open in a browser. */
 export function janitorPublicUrl(id) {
     return `https://janitorai.com/characters/${String(id ?? '').trim()}`;
@@ -225,6 +247,48 @@ export function janitorCardFields(meta, { body = '' } = {}) {
 }
 
 /**
+ * The finished card, provenance included.
+ *
+ * The provenance rides *inside* the PNG the same way it does for JannyAI: the
+ * import path then never has to stamp afterwards, and stamping is precisely
+ * where imports used to get blanked (see PITFALLS). `vault_url` is the canonical
+ * public page, so a provenance-based cleanup can match one file exactly.
+ * @param {Record<string, any>} meta detail payload
+ * @param {{body?: string, avatarUrl?: string, retrievedAt?: string}} [options]
+ * @returns {{spec: string, spec_version: string, data: Record<string, any>}}
+ */
+export function janitorCardCharacter(meta, { body = '', avatarUrl = '', retrievedAt = new Date().toISOString() } = {}) {
+    const id = String(meta?.id ?? '').trim();
+    const fields = janitorCardFields(meta, { body });
+    const counts = meta?.token_counts && typeof meta.token_counts === 'object' ? meta.token_counts : {};
+    return {
+        spec: 'chara_card_v2',
+        spec_version: '2.0',
+        data: {
+            ...fields,
+            system_prompt: '',
+            post_history_instructions: '',
+            character_book: null,
+            character_version: '',
+            extensions: {
+                vault_source: 'janitor',
+                vault_full_path: id,
+                vault_url: janitorPublicUrl(id),
+                janitor: {
+                    characterId: id,
+                    creatorId: fields.creatorId,
+                    totalTokens: Number(counts.total_tokens ?? meta?.total_tokens ?? 0) || 0,
+                    showDefinition: meta?.showdefinition === true,
+                    proxyEnabled: (meta?.is_proxy_enabled ?? meta?.allow_proxy) !== false,
+                    avatarUrl: String(avatarUrl || meta?.avatar || ''),
+                    retrievedAt,
+                },
+            },
+        },
+    };
+}
+
+/**
  * Read the signed-in account out of `/hampter/profiles/mine`.
  *
  * Verified shape (measured): the payload is an object with `id`/`handle`/`name`
@@ -316,7 +380,7 @@ export function normalizeJanitorRow(row) {
         url: janitorPublicUrl(id),
         // Public bio, HTML: the converter keeps its formatting for creator notes.
         blurb: String(source.description ?? '').slice(0, 600),
-        avatar: String(source.avatar ?? ''),
+        avatar: janitorAvatarUrl(source.avatar ?? source.image),
         creator: String(source.creator_name ?? source.creator ?? ''),
         creatorId: String(source.creator_id ?? ''),
         tags: cardTags,
