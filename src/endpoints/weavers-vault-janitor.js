@@ -490,3 +490,281 @@ export function normalizeJanitorRow(row) {
         proxyEnabled: (source.is_proxy_enabled ?? source.allow_proxy) !== false,
     };
 }
+
+// ─── Lorebooks (`scripts[]`) — S8 ────────────────────────────────────────────
+//
+// Measured 2026-11-26, 15 requests total. A character's `scripts[]` entry:
+//
+//   {"type":"lorebook","id":"47c1eed5-f087-4777-a8ed-e37f0c3990b5",
+//    "title":"Heroes and Villains","description":"Information about heroes and
+//    Villains in this RPG","theme":"red","user_id":"…","user_name":"1Reika2",
+//    "is_public":true,"updated_at":"2026-08-08T18:57:45.762+00:00",
+//    "message_count":51336}
+//
+// and `GET /hampter/script/{id}` answers 200 with a `script` field that is a
+// JSON **array inside a string**; its entries carry
+// `category,content,enabled,id,key,keysRaw,minMessages,priority,probability,
+//  insertion_order,keywordsRaw,constant`.
+//
+// Two measured facts drive the classification below:
+//   * `is_public:false` books cannot be downloaded — the same route answers
+//     404 {"message":"script not found"} — so they are closed, and no request
+//     is spent proving it.
+//   * a transport failure is NOT a closed book. Glaze's `!accessible && !isJs`
+//     folds every failure into "private"; here a failure stays a failure with
+//     its reason, so the UI can say what broke.
+
+/** Script `type`s that denote a lorebook (measured: `lorebook`; `advanced` is
+ *  Glaze's newer Nine-API shape and is kept so it is classified, not dropped). */
+export const JANITOR_SCRIPT_TYPES = Object.freeze(['lorebook', 'advanced']);
+
+/**
+ * The lorebook references attached to a character.
+ * @param {any} meta a `/hampter/characters/{id}` payload
+ * @returns {Array<{id: string, title: string, description: string, type: string, isPublic: boolean}>}
+ */
+export function janitorLorebookRefs(meta) {
+    const scripts = meta?.scripts;
+    // A card with no books sends `scripts: []` (measured); a closed card may
+    // send null. Both mean "no books".
+    if (!Array.isArray(scripts)) return [];
+    const seen = new Set();
+    const out = [];
+    for (const script of scripts) {
+        if (!script || typeof script !== 'object') continue;
+        const id = String(script.id ?? '').trim();
+        if (!id || seen.has(id)) continue;
+        const type = String(script.type ?? '').trim().toLowerCase();
+        if (!JANITOR_SCRIPT_TYPES.includes(type)) continue;
+        seen.add(id);
+        out.push({
+            id,
+            title: String(script.title ?? '').trim(),
+            description: String(script.description ?? '').trim(),
+            type,
+            // Guard against a site that sends 0/1 or "true" instead of a boolean.
+            isPublic: script.is_public !== false && script.is_public !== 0 && script.is_public !== 'false',
+        });
+    }
+    return out;
+}
+
+/** Keys of a JanitorAI entry, in the order Glaze accepts them. */
+function janitorKeysOf(value) {
+    if (Array.isArray(value)) {
+        return value.map(k => String(k ?? '').trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+        return value.split(',').map(k => k.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function janitorNumberOf(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Pull the entries (or the JavaScript source) out of a `/hampter/script/{id}`
+ * record. Measured: `script` is a string holding a JSON array. A "advanced" /
+ * Nine-API book ships JavaScript instead — that shape is UNMEASURED, so it is
+ * detected defensively (anything non-JSON is treated as source) rather than
+ * assumed.
+ * @param {any} record
+ * @returns {{entries: any[], jsSource: string}}
+ */
+export function janitorScriptEntries(record) {
+    const raw = record?.script;
+    if (Array.isArray(raw)) return { entries: raw, jsSource: '' };
+    if (typeof raw !== 'string') return { entries: [], jsSource: '' };
+    const text = raw.trim();
+    if (!text) return { entries: [], jsSource: '' };
+    try {
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? { entries: parsed, jsSource: '' } : { entries: [], jsSource: '' };
+    } catch {
+        // Not JSON: script source (the scripted/advanced path).
+        return { entries: [], jsSource: text };
+    }
+}
+
+/**
+ * Classify one lorebook reference against its fetch result.
+ *
+ * `kind` is one of:
+ *   `public`   — structured entries, convertible with no LLM
+ *   `scripted` — public source that is JavaScript; needs an LLM rebuild
+ *   `closed`   — the site says we cannot have it (private, or empty)
+ *   `failed`   — we could not find out; `reason` says what broke
+ *
+ * `failed` is never collapsed into `closed`: a transport error is reported as a
+ * transport error. Glaze's `!accessible && !isJs` hides exactly this.
+ * @param {{id: string, title: string, isPublic: boolean}} ref
+ * @param {{status?: number, body?: string, challenged?: boolean, error?: Error|string|null}} [result]
+ * @returns {{id: string, title: string, kind: 'public'|'scripted'|'closed'|'failed',
+ *            reason: string, entries: any[], jsSource: string, entryCount: number}}
+ */
+export function classifyJanitorLorebook(ref, result = {}) {
+    const base = {
+        id: String(ref?.id ?? ''),
+        title: String(ref?.title ?? '').trim(),
+        entries: [],
+        jsSource: '',
+        entryCount: 0,
+    };
+    // Known-private books are closed on the ref's own word — no request spent.
+    if (ref?.isPublic === false) return { ...base, kind: 'closed', reason: 'private' };
+
+    const status = Number(result?.status ?? 0);
+    const body = String(result?.body ?? '');
+
+    if (result?.error || status === -1) {
+        return { ...base, kind: 'failed', reason: 'transport' };
+    }
+    if (result?.challenged) {
+        return { ...base, kind: 'failed', reason: 'challenge' };
+    }
+    if (status === 401 || status === 403) {
+        // A public book must not need an identity: this is our session, not the book.
+        return { ...base, kind: 'failed', reason: 'signed-out' };
+    }
+    if (status === 429) {
+        return { ...base, kind: 'failed', reason: 'rate-limited' };
+    }
+    if (status === 404) {
+        // Measured bodies: a record we may not have is
+        // {"message":"script not found","statusCode":404} (47 bytes), a missing
+        // route is Express's "Cannot GET …". Either way a *public* ref that 404s
+        // is a contract failure, never "closed".
+        const denied = /script not found/i.test(body);
+        return { ...base, kind: 'failed', reason: denied ? 'script-denied' : 'script-missing' };
+    }
+    if (status < 200 || status >= 300) {
+        return { ...base, kind: 'failed', reason: status >= 500 ? 'server' : `http-${status}` };
+    }
+
+    let record = null;
+    try {
+        record = JSON.parse(body);
+    } catch {
+        return { ...base, kind: 'failed', reason: 'unparseable' };
+    }
+
+    const { entries, jsSource } = janitorScriptEntries(record);
+    if (jsSource) return { ...base, kind: 'scripted', reason: '', jsSource };
+    const usable = entries.filter(entry => String(entry?.content ?? entry?.text ?? '').trim());
+    if (!usable.length) {
+        // The site answered and the book has nothing to convert.
+        return { ...base, kind: 'closed', reason: 'no-entries' };
+    }
+    return {
+        ...base,
+        kind: 'public',
+        reason: '',
+        entries,
+        entryCount: usable.length,
+        // Measured: the ref already carries the description, so the book's own
+        // HTML page (which Glaze fetches and double-decodes) is not needed.
+        description: String(record?.description ?? '').trim() || String(ref?.description ?? '').trim(),
+    };
+}
+
+/**
+ * `<character> — <book>`, the World Info name the plan asks for.
+ * @param {string} characterName
+ * @param {string} bookTitle
+ * @returns {string}
+ */
+export function janitorLorebookName(characterName, bookTitle) {
+    const character = String(characterName ?? '').trim();
+    const book = String(bookTitle ?? '').trim();
+    if (!character) return book || 'JanitorAI Lorebook';
+    if (!book) return character;
+    return `${character} — ${book}`;
+}
+
+/**
+ * Where a JanitorAI entry goes, in characterBook vocabulary (`before_char` /
+ * `after_char`) — what `convertCharacterBook` understands.
+ *
+ * Measured entries carry neither `position` nor `placement`, so the default is
+ * "after". `placement`/`placementPosition` are honoured when a book sends them
+ * (they write the entry into a card field; the nearest SillyTavern slot is the
+ * same side of the definition). Depth is not expressible in a characterBook
+ * entry, so an `at_depth` position degrades to "after" — as in Glaze's converter.
+ */
+function janitorCharacterBookPosition(entry) {
+    const placement = entry?.placement;
+    if (placement != null && placement !== 'default') {
+        return String(entry?.placementPosition ?? '').toLowerCase() === 'before'
+            ? 'before_char'
+            : 'after_char';
+    }
+    const position = entry?.position;
+    if (typeof position === 'number') {
+        return [0, 2, 4].includes(position) ? 'before_char' : 'after_char';
+    }
+    if (typeof position === 'string') {
+        const p = position.toLowerCase();
+        if (p === 'before_char' || p === 'before_character') return 'before_char';
+    }
+    return 'after_char';
+}
+
+/**
+ * JanitorAI script entries → a characterBook-shaped book.
+ *
+ * The shape is deliberate: the client feeds this to the host's own
+ * `convertCharacterBook` (world-info.js:5498) and then `saveWorldInfo`, exactly
+ * as the chub lorebook path does. SillyTavern's entry template therefore stays
+ * the single source of truth for what a World Info entry contains — a hand-built
+ * entry would silently miss every field ST adds next.
+ *
+ * `id` is assigned by index: JanitorAI entry ids are UUIDs (measured), while
+ * `convertCharacterBook` uses `entry.id` as the numeric `uid`.
+ * @param {any[]} entries
+ * @param {{name?: string}} [options]
+ * @returns {{name: string, entries: object[]}}
+ */
+export function janitorScriptToCharacterBook(entries, { name = '' } = {}) {
+    const out = [];
+    const source = Array.isArray(entries) ? entries : [];
+    for (const entry of source) {
+        if (!entry || typeof entry !== 'object') continue;
+        const content = String(entry.content ?? entry.text ?? '').trim();
+        if (!content) continue;
+        const constant = entry.constant === true;
+        const rawProbability = janitorNumberOf(entry.probability);
+        // JanitorAI sends 100; older books send a fraction. The contract is
+        // 0-100 either way (the same rule Glaze applies).
+        const probability = rawProbability == null
+            ? 100
+            : Math.max(0, Math.min(100, rawProbability > 0 && rawProbability <= 1
+                ? Math.round(rawProbability * 100)
+                : Math.round(rawProbability)));
+        const index = out.length;
+        const extensions = { display_index: index };
+        if (rawProbability != null) extensions.probability = probability;
+        if (entry.case_sensitive !== undefined) extensions.case_sensitive = entry.case_sensitive === true;
+        if (entry.match_whole_words !== undefined) extensions.match_whole_words = entry.match_whole_words === true;
+        if (entry.prevent_recursion !== undefined) extensions.prevent_recursion = entry.prevent_recursion === true;
+        if (entry.exclude_recursion !== undefined) extensions.exclude_recursion = entry.exclude_recursion === true;
+
+        out.push({
+            id: index,
+            keys: janitorKeysOf(entry.key ?? entry.keys ?? entry.keysRaw ?? entry.keywords),
+            secondary_keys: janitorKeysOf(entry.keysecondary ?? entry.secondary_keys ?? entry.keySecondary),
+            comment: String(entry.comment ?? entry.title ?? entry.name ?? entry.category ?? `Entry ${index}`).trim(),
+            content,
+            enabled: entry.enabled !== false && entry.disable !== true,
+            constant,
+            selective: !constant,
+            insertion_order: janitorNumberOf(entry.insertion_order ?? entry.priority ?? entry.order) ?? 100,
+            position: janitorCharacterBookPosition(entry),
+            extensions,
+        });
+    }
+    return { name: String(name ?? ''), entries: out };
+}
+
