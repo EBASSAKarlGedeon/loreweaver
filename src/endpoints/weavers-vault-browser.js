@@ -485,6 +485,8 @@ export class VaultBrowser {
         this.targets = new Map();
         /** Epoch ms until which the idle teardown must not fire. */
         this.holdUntil = 0;
+        /** A hold that only its own deadline can end (a human mid-form). */
+        this.stickyHold = false;
         /** Identifiers of document-start scripts currently installed. */
         this.initScripts = [];
     }
@@ -497,14 +499,30 @@ export class VaultBrowser {
      * survives until `release()` or the hold expires.
      * @param {number} [ttlMs]
      */
-    hold(ttlMs = 15 * 60_000) {
+    /**
+     * Keep the session alive for a human step.
+     *
+     * A normal hold is cancelled by `release()`, which is what the sign-in flow
+     * wants: hold while the login page is up, release once it worked. A *sticky*
+     * hold lasts until its own deadline no matter what other requests say — a form
+     * a human is filling must not close because a status poll called `release()`
+     * (measured: `/janitor/account` did exactly that and killed the window 30 s
+     * after the persona wall was shown).
+     * @param {number} ttlMs
+     * @param {{sticky?: boolean}} options
+     */
+    hold(ttlMs = 15 * 60_000, { sticky = false } = {}) {
         this.holdUntil = Date.now() + Math.max(1_000, Number(ttlMs) || 0);
+        this.stickyHold = Boolean(sticky);
         this.scheduleIdleShutdown();
     }
 
     /** Give the session back to the idle teardown. */
     release() {
+        // A sticky hold belongs to a human mid-task; only its deadline ends it.
+        if (this.stickyHold && Date.now() < this.holdUntil) return;
         this.holdUntil = 0;
+        this.stickyHold = false;
         // The human step is done, so the window goes back offscreen; otherwise a
         // signed-in session leaves a normal window on the desktop.
         this.park().catch(() => {});
@@ -1204,6 +1222,7 @@ export class VaultBrowser {
         this.port = null;
         this.taskbarHidden = false;
         this.holdUntil = 0;
+        this.stickyHold = false;
 
         // Ask nicely first: a killed browser marks the profile as crashed and the
         // next launch shows "Restore pages? Chrome didn't shut down correctly."

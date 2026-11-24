@@ -944,7 +944,9 @@ router.post('/janitor/capture', async (req, res) => {
             // keep it alive instead of handing back an error the user cannot act on.
             try {
                 await captureBrowser?.reveal();
-                captureBrowser?.hold(20 * 60_000);
+                // Sticky: the human is about to type into that window, and any
+                // status poll calling release() must not close it under them.
+                captureBrowser?.hold(20 * 60_000, { sticky: true });
             } catch { /* the message still explains the task */ }
             return res.status(409).json({ error: error.message, code: 'janitor_profile_required', phases });
         }
