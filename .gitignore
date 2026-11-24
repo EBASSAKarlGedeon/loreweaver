@@ -26,6 +26,8 @@ public/stats.json
 /docker/user
 /docker/extensions
 /docker/data
+# e2e data snapshots must never be committed: they carry real character cards
+/data-*-e2e
 /docker/dist
 .DS_Store
 public/settings.json
