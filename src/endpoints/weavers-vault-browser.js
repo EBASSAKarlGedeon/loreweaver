@@ -414,6 +414,27 @@ export class VaultBrowser {
         this.pending = 0;
         this.idleTimer = null;
         this.targets = new Map();
+        /** Epoch ms until which the idle teardown must not fire. */
+        this.holdUntil = 0;
+    }
+
+    /**
+     * Keep the session alive across a human step (sign-in, a manual check).
+     *
+     * The idle TTL is 30 s, which is right for a fetch and wrong for a Google
+     * login: measured, the window closed before it could be used. A held session
+     * survives until `release()` or the hold expires.
+     * @param {number} [ttlMs]
+     */
+    hold(ttlMs = 15 * 60_000) {
+        this.holdUntil = Date.now() + Math.max(1_000, Number(ttlMs) || 0);
+        this.scheduleIdleShutdown();
+    }
+
+    /** Give the session back to the idle teardown. */
+    release() {
+        this.holdUntil = 0;
+        this.scheduleIdleShutdown();
     }
 
     /** Serialize every request, exactly like Glaze's `_gate`. */
@@ -434,34 +455,43 @@ export class VaultBrowser {
     scheduleIdleShutdown() {
         if (this.pending > 0) return;
         if (this.idleTimer) clearTimeout(this.idleTimer);
+        const held = Math.max(0, this.holdUntil - Date.now());
         this.idleTimer = setTimeout(() => {
-            if (this.pending === 0) this.dispose().catch(() => {});
-        }, IDLE_TTL_MS);
+            if (this.pending !== 0) return;
+            // A hold that expired while this timer ran is no hold at all.
+            if (this.holdUntil > Date.now()) {
+                this.scheduleIdleShutdown();
+                return;
+            }
+            this.dispose().catch(() => {});
+        }, IDLE_TTL_MS + held);
         this.idleTimer.unref?.();
     }
 
     /**
      * GET a URL from inside the parked page.
      * @param {string} url
+     * @param {{accept?: string, timeoutMs?: number}} [options] `accept` must be
+     *   the type the endpoint serves: JanitorAI's API is JSON.
      * @returns {Promise<{status: number, body: string, challenged: boolean}>}
      */
-    fetchText(url) {
+    fetchText(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000 } = {}) {
         return this.enqueue(async () => {
             await this.ensureStarted();
-            let result = await this.rawFetch(url);
+            let result = await this.rawFetch(url, { accept, timeoutMs });
             if (result.challenged) {
                 this.logger.warn?.(`[Weaver's Vault] ${this.label}: challenge on fetch — reloading session`);
                 await this.reload();
-                result = await this.rawFetch(url);
+                result = await this.rawFetch(url, { accept, timeoutMs });
             }
             return result;
         });
     }
 
-    async rawFetch(url) {
+    async rawFetch(url, { accept = 'text/html,application/xhtml+xml,*/*', timeoutMs = 40_000 } = {}) {
         const expression = `(() => {
             return fetch(${JSON.stringify(url)}, {
-                headers: { "Accept": "text/html,application/xhtml+xml,*/*" },
+                headers: { "Accept": ${JSON.stringify(accept)} },
                 credentials: "include",
             }).then(async r => ({
                 status: r.status,
@@ -470,7 +500,7 @@ export class VaultBrowser {
             })).catch(e => ({ status: -1, body: String(e), challenged: false }));
         })()`;
         try {
-            const value = await this.page.evaluate(expression, { timeoutMs: 40_000 });
+            const value = await this.page.evaluate(expression, { timeoutMs });
             const status = Number(value?.status ?? -1);
             const body = String(value?.body ?? '');
             const challenged = value?.challenged === true
@@ -807,6 +837,25 @@ export class VaultBrowser {
         await session.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
     }
 
+    /**
+     * Move the parked page to another URL on the same origin and wait for it.
+     * Used by the sign-in flow (the browser is parked on the origin, sign-in
+     * lives at `/login`).
+     * @param {string} url
+     * @returns {Promise<boolean>} whether the page became ready
+     */
+    async navigate(url) {
+        await this.enqueue(async () => {
+            await this.ensureStarted();
+            try {
+                await this.page.evaluate(`location.href = ${JSON.stringify(url)}`, { awaitPromise: false, timeoutMs: 10_000 });
+            } catch { /* navigation destroys the context */ }
+            await new Promise(r => setTimeout(r, 800));
+            await this.waitForPage();
+        });
+        return Boolean(this.page);
+    }
+
     /** Re-run the managed challenge from the origin (Glaze's `_reload`). */
     async reload() {
         if (!this.page) return;
@@ -830,6 +879,7 @@ export class VaultBrowser {
         this.child = null;
         this.port = null;
         this.taskbarHidden = false;
+        this.holdUntil = 0;
 
         // Ask nicely first: a killed browser marks the profile as crashed and the
         // next launch shows "Restore pages? Chrome didn't shut down correctly."

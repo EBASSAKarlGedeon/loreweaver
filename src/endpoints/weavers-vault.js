@@ -31,6 +31,19 @@ import {
 } from './weavers-vault-janny.js';
 import { JannyBrowserUnavailable, disposeJannyBrowser, findBrowserBinary, getJannyBrowser } from './weavers-vault-janny-browser.js';
 import { loadJannyTagCatalog } from './weavers-vault-janny-tags.js';
+import {
+    JANITOR_ORIGIN,
+    JANITOR_LOGIN_URL,
+    classifyJanitorError,
+    janitorCardState,
+    janitorPublicUrl,
+} from './weavers-vault-janitor.js';
+import {
+    disposeJanitorBrowser,
+    findBrowserBinary as findJanitorBrowserBinary,
+    getJanitorBrowser,
+    readJanitorAccount,
+} from './weavers-vault-janitor-browser.js';
 import { resolveJannyTagIds } from './weavers-vault-janny.js';
 
 /**
@@ -310,6 +323,19 @@ function jannyProfileDir() {
     return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janny-profile');
 }
 
+// JanitorAI's profile lives beside jannyai's, at the data root, for the same
+// reason: sync walks `data/default-user`, and a Chrome profile must never be in it.
+function janitorProfileDir() {
+    return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janitor-profile');
+}
+
+function janitorBrowserFor(req) {
+    return getJanitorBrowser({
+        profileDir: path.resolve(janitorProfileDir()),
+        chromePath: String(req.user?.settings?.vaultJanitorBrowserPath ?? '').trim() || null,
+    });
+}
+
 /** Tag labels are cached beside the profile, outside every sync handle. */
 function jannyTagCachePath() {
     return path.join(globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'), '_vault-janny-tags.json');
@@ -543,6 +569,78 @@ router.post('/janny/browser/focus', async (req, res) => {
 
 router.post('/janny/browser/close', async (req, res) => {
     await disposeJannyBrowser();
+    await disposeJanitorBrowser();
+    res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// JanitorAI (janitorai.com). Reads are plain JSON over the browser session; the
+// account and the /generateAlpha capture are why that session exists at all.
+// ---------------------------------------------------------------------------
+
+router.get('/janitor/status', async (req, res) => {
+    const browserPath = findJanitorBrowserBinary();
+    const base = {
+        ok: Boolean(browserPath),
+        browserPath,
+        profileDir: path.resolve(janitorProfileDir()),
+        origin: JANITOR_ORIGIN,
+        signedIn: false,
+        account: '',
+        note: browserPath
+            ? 'JanitorAI needs a browser session for sign-in and for recovering closed definitions.'
+            : 'No Chrome/Edge binary found — set vaultJanitorBrowserPath or JANITOR_BROWSER_PATH.',
+    };
+    if (!browserPath) return res.json(base);
+    // Only report an account when a session is already up: starting a browser to
+    // answer a status probe would cost 3-10 s on every panel open.
+    const browser = janitorBrowserFor(req);
+    if (!browser.isRunning()) return res.json({ ...base, running: false });
+    try {
+        const account = await readJanitorAccount(browser);
+        return res.json({ ...base, running: true, signedIn: account.signedIn, account: account.name });
+    } catch (error) {
+        return res.json({ ...base, running: true, note: `Browser session error: ${error.message}` });
+    }
+});
+
+/** Ask the signed-in account — starts the browser when needed. */
+router.get('/janitor/account', async (req, res) => {
+    try {
+        const browser = janitorBrowserFor(req);
+        const account = await readJanitorAccount(browser);
+        // Signed in: the window has done its job, hand the session back.
+        if (account.signedIn) browser.release();
+        return res.json({ ok: true, ...account });
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+    }
+});
+
+/**
+ * Show the window so the user can sign in.
+ *
+ * The window is parked offscreen and has no taskbar button, so this both reveals
+ * it and moves it to /login — otherwise the user would be looking at a feed they
+ * cannot interact with.
+ */
+router.post('/janitor/browser/focus', async (req, res) => {
+    try {
+        const browser = janitorBrowserFor(req);
+        const account = await readJanitorAccount(browser);
+        // Signing in is a human step that takes minutes; without this the 30 s
+        // idle teardown closes the window mid-login (measured).
+        if (!account.signedIn) browser.hold();
+        if (!account.signedIn) await browser.navigate(JANITOR_LOGIN_URL);
+        const { revealed, running } = await browser.reveal();
+        return res.json({ ok: true, running, revealed, signedIn: account.signedIn, account: account.name });
+    } catch (error) {
+        return res.status(503).json({ error: error.message, code: 'janitor_browser' });
+    }
+});
+
+router.post('/janitor/browser/close', async (req, res) => {
+    await disposeJanitorBrowser();
     res.json({ ok: true });
 });
 
