@@ -240,9 +240,17 @@ describe('scripted lorebook rebuild', () => {
         const confirmAt = handler.indexOf('confirm(`Build');
         expect(confirmAt).toBeGreaterThan(-1);
         expect(sendAt).toBeGreaterThan(confirmAt);
-        // One send site in the whole client, and it is this one.
-        expect(clientJs.match(/ConnectionManagerRequestService\.sendRequest\(/g)).toHaveLength(1);
         expect(handler).toContain('spends tokens');
+        // Two sheets send an LLM request now: this one and the capture sheet.
+        // Both confirm, and both say what it costs, before the request goes out.
+        expect(clientJs.match(/ConnectionManagerRequestService\.sendRequest\(/g)).toHaveLength(2);
+        const rebuildSheet = clientJs.slice(clientJs.indexOf('function openRebuildSheet'), clientJs.indexOf('function openCaptureSheet'));
+        const captureSheet = clientJs.slice(clientJs.indexOf('function openCaptureSheet'), clientJs.indexOf('function showImportOptions'));
+        for (const sheet of [rebuildSheet, captureSheet]) {
+            expect(sheet).toContain('ConnectionManagerRequestService.sendRequest(');
+            expect(sheet).toContain('spends tokens');
+            expect(sheet).toMatch(/confirm\(/);
+        }
     });
 
     test('the reply stays boundless and the preview is the request', () => {

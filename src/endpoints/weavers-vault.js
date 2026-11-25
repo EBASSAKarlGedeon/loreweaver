@@ -852,6 +852,10 @@ router.post('/janitor/account/restore', async (req, res) => {
  */
 router.post('/janitor/capture', async (req, res) => {
     const id = String(req.body?.id ?? '').trim();
+    // `lore: true` asks for the assembled prompt's lorebook text, not for the
+    // definition: a public card can still carry a closed lorebook, and that is
+    // the same capture with a different question. Everything else is unchanged.
+    const loreOnly = req.body?.lore === true;
     if (!/^[0-9a-f-]{8,}$/i.test(id)) {
         return res.status(400).json({ error: 'A JanitorAI character id is required.', code: 'janitor_id' });
     }
@@ -888,7 +892,7 @@ router.post('/janitor/capture', async (req, res) => {
                     code: 'janitor_unproxyable',
                 });
             }
-            if (janitorDefinitionPublic(meta)) {
+            if (!loreOnly && janitorDefinitionPublic(meta)) {
                 return res.status(409).json({
                     error: 'This definition is already public — no recovery needed.',
                     code: 'janitor_public',
@@ -942,6 +946,13 @@ router.post('/janitor/capture', async (req, res) => {
                 character,
                 meta,
                 phases,
+                // The raw reconstructed lorebook text, only for the capture sheet:
+                // rebuilding entries from it is a separate, explicit action, while a
+                // plain recovery just wants its counts. `null` is the honest answer
+                // when the capture recovered no lore at all.
+                lorebookText: req.body?.lore === true && typeof capture.lorebookText === 'string'
+                    ? capture.lorebookText
+                    : undefined,
                 // The two numbers that show the capture actually saw a prompt: the
                 // system content of the probe and of the trigger send.
                 report: {

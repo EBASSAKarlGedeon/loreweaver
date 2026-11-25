@@ -19,12 +19,15 @@ import {
     chunkText,
     messagesFor,
     normalizeEntry,
+    loosePattern,
     parseReply,
     partCacheKey,
     planBuild,
+    publicEntryContents,
     splitEntryBlocks,
     stripFences,
     transportFor,
+    withoutPublicEntries,
 } from '../../public/scripts/extensions/weavers-vault/lorebook-rebuild.js';
 
 /** Deterministic counter: words. Predictable, and it makes every budget exact. */
@@ -399,3 +402,48 @@ describe('context', () => {
         expect(content.indexOf('A lighthouse keeper.')).toBeLessThan(content.indexOf('const loreEntries'));
     });
 });
+describe('separating public entries from a capture', () => {
+    // Glaze's janitor_separate.dart:141-191. A capture assembles one prompt for
+    // public AND closed books, so the public entries arrive verbatim inside the
+    // closed text; rebuilding them as closed content would duplicate them.
+    const publicEntry = 'The Silver Court rules the northern reach from the salt keep.';
+
+    test('a captured public entry is cut out and the closed text survives', () => {
+        const text = publicEntry + '\n\nA closed entry about dragons that nobody published.';
+        expect(withoutPublicEntries(text, [publicEntry]))
+            .toBe('A closed entry about dragons that nobody published.');
+    });
+
+    test('typographic substitutions still match', () => {
+        const needle = "Warden's oath — sworn at dawn, kept till dusk.";
+        const text = 'Warden’s oath – sworn  at dawn, kept till dusk.\n\nClosed: the gate opens once.';
+        expect(withoutPublicEntries(text, [needle])).toBe('Closed: the gate opens once.');
+    });
+
+    test('a needle under twelve characters is left alone', () => {
+        // Short needles match ordinary prose, so Glaze skips them (:146).
+        const text = 'A short note.\n\nClosed: the gate opens once.';
+        expect(withoutPublicEntries(text, ['A note.'])).toBe(text);
+        // The guard is length, not "never remove": the twelve-character form goes.
+        expect(withoutPublicEntries(text, ['A short note.'])).toBe('Closed: the gate opens once.');
+    });
+
+    test('no contents means no change at all, whitespace included', () => {
+        expect(withoutPublicEntries('  keep me  ', [])).toBe('  keep me  ');
+    });
+
+    test('contents are read from both book shapes and blanks are dropped', () => {
+        const books = [
+            { book: { entries: [{ content: 'one long enough entry' }, { content: '   ' }] } },
+            { entries: [{ content: 'another long enough entry' }] },
+        ];
+        expect(publicEntryContents(books)).toEqual(['one long enough entry', 'another long enough entry']);
+        expect(publicEntryContents(undefined)).toEqual([]);
+    });
+
+    test('the pattern escapes regex syntax and widens glyphs', () => {
+        expect(loosePattern('a (b)')).toBe('a\\s+\\(b\\)');
+        expect(loosePattern("it's")).toBe("it['\u2018\u2019\u02BC]s");
+    });
+});
+
