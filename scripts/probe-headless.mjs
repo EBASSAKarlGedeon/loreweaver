@@ -284,7 +284,7 @@ function browserVersion(version) {
  * Build the `Emulation.setUserAgentOverride` payload from variant A's answers,
  * so B claims exactly what the real browser proved it is.
  */
-function buildOverride(snapshotA, versionB, { reduced = false, acceptLanguage = true }) {
+export function buildOverride(snapshotA, versionB, { reduced = false, acceptLanguage = true }) {
   const major = String(browserVersion(versionB) ?? '').split('.')[0] || '0';
   const hev = snapshotA.uaDataHighEntropy ?? {};
   const brands = (snapshotA.uaData?.brands ?? []).map((entry) => ({ ...entry }));
@@ -322,7 +322,7 @@ function buildOverride(snapshotA, versionB, { reduced = false, acceptLanguage = 
 }
 
 /** The screen A reported, so B does not sit in headless's 800x600 default. */
-function deviceMetrics(snapshotA) {
+export function deviceMetrics(snapshotA) {
   return {
     width: snapshotA.window.innerWidth,
     height: snapshotA.window.innerHeight,
@@ -545,7 +545,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(2);
-});
+import { pathToFileURL } from 'node:url';
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(2);
+  });
+}
