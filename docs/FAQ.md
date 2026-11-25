@@ -441,3 +441,19 @@ profile → pick the model in its own Connection Profile panel (or use *Update t
 **See also**: the same class of surprise explains an `Invalid API key` 401 — the sheet used to
 pick the *first* profile in the list (PITFALLS #50), so the key that failed was the wrong
 account's.
+
+## Weaver's Vault: how do I choose which profile a rebuild spends on?
+
+**Short answer**: Extensions → **Weaver's Vault** → *Rebuild connection profile*. The pick is
+saved as `extension_settings["weavers-vault"].rebuild.profileId` and both rebuild flows (the
+capture sheet and the scripted sheet) use it; the build confirmation repeats the profile name
+and the model that will be billed.
+
+**Why it moved there**: the sheets used to dial the profile saved in the scripted sheet, else
+whatever Connection Manager had *active at that moment* — so a rebuild could silently land on an
+account the user had switched to for chat hours earlier. The drawer makes the choice explicit;
+leaving it on *Follow the active profile* restores the old behaviour.
+
+**Nothing to misread**: the dropdown lists the profiles' own `model` field, so
+`Cheaper — google/gemma-4-31b-it:free` is the profile that was rate-limited in the entry above,
+visible before a single token is spent.

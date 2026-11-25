@@ -412,6 +412,44 @@ describe('the saving stage matches Glaze', () => {
  * 'API request failed' because `extensions/shared.js:485` wraps every transport
  * error and hangs the provider's sentence off `cause`).
  */
+describe('the settings drawer chooses the rebuild profile', () => {
+    // A rebuild spends money on whatever profile the sheet dials. The sheet used to
+    // fall back to the active profile silently, so the only way to be sure was to
+    // remember what Connection Manager was set to. The choice now has a home.
+    const settingsHtml = fs.readFileSync(path.join(clientDir, 'settings.html'), 'utf8');
+
+    test('settings.html is an inline drawer with a profile select', () => {
+        expect(settingsHtml).toContain('class="inline-drawer"');
+        expect(settingsHtml).toContain('inline-drawer-toggle inline-drawer-header');
+        expect(settingsHtml).toContain('id="wv-rebuild-profile"');
+        expect(settingsHtml).toContain('id="wv-rebuild-profile-note"');
+        expect(settingsHtml).toContain('Rebuild connection profile');
+    });
+
+    test('it mounts into the Extensions panel and offers every chat profile', () => {
+        expect(clientJs).toContain("await mountSettings();");
+        expect(clientJs).toContain("$('#extensions_settings2').append(html)");
+        // The folder is MODULE ('weavers-vault'); extensionName is "Weaver's Vault",
+        // and as a path segment it 404s (PITFALLS #51).
+        expect(clientJs).toContain('/scripts/extensions/${MODULE}/settings.html');
+        expect(clientJs).not.toContain('/scripts/extensions/${extensionName}/');
+        expect(clientJs).toContain('const profiles = rebuildProfiles();');
+        expect(clientJs).toContain('rebuildProfileLabel(profile)');
+        // Empty value = follow the active profile, the behaviour before the drawer.
+        expect(clientJs).toContain("'Follow the active profile (none selected)'");
+    });
+
+    test('a pick is saved as the rebuild profile and both sheets honour it', () => {
+        expect(clientJs).toContain("saveRebuildConfig({ profileId: String($(this).val() || '') });");
+        expect(clientJs).toContain('resolveRebuildProfile(profiles, config.profileId,');
+    });
+
+    test('the confirm names the profile and the model that pays', () => {
+        expect(clientJs).toContain("'Build \\'' + name + '\\' with \\'' + targetName + '\\''");
+        expect(clientJs).toContain('const targetModel = config.model || rebuildProfile?.model');
+        expect(clientJs).toContain("'Rebuild \\'' + (book.title || book.name) + '\\' with \\'' + (rebuildProfile?.name");
+    });
+});
 describe('the build uses the active connection profile', () => {
     const sheetStart = clientJs.indexOf('function openCaptureSheet(');
     const sheet = clientJs.slice(
