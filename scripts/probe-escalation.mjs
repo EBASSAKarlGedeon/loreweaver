@@ -19,6 +19,9 @@ const args = process.argv.slice(2);
 const arg = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : fallback; };
 const ORIGIN = arg('--origin', 'http://127.0.0.1:8000');
 const TIMEOUT = Number(arg('--timeout', 300_000));
+// `--profile` runs the hand-off on a real profile (a temp one is created and
+// deleted otherwise). A real profile is never deleted here — it holds a session.
+const REUSE_PROFILE = arg('--profile', null);
 const HOST = new URL(ORIGIN).hostname;
 
 /** Chrome processes on this profile, and how many own an OS window. */
@@ -41,7 +44,8 @@ function profileWindows(profileDir) {
 const log = (...parts) => process.stderr.write(`${parts.join(' ')}\n`);
 
 async function main() {
-    const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'loreweaver-escalation-'));
+    const temp = REUSE_PROFILE ? null : fs.mkdtempSync(path.join(os.tmpdir(), 'loreweaver-escalation-'));
+    const profileDir = REUSE_PROFILE ?? temp;
     const backend = new ChromeBackend({ profileDir, host: HOST, origin: ORIGIN, label: 'Probe', headless: true, logger: { info: () => {}, warn: log } });
     const result = { origin: ORIGIN, profileDir, phases: {} };
     try {
@@ -63,7 +67,9 @@ async function main() {
         result.after.fetch = await backend.page.evaluate('fetch("/").then(r => r.status)', { awaitPromise: true, timeoutMs: 20_000 }).catch(() => -1);
     } finally {
         try { await backend.dispose(); } catch { /* already gone */ }
-        try { fs.rmSync(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); } catch { /* temp */ }
+        if (temp) {
+            try { fs.rmSync(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); } catch { /* temp */ }
+        }
     }
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }

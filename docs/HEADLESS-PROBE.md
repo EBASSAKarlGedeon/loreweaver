@@ -238,3 +238,28 @@ on the real profile, headless, once:
 
 So the token read, the bearer header, the JSON parse and the session check all
 survive headless — the mode does not just load the front page, it serves the app.
+
+## Probe 6 (2026-11-25): hand the real profile to a window and take it back
+
+The riskiest half of escalation is the return trip: if handing the profile to a
+plain browser leaves it in a state the site dislikes, the vault breaks silently
+after every sign-in. `node scripts/probe-escalation.mjs --origin https://janitorai.com
+--profile data/_vault-janitor-profile` runs it on the real profile — headless, a
+plain window for the human, headless again — and probe 5 re-run afterwards answers
+the only question that matters: is the account still signed in?
+
+| | before the hand-off | after it | after probe 5 re-run |
+| --- | --- | --- | --- |
+| processes on the profile | 9 | 10 | 10 |
+| **windows** | **0** | **0** | **0** |
+| page | 200 | 200, `JanitorAI - Build, share, and explore` | 200 |
+| account (`/hampter/profiles/mine`) | 200, `Hiro` | — | **200, `Hiro`, no challenge** |
+
+Headless start 5.9 s, the human took 261 s (the 300 s timeout never fired),
+`reveal()` returned `{revealed: 1, escalated: true, closed: true, running: true}`,
+the account read took 0.4 s after the swap. So the cookies and the Supabase
+session survive the round trip, which is the property the whole design rests on.
+The one window in the trace is the one the user is supposed to see.
+
+Not covered here: a human actually signing in (the profile was already signed in).
+That is the next natural opportunity rather than a provoked test.
