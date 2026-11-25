@@ -22,6 +22,7 @@
 import path from 'node:path';
 import { ChromeBackend } from './weavers-vault-chrome-backend.js';
 import { VaultBrowserUnavailable } from './weavers-vault-browser-error.js';
+import { resolveHeadlessMode } from './weavers-vault-headless-identity.js';
 
 export { VaultBrowserUnavailable };
 export { findBrowserBinary } from './weavers-vault-chrome-backend.js';
@@ -52,6 +53,24 @@ export function resolveIdleTtl(override = null, env = process.env) {
         if (Number.isFinite(ms) && ms > 0) return ms;
     }
     return IDLE_TTL_MS;
+}
+
+/**
+ * Whether a fetch answer is a check only a human can pass.
+ *
+ * `cf-mitigated` is Cloudflare's own word for a challenge. The second form is
+ * the firewall's block page ("Access Restricted … blocked by our firewall"),
+ * which is what a headless browser earns when its identity is wrong: it carries
+ * no `cf-mitigated` and no `_cf_chl_opt`, so without this test it looks like an
+ * ordinary 403 and would be retried forever (measured 2026-11-25).
+ * @param {{status?: number, body?: string, challenged?: boolean}|null} result
+ * @returns {boolean}
+ */
+export function needsHuman(result) {
+    if (!result) return false;
+    if (result.challenged === true) return true;
+    return Number(result.status) === 403
+        && /Access Restricted|blocked by our firewall/i.test(String(result.body ?? ''));
 }
 
 /**
@@ -104,7 +123,7 @@ export class VaultBrowser {
      */
     constructor({ profileDir, host, origin, label = 'Vault', chromePath = null,
         settingName = 'vaultBrowserPath', envName = 'VAULT_BROWSER_PATH',
-        headless = false, idleTtlMs = null, logger = console }) {
+        headless = null, idleTtlMs = null, logger = console }) {
         if (!host || !origin) throw new Error('VaultBrowser needs a host and an origin');
         this.host = host;
         this.origin = origin;
@@ -122,6 +141,12 @@ export class VaultBrowser {
         this.idleTimer = null;
         /** How long an idle session survives; see `IDLE_TTL_MS`. */
         this.idleTtlMs = resolveIdleTtl(idleTtlMs);
+        // Off unless asked for; `VAULT_BROWSER_HEADLESS=1` turns it on and an
+        // explicit `0` always wins. Headless needs no window, so it needs none of
+        // the window hygiene; a human step escalates to a plain window instead.
+        this.headless = resolveHeadlessMode(headless);
+        /** Set once a human has been asked for a check; see `escalateForHuman`. */
+        this.escalated = false;
         /** Epoch ms until which the idle teardown must not fire. */
         this.holdUntil = 0;
         /** A hold that only its own deadline can end (a human mid-form). */
@@ -141,7 +166,7 @@ export class VaultBrowser {
             chromePath,
             settingName,
             envName,
-            headless,
+            headless: this.headless,
             logger,
             // The engine must ask the session who owns the window: adoption and
             // reveal park only what no human is looking at.
@@ -233,6 +258,13 @@ export class VaultBrowser {
             if (result.challenged) {
                 this.logger.warn?.(`[Weaver's Vault] ${this.label}: challenge on fetch — reloading session`);
                 await this.reload();
+                result = await this.rawFetch(url, { accept, timeoutMs, headers });
+            }
+            // A headless session cannot pass a check that wants a person, so ask
+            // for one instead of failing the request: escalation opens a normal
+            // window on the same profile, waits for it to close, and brings the
+            // headless session back (see ChromeBackend#escalateToSignIn).
+            if (this.headless && needsHuman(result) && await this.escalateForHuman()) {
                 result = await this.rawFetch(url, { accept, timeoutMs, headers });
             }
             return result;
@@ -348,6 +380,27 @@ export class VaultBrowser {
         // window again afterwards.
         if (!this.isHeld()) this.hold(3 * 60_000);
         return this.backend.reveal();
+    }
+
+    /**
+     * Ask a human to pass whatever check blocks a headless session.
+     *
+     * Once per session: a second escalation inside the same session would put a
+     * window in front of someone for a check they just passed, and a loop here
+     * would be a window that never closes.
+     * @returns {Promise<boolean>} whether a window was shown
+     */
+    async escalateForHuman() {
+        if (!this.headless || this.escalated) return false;
+        this.escalated = true;
+        this.logger.warn?.(`[Weaver's Vault] ${this.label}: a check needs a person — opening a window for it`);
+        try {
+            await this.reveal();
+            return true;
+        } catch (error) {
+            this.logger.warn?.(`[Weaver's Vault] ${this.label}: could not open the window: ${error.message}`);
+            return false;
+        }
     }
 
     /**

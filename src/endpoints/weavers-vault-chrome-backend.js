@@ -11,16 +11,34 @@
  * Ported from Glaze's `JannyWebViewProxy` and `janitor_webview_proxy.dart`
  * (AGPL-3.0). A real, headful Chromium is not an affectation: `cf_clearance` is
  * bound to the TLS fingerprint of whoever solved the challenge, so cookies
- * replayed from Node fail (`403 cf-mitigated: challenge`, measured 2026-11-23)
- * and headless Chrome is rejected outright — hence a visible window parked
- * offscreen rather than `--headless`.
+ * replayed from Node fail (`403 cf-mitigated: challenge`, measured 2026-11-23).
+ *
+ * A headless instance *is* rejected when it describes itself — a UA saying
+ * `HeadlessChrome` earns `403 Access Restricted`, a firewall block (measured
+ * 2026-11-25). With the identity of a real Chrome on this machine applied first
+ * it passes exactly like a headful one (probe 2: 5/5, and the same 200 fetch),
+ * which is why `headless` exists: no window, so nothing to hide. It stays off
+ * until `VAULT_BROWSER_HEADLESS=1`, and a human sign-in still needs a window,
+ * which is what `escalateToSignIn()` provides.
  */
 
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import WebSocket from 'ws';
 import { VaultBrowserUnavailable } from './weavers-vault-browser-error.js';
+import {
+    applyIdentity,
+    browserMajor,
+    IDENTITY_EXPRESSION,
+    IDENTITY_PROBE_HTML,
+    identityIsUsable,
+    loadCachedIdentity,
+    sanitizeProduct,
+    saveCachedIdentity,
+} from './weavers-vault-headless-identity.js';
 
 const START_TIMEOUT_MS = 30_000;
 // A brand-new profile has to solve Cloudflare's managed challenge from scratch:
@@ -529,7 +547,11 @@ export class ChromeBackend {
         this.settingName = settingName;
         this.envName = envName;
         this.logger = logger;
-        this.headless = headless;
+        this.headless = Boolean(headless);
+        /** The measured identity applied to a headless page; see the module. */
+        this.identity = null;
+        /** The Chrome major version `identity` was measured on. */
+        this.identityMajor = '';
         this.chromePath = chromePath;
         // Absolute from the start: a relative --user-data-dir makes the browser's
         // own command line relative too, which defeats profile reclaiming.
@@ -554,15 +576,17 @@ export class ChromeBackend {
      * Called right before the browser spawns, so `Add-Type` compiles while Chrome
      * boots: the first 50 ms tick that sees a window restyles it, instead of the
      * ~1050 ms a taskbar button used to stay visible (measured 2026-11-26).
-     * @param {{budgetMs?: number}} [options]
+     * @param {{budgetMs?: number, profileDir?: string}} [options] `profileDir`
+     *   defaults to the session profile; the identity measurement passes its own
+     *   throwaway profile so that window is styled too.
      * @returns {import('node:child_process').ChildProcess|null}
      */
-    startTaskbarWatch({ budgetMs = 8000 } = {}) {
+    startTaskbarWatch({ budgetMs = 8000, profileDir = this.profileDir } = {}) {
         if (process.platform !== 'win32') return null;
         this.stopTaskbarWatch();
         try {
             const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-                taskbarWatchScript(path.basename(this.profileDir), budgetMs)],
+                taskbarWatchScript(path.basename(profileDir), budgetMs)],
             { stdio: 'ignore', windowsHide: true });
             child.on('error', () => {});
             child.unref?.();
@@ -590,6 +614,9 @@ export class ChromeBackend {
      * @returns {Promise<{revealed: number, running: boolean}>}
      */
     async reveal() {
+        // A headless session has nothing to put on screen, so a human step has to
+        // hand the profile to a plain window instead; see `escalateToSignIn()`.
+        if (this.headless) return this.escalateToSignIn();
         // The watcher would strip the button again for the rest of its budget.
         this.stopTaskbarWatch();
         await this.focusPage();
@@ -663,7 +690,7 @@ export class ChromeBackend {
      * @returns {Promise<void>}
      */
     async park() {
-        if (!this.page) return;
+        if (this.headless || !this.page) return;
         // `windowId` is only set by `placeWindowOnScreen()`, so a parked window
         // that was never revealed had no id and this method silently did nothing
         // — which is why a browser born on screen (Chrome restores the last
@@ -689,7 +716,7 @@ export class ChromeBackend {
      * @returns {Promise<void>}
      */
     async hideWindow() {
-        if (this.taskbarHidden) return;
+        if (this.headless || this.taskbarHidden) return;
         try {
             const n = await hideProfileWindows(this.profileDir);
             if (n > 0) {
@@ -708,12 +735,18 @@ export class ChromeBackend {
         }
         fs.mkdirSync(this.profileDir, { recursive: true });
 
-        // Started before anything else in the start path, and long before the
-        // spawn: the watcher needs ~1.8 s to compile its C# helper (measured) and
-        // Chrome has a window up ~0.5 s after spawn, so starting it here is what
-        // makes the restyle land on the first tick instead of 1.8 s later. The
-        // budget covers a slow start (challenge waits happen after this).
-        this.startTaskbarWatch({ budgetMs: 25_000 });
+        // A headless browser has no window at all, so there is nothing to style —
+        // and its identity has to be measured before it starts, while the profile
+        // is still free.
+        if (this.headless) await this.ensureIdentity(binary);
+        else {
+            // Started before anything else in the start path, and long before the
+            // spawn: the watcher needs ~1.8 s to compile its C# helper (measured) and
+            // Chrome has a window up ~0.5 s after spawn, so starting it here is what
+            // makes the restyle land on the first tick instead of 1.8 s later. The
+            // budget covers a slow start (challenge waits happen after this).
+            this.startTaskbarWatch({ budgetMs: 25_000 });
+        }
 
         // A previous run can leave the browser holding the profile lock (a crash
         // skips dispose()). Chrome then refuses to start a second instance on the
@@ -731,6 +764,9 @@ export class ChromeBackend {
         // Spawn and attach live in launch(): they need a real browser, while the
         // lines above are policy decisions that a test can drive with a mock.
         await this.launch(binary);
+
+        // No window to place, so nothing to hide or park; the rest is the same wait.
+        if (this.headless) return this.finishHeadlessStart(binary);
 
         // Keep the window out of the taskbar. The watcher started at the top of
         // start() usually beat us to it (that is the point); this is the
@@ -755,6 +791,25 @@ export class ChromeBackend {
                 + 'if it shows a verification button, click it once and retry.',
             );
         }
+    }
+
+    /**
+     * The headless half of `start()`: override the identity, then wait for the
+     * page. Split out so `start()` still reads as one sequence of window steps
+     * (park, wait, park) for the headful path.
+     * @param {string} binary
+     * @returns {Promise<void>}
+     */
+    async finishHeadlessStart(binary) {
+        await this.applyHeadlessIdentity(binary);
+        if (await this.waitForPage()) return;
+        // Leave nothing half-solved behind: a challenged page would be reused by
+        // the next request and fail the same way.
+        await this.dispose();
+        throw new VaultBrowserUnavailable(
+            'The Cloudflare check did not finish in the headless browser. Retry, or set '
+            + 'VAULT_BROWSER_HEADLESS=0 to run the visible browser instead.',
+        );
     }
 
     /**
@@ -788,11 +843,170 @@ export class ChromeBackend {
     }
 
     /**
-     * Spawn the browser, read its debugging port and attach to its page.
+     * The identity a headless page has to claim, from the cache or freshly
+     * measured. Called before the headless browser starts, while the profile is
+     * free (measuring needs it).
      * @param {string} binary
      * @returns {Promise<void>}
      */
-    async launch(binary) {
+    async ensureIdentity(binary) {
+        const cached = loadCachedIdentity(this.profileDir);
+        if (cached) {
+            this.identity = cached.reference;
+            this.identityMajor = cached.major;
+            this.logger.info?.(`[Weaver's Vault] ${this.label}: headless identity reused (Chrome ${cached.major})`);
+            return;
+        }
+        await this.measureIdentity(binary);
+    }
+
+    /**
+     * Measure the identity with a real Chrome on this machine.
+     *
+     * The one thing a headless browser must not be asked to describe. The
+     * measuring browser is a normal headful launch of the same binary: parked
+     * offscreen and out of the taskbar by `start()`, so it is never seen, and it
+     * loads only the vault's own origin — no site traffic.
+     * @param {string} binary
+     * @returns {Promise<void>}
+     */
+    async measureIdentity(binary) {
+        // A throwaway profile on a local `file://` page, headful (it has to be: the
+        // screen is part of the identity) but parked and out of the taskbar. No
+        // network, so measuring costs the site nothing, and the vault profile is
+        // never touched — no cookies opened, no exit state rewritten.
+        const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'loreweaver-identity-'));
+        const probePage = path.join(probeDir, 'identity-probe.html');
+        fs.writeFileSync(probePage, IDENTITY_PROBE_HTML);
+        const watcher = this.startTaskbarWatch({ profileDir: probeDir, budgetMs: 20_000 });
+        let child = null;
+        try {
+            child = spawn(binary, [
+                '--remote-debugging-port=0',
+                `--user-data-dir=${probeDir}`,
+                '--no-first-run',
+                '--no-default-browser-check',
+                // Parked and out of the taskbar: this window exists for ~3 s and
+                // must never be seen either.
+                '--window-position=-32000,-32000',
+                '--window-size=1280,900',
+                pathToFileURL(probePage).href,
+            ], { stdio: 'ignore', windowsHide: true });
+            child.on('error', () => {});
+            const port = await this.waitForPort(probeDir, { timeoutMs: 20_000 });
+            if (!port) throw new VaultBrowserUnavailable('The browser did not start to measure an identity.');
+            const page = await this.attachToPage(port);
+            if (!page) throw new VaultBrowserUnavailable('The browser page could not be attached.');
+            try {
+                const reference = await page.evaluate(IDENTITY_EXPRESSION, { awaitPromise: true, timeoutMs: 20_000 });
+                if (!identityIsUsable(reference)) {
+                    // A guess here is a fingerprint mismatch, which is worse than the
+                    // window this mode exists to avoid. Refuse, loudly.
+                    throw new VaultBrowserUnavailable(
+                        'The browser could not report a usable identity (no brands, or no screen size), so '
+                        + 'the vault stays headful. Set VAULT_BROWSER_HEADLESS=0 to silence this.',
+                    );
+                }
+                const version = await page.send('Browser.getVersion', {}).catch(() => null);
+                const product = sanitizeProduct(version?.product ?? '');
+                this.identity = reference;
+                this.identityMajor = browserMajor(product);
+                saveCachedIdentity(this.profileDir, product, reference);
+                this.logger.info?.(`[Weaver's Vault] ${this.label}: measured the browser identity (Chrome ${this.identityMajor}, ${reference.screen.width}x${reference.screen.height})`);
+            } finally {
+                page.close();
+            }
+        } finally {
+            try { child?.kill(); } catch { /* already gone */ }
+            if (child?.pid && process.platform === 'win32') {
+                spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+            }
+            try { watcher?.kill(); } catch { /* already gone */ }
+            try {
+                fs.rmSync(probeDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+            } catch { /* a throwaway profile; the OS temp cleaner will get it */ }
+        }
+    }
+    /**
+     * Apply the measured identity to the page, so the site sees a real Chrome.
+     * @param {string} binary used only if Chrome turned out to have updated
+     * @returns {Promise<boolean>} whether the override was accepted
+     */
+    async applyHeadlessIdentity(binary) {
+        if (!this.page) return false;
+        const version = await this.page.send('Browser.getVersion', {}).catch(() => null);
+        const product = sanitizeProduct(version?.product ?? '');
+        const major = browserMajor(product);
+        if (major && this.identityMajor && major !== this.identityMajor) {
+            // Chrome updated under us: the cached identity claims the old version,
+            // and a UA claiming the wrong version is a mismatch. Measure again.
+            this.logger.warn?.(`[Weaver's Vault] ${this.label}: Chrome is now ${major}, re-measuring the headless identity`);
+            await this.dispose();
+            await this.measureIdentity(binary);
+            await this.launch(binary);
+            return this.applyHeadlessIdentity(binary);
+        }
+        const applied = await applyIdentity(this.page, this.identity, product);
+        if (applied) this.logger.info?.(`[Weaver's Vault] ${this.label}: headless session (Chrome ${major || '?'}, ${this.identity?.screen?.width}x${this.identity?.screen?.height})`);
+        else this.logger.warn?.(`[Weaver's Vault] ${this.label}: could not apply the headless identity`);
+        return applied;
+    }
+
+    /**
+     * Hand the profile to a plain window for a human step.
+     *
+     * A headless browser cannot show a sign-in form, so it is closed, a browser
+     * with no flags of ours is opened on the same profile, and the headless
+     * session comes back once that window is closed. Cookies live in the profile,
+     * so the sign-in survives the swap (verified 2026-11-25).
+     * @param {{timeoutMs?: number}} [options]
+     * @returns {Promise<{revealed: number, escalated: boolean, closed: boolean, running: boolean}>}
+     */
+    async escalateToSignIn({ timeoutMs = 10 * 60_000 } = {}) {
+        const binary = this.chromePath ?? findBrowserBinary({ envName: this.envName });
+        if (!binary) {
+            throw new VaultBrowserUnavailable(
+                `No Chrome/Edge binary was found. Set \`${this.settingName}\` (or ${this.envName}) to one.`,
+            );
+        }
+        await this.dispose();
+        this.logger.info?.(`[Weaver's Vault] ${this.label}: opening a plain window for sign-in`);
+        const child = spawn(binary, [
+            `--user-data-dir=${this.profileDir}`,
+            '--no-first-run',
+            '--no-default-browser-check',
+            this.origin,
+        ], { stdio: 'ignore' });
+        let closed = false;
+        await new Promise((resolve) => {
+            const timer = setTimeout(resolve, timeoutMs);
+            child.once('exit', () => { clearTimeout(timer); closed = true; resolve(); });
+        });
+        if (!closed) {
+            // The human never came back: close it rather than leave a window and a
+            // profile lock behind.
+            try {
+                if (process.platform === 'win32') {
+                    spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+                } else {
+                    child.kill('SIGKILL');
+                }
+            } catch { /* already gone */ }
+        }
+        await this.start();
+        return { revealed: 1, escalated: true, closed, running: this.isRunning() };
+    }
+
+    /**
+     * The command line for one launch.
+     *
+     * Split out of `launch()` so a test can read it without spawning a browser.
+     * A headless launch is deliberately minimal: it has no window to place, so
+     * the window flags would describe one that does not exist, and the identity
+     * that matters is applied over CDP (`applyHeadlessIdentity`).
+     * @returns {string[]}
+     */
+    launchArgs() {
         const args = [
             '--remote-debugging-port=0',
             `--user-data-dir=${this.profileDir}`,
@@ -815,15 +1029,25 @@ export class ChromeBackend {
             // Belt and braces: never offer "Restore pages?" even if a previous
             // run had to be killed (the exit state is repaired above).
             '--hide-crash-restore-bubble',
-            // Offscreen but *headful*: Cloudflare rejects headless Chrome
-            // (measured), and a real window is what Glaze's WebView2 provides.
-            '--window-position=-32000,-32000',
-            '--window-size=1280,900',
-            this.origin,
         ];
-        if (this.headless) args.splice(args.length - 1, 0, '--headless=new');
+        if (this.headless) {
+            args.push('--headless=new');
+        } else {
+            // Offscreen but *headful*: a parked real window is what a challenge
+            // expects when the identity is not ours to claim.
+            args.push('--window-position=-32000,-32000', '--window-size=1280,900');
+        }
+        args.push(this.origin);
+        return args;
+    }
 
-
+    /**
+     * Spawn the browser, read its debugging port and attach to its page.
+     * @param {string} binary
+     * @returns {Promise<void>}
+     */
+    async launch(binary) {
+        const args = this.launchArgs();
         this.child = spawn(binary, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: false });
         let stderrTail = '';
         this.child.stderr?.on('data', chunk => {
@@ -839,17 +1063,7 @@ export class ChromeBackend {
             this.onExit?.();
         });
 
-        const portFile = path.join(this.profileDir, 'DevToolsActivePort');
-        const deadline = Date.now() + START_TIMEOUT_MS;
-        let port = null;
-        while (Date.now() < deadline) {
-            if (fs.existsSync(portFile)) {
-                const [rawPort] = String(fs.readFileSync(portFile, 'utf8')).split('\n');
-                port = Number(rawPort);
-                if (port > 0) break;
-            }
-            await new Promise(r => setTimeout(r, 150));
-        }
+        const port = await this.waitForPort(this.profileDir);
         if (!port) {
             this.stopTaskbarWatch();
             const detail = exited !== null ? ` (browser exited with code ${exited}${stderrTail ? `: ${stderrTail.trim().split('\n').slice(-2).join(' ')}` : ''})` : '';
@@ -865,14 +1079,46 @@ export class ChromeBackend {
     }
 
     /**
+     * Wait for a browsing profile to write its debugging port.
+     * @param {string} profileDir
+     * @param {{timeoutMs?: number}} [options]
+     * @returns {Promise<number|null>} the port, or null on timeout
+     */
+    async waitForPort(profileDir, { timeoutMs = START_TIMEOUT_MS } = {}) {
+        const portFile = path.join(profileDir, 'DevToolsActivePort');
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            if (fs.existsSync(portFile)) {
+                try {
+                    const [rawPort] = String(fs.readFileSync(portFile, 'utf8')).split('\n');
+                    const port = Number(rawPort);
+                    if (port > 0) return port;
+                } catch {
+                    // Chrome creates the file before it finishes writing it: EBUSY
+                    // or a half-line (measured 2026-11-25, and it killed a start).
+                    // The file appearing is not the port being readable.
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
+        return null;
+    }
+
+    /**
      * Reuse a browser already running on this profile (crash recovery).
      * @returns {Promise<boolean>} true when a session was adopted
      */
     async adoptExisting() {
         const portFile = path.join(this.profileDir, 'DevToolsActivePort');
         if (!fs.existsSync(portFile)) return false;
-        const [rawPort] = String(fs.readFileSync(portFile, 'utf8')).split('\n');
-        const port = Number(rawPort);
+        let port = 0;
+        try {
+            const [rawPort] = String(fs.readFileSync(portFile, 'utf8')).split('\n');
+            port = Number(rawPort);
+        } catch {
+            // Locked while Chrome writes it; a fresh launch is the right answer.
+            return false;
+        }
         if (!(port > 0)) return false;
         try {
             const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(2000) });
@@ -893,7 +1139,11 @@ export class ChromeBackend {
         // teardown: "the Chrome window appears and disappears after 30 seconds".
         // Parking is safe here because a human step holds the window; only an
         // unheld window is put back offscreen.
-        if (this.isHeld()) await this.hideWindow();
+        if (this.headless) {
+            // An adopted headless page carries no identity (it lives in the
+            // renderer), so a session created by an older run has to be given one.
+            await this.applyHeadlessIdentity(this.chromePath ?? findBrowserBinary({ envName: this.envName }));
+        } else if (this.isHeld()) await this.hideWindow();
         else await this.park();
         this.logger.info?.(`[Weaver's Vault] ${this.label}: adopted the running browser session`);
         return true;

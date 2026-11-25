@@ -1,4 +1,7 @@
 import { describe, test, expect, jest } from '@jest/globals';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
     IDLE_TTL_MS,
     VaultBrowser,
@@ -6,6 +9,7 @@ import {
     disposeVaultBrowser,
     findBrowserBinary,
     getVaultBrowser,
+    needsHuman,
     resolveIdleTtl,
     selectBrowserBackendKind,
 } from '../../src/endpoints/weavers-vault-browser.js';
@@ -211,6 +215,22 @@ describe('window hygiene', () => {
         expect(calls[calls.length - 1]).toBe('dispose');
     });
 
+    test('a headless reveal hands the profile to a plain window instead', async () => {
+        // There is no window to place, so the only honest way to let a human sign
+        // in is a separate browser on the same profile (`escalateToSignIn`).
+
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe', headless: true });
+        const calls = [];
+        backend.escalateToSignIn = async () => { calls.push('escalate'); return { revealed: 1, escalated: true, running: true }; };
+        backend.placeWindowOnScreen = async () => { calls.push('place'); return true; };
+        backend.nudgeWindowSize = async () => { calls.push('nudge'); };
+
+        const result = await backend.reveal();
+
+        expect(calls).toEqual(['escalate']);
+        expect(result.escalated).toBe(true);
+    });
+
     test('the taskbar watcher is stopped before a human needs the window', () => {
         const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe' });
         const killed = [];
@@ -221,5 +241,177 @@ describe('window hygiene', () => {
         // Idempotent: dispose() and reveal() both call it.
         backend.stopTaskbarWatch();
         expect(killed).toEqual(['kill']);
+    });
+});
+
+/** A session whose browser is faked: the point is what the policy does. */
+function blockedSession({ headless = true, answers = [] } = {}) {
+    const browser = new VaultBrowser({ ...OPTIONS, headless });
+    const calls = [];
+    const queue = [...answers];
+    browser.backend = {
+        page: {},
+        start: async () => {},
+        reveal: async () => { calls.push('reveal'); return { revealed: 1, escalated: true }; },
+        isRunning: () => true,
+    };
+    browser.rawFetch = async () => queue.shift();
+    browser.reload = async () => { calls.push('reload'); };
+    return { browser, calls };
+}
+
+describe('a headless session that is blocked', () => {
+    test('a firewall block page asks for a human, then retries once', async () => {
+        // Measured 2026-11-25: the block carries no cf-mitigated and no
+        // _cf_chl_opt, so it must be recognised from its body — otherwise it looks
+        // like an ordinary 403 and the request just fails.
+        const block = { status: 403, body: '<title>Access Restricted</title>This request was blocked by our firewall', challenged: false };
+        const ok = { status: 200, body: 'fine', challenged: false };
+        const { browser, calls } = blockedSession({ answers: [block, ok] });
+
+        const result = await browser.fetchText('https://janitorai.com/');
+
+        expect(calls).toEqual(['reveal']);
+        expect(result).toEqual(ok);
+        disarm(browser);
+    });
+
+    test('a challenge asks for a human after the reload fails to clear it', async () => {
+        const challenge = { status: 403, body: 'window._cf_chl_opt', challenged: true };
+        const ok = { status: 200, body: 'fine', challenged: false };
+        const { browser, calls } = blockedSession({ answers: [challenge, challenge, ok] });
+
+        const result = await browser.fetchText('https://janitorai.com/api');
+
+        expect(calls).toEqual(['reload', 'reveal']);
+        expect(result.status).toBe(200);
+        disarm(browser);
+    });
+
+    test('the human is asked once per session, not once per request', async () => {
+        const block = { status: 403, body: 'blocked by our firewall', challenged: false };
+        const { browser, calls } = blockedSession({ answers: [block, block, block] });
+
+        await browser.fetchText('https://janitorai.com/a');
+        await browser.fetchText('https://janitorai.com/b');
+
+        expect(calls).toEqual(['reveal']);
+        disarm(browser);
+    });
+
+    test('a headful session never opens a window by itself', async () => {
+        const block = { status: 403, body: 'blocked by our firewall', challenged: false };
+        const { browser, calls } = blockedSession({ headless: false, answers: [block] });
+
+        const result = await browser.fetchText('https://janitorai.com/');
+
+        expect(calls).toEqual([]);
+        expect(result.status).toBe(403);
+        disarm(browser);
+    });
+
+    test('needsHuman separates a block page from an ordinary 403', () => {
+        expect(needsHuman({ status: 403, body: 'Access Restricted', challenged: false })).toBe(true);
+        expect(needsHuman({ status: 403, body: 'blocked by our firewall', challenged: false })).toBe(true);
+        expect(needsHuman({ status: 403, body: 'not signed in', challenged: false })).toBe(false);
+        expect(needsHuman({ status: 200, body: 'ok', challenged: false })).toBe(false);
+        expect(needsHuman({ status: 403, body: '', challenged: true })).toBe(true);
+        expect(needsHuman(null)).toBe(false);
+    });
+});
+
+describe('headless mode', () => {
+    test('a headless start has no window to style, place or park', async () => {
+        // The measured identity comes first (it needs the profile), then the
+        // launch, then the override — the override has to land before the page
+        // loads anything from the site, or the firewall sees these very requests.
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe', headless: true });
+        const calls = [];
+        backend.startTaskbarWatch = () => { calls.push('watch'); return null; };
+        backend.ensureIdentity = async () => { calls.push('identity'); };
+        backend.adoptExisting = async () => false;
+        backend.prepareProfile = async () => { calls.push('prepare'); };
+        backend.launch = async () => { calls.push('launch'); };
+        backend.applyHeadlessIdentity = async () => { calls.push('apply'); return true; };
+        backend.hideWindow = async () => { calls.push('hide'); };
+        backend.park = async () => { calls.push('park'); };
+        backend.waitForPage = async () => { calls.push('wait'); return true; };
+
+        await backend.start();
+
+        expect(calls).toEqual(['identity', 'prepare', 'launch', 'apply', 'wait']);
+    });
+
+    test('a headless challenge that never clears disposes and names the escape hatch', async () => {
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe', headless: true });
+        const calls = [];
+        backend.ensureIdentity = async () => {};
+        backend.adoptExisting = async () => false;
+        backend.prepareProfile = async () => {};
+        backend.launch = async () => { calls.push('launch'); };
+        backend.applyHeadlessIdentity = async () => true;
+        backend.waitForPage = async () => false;
+        backend.dispose = async () => { calls.push('dispose'); };
+
+        const attempt = backend.start();
+        await expect(attempt).rejects.toBeInstanceOf(VaultBrowserUnavailable);
+        await expect(attempt).rejects.toThrow('VAULT_BROWSER_HEADLESS=0');
+        expect(calls).toEqual(['launch', 'dispose']);
+    });
+
+    test('a headless launch asks for headless and no window placement', () => {
+        const headless = new ChromeBackend({ ...OPTIONS, headless: true });
+        const args = headless.launchArgs();
+        expect(args).toContain('--headless=new');
+        expect(args.some(arg => arg.startsWith('--window-position'))).toBe(false);
+        expect(args.some(arg => arg.startsWith('--window-size'))).toBe(false);
+        expect(args).toContain('--remote-debugging-port=0');
+        expect(args[args.length - 1]).toBe(OPTIONS.origin);
+
+        const headful = new ChromeBackend({ ...OPTIONS });
+        expect(headful.launchArgs()).toContain('--window-position=-32000,-32000');
+        expect(headful.launchArgs()).not.toContain('--headless=new');
+    });
+
+    test('a debugging-port file that is still being written does not fail a start', async () => {
+        // Measured 2026-11-25: Chrome creates DevToolsActivePort and keeps it locked
+        // for a moment, and reading it then threw EBUSY straight out of start().
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loreweaver-port-'));
+        const backend = new ChromeBackend({ ...OPTIONS, profileDir: dir });
+        fs.writeFileSync(path.join(dir, 'DevToolsActivePort'), '9333\n/devtools/browser/x');
+        const real = fs.readFileSync;
+        let calls = 0;
+        const spy = jest.spyOn(fs, 'readFileSync').mockImplementation((file, ...rest) => {
+            if (String(file).endsWith('DevToolsActivePort') && calls++ === 0) {
+                throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+            }
+            return real(file, ...rest);
+        });
+        try {
+            expect(await backend.waitForPort(dir, { timeoutMs: 3_000 })).toBe(9333);
+        } finally {
+            spy.mockRestore();
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    test('no usable identity means no headless start, not a guess', async () => {
+        // The failure this prevents is measured: a self-describing headless UA got
+        // a 403 firewall block that no challenge handling recovers from. A guess
+        // about the screen size would be a different fingerprint, not a fix.
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe', headless: true });
+        backend.startTaskbarWatch = () => null;
+        backend.waitForPort = async () => 9222;
+        backend.attachToPage = async () => ({
+            evaluate: async () => ({ userAgent: 'HeadlessChrome/158.0.0.0', uaData: { brands: [] } }),
+            send: async () => ({ product: 'HeadlessChrome/158.0.0.0' }),
+            close: () => {},
+        });
+
+        await expect(backend.measureIdentity('C:/fake/chrome.exe')).rejects.toBeInstanceOf(VaultBrowserUnavailable);
+        // Nothing was cached, so the next attempt measures again instead of running
+        // on a half-usable identity.
+        expect(backend.identity).toBeNull();
+        expect(backend.headless).toBe(true);
     });
 });

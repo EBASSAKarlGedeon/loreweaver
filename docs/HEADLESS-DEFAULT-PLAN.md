@@ -1,8 +1,16 @@
 # Headless by default — design proposal (embedded-engine Step 3)
 
-Status: **approved 2026-11-25; steps 1-2 of the live test done, code not written yet.** Evidence:
+Status: **implemented 2026-11-25 behind `VAULT_BROWSER_HEADLESS` (default off).** Evidence:
 `docs/HEADLESS-PROBE.md` (probe 1: fingerprint parity; probe 2: 5/5 clear on the
-site, headless and headful alike).
+site, headless and headful alike) and the local smoke test below. The default is
+not flipped yet: that needs one site run on the vault profile, which costs a page
+load (~288 requests) and is waiting on the user.
+
+Where the code is: `src/endpoints/weavers-vault-headless-identity.js` (the identity:
+measure, cache, apply, refuse) and `src/endpoints/weavers-vault-chrome-backend.js`
+(`launchArgs()`, `ensureIdentity()`, `measureIdentity()`, `applyHeadlessIdentity()`,
+`finishHeadlessStart()`, `escalateToSignIn()`). Tests: `tests/vault/vault-headless-identity.test.js`
+and the `headless mode` block in `tests/vault/vault-browser-backend.test.js`.
 
 ## The point
 
@@ -34,6 +42,25 @@ monitor.
 launch: the override lives in the page's renderer, and a page we attach to from a
 previous session has none.
 
+**3a. Where the identity comes from — amended after the live test.** Not from the
+headless page (it says `HeadlessChrome` and gets a 403 block, and on `about:blank`
+it reports no brands at all), and not from one PowerShell call that guesses the
+screen either. It comes from **a real headful Chrome on this machine**, launched
+once for the purpose on a throwaway profile, parked and taskbar-hidden, on a local
+`file://` page: a file document is a secure context, so `getHighEntropyValues()`
+answers in full (`brands`, `platformVersion`, architecture, bitness) and the real
+screen/DPR come with it — and the launch costs **no network at all**. The result is
+cached in `headless-identity.json` beside the profile, keyed by Chrome major version
+and valid for 7 days; a Chrome update or a monitor swap re-measures. If no usable
+identity can be measured, the vault **refuses to start headless** instead of
+guessing (a wrong fingerprint is a different failure, not a safer one).
+
+**3b. The second escalation trigger is a firewall block, not just a challenge.**
+Measured 2026-11-25: a self-describing headless browser earns `403 Access Restricted`
+from the site, which is a block page — no `cf-mitigated`, no `_cf_chl_opt`, nothing to
+click. That answer must escalate to the human window exactly like a challenge does;
+retrying it headless can only fail the same way.
+
 **4. The sign-in escape hatch.** `reveal()` in headless mode cannot show a window,
 so it escalates:
 
@@ -50,8 +77,30 @@ challenge (`cf-mitigated` header, or `_cf_chl_opt` in the body), so a challenge
 that appears later still reaches a human rather than failing silently.
 
 **5. A one-variable escape hatch.** `VAULT_BROWSER_HEADLESS=0` restores today's
-headful behaviour without a code change. Default on, but the flag is the first
-thing to flip if the site starts challenging headless.
+headful behaviour without a code change. As built it is **default off**
+(`VAULT_BROWSER_HEADLESS=1` turns it on) until one site run says the vault profile
+is happy headless; an explicit `0` always wins over an option a config file passes
+down, so the switch can always be taken out of a shell profile.
+
+## What the local smoke test measured (2026-11-25)
+
+`node scripts/smoke-headless-backend.mjs` runs the production backend on a
+throwaway profile against the local dev server, so it costs the site nothing:
+
+| | result |
+| --- | --- |
+| first start (measuring launch + headless launch) | 12.3 s |
+| UA | `Chrome/158.0.0.0`, no `Headless` anywhere |
+| brands | `Chromium/158`, `Not.A/Brand/24`, `Google Chrome/158` |
+| screen / DPR / platform | 1536x864, 1.25, `Windows` |
+| viewport / outer | 1284x795 / 1285x883 (`outer > inner`, the headless tell fixed) |
+| OS windows for the profile | **0** of 8 processes |
+| identity cache | written, `major: 158` |
+| local fetch | 200 |
+
+The earlier measuring path (a headful launch on `this.origin`) was replaced because
+for the janitor session `origin` is janitorai.com: it would have loaded the site
+once every 7 days for no reason. The `file://` probe removed that traffic entirely.
 
 ## Risks, in order of how likely they are to bite
 
