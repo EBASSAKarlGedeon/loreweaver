@@ -242,3 +242,100 @@ describe('capture sheet styles', () => {
         expect(clientCss).toMatch(/\.wv-cbody \{[\s\S]{0,240}flex: 1 1 auto;/);
     });
 });
+
+/**
+ * The building stage, matched to Glaze's capture sheet
+ * (janitor_lorebook_capture_sheet.dart:1507 `_buildBlock`). Every rule below was
+ * a visible divergence: pill chips instead of a breadcrumb, caps micro-headers
+ * with no help or description, a permanent bordered dump of the text, a
+ * full-width download button, bare checkboxes instead of ContextSourceTile
+ * rows, an always-open alias field, and stretched pills.
+ */
+describe('the building stage matches Glaze', () => {
+    const build = clientJs.slice(
+        clientJs.indexOf('<div class="wv-cstage-build" hidden>'),
+        clientJs.indexOf('<div class="wv-cstage-save" hidden>'),
+    );
+
+    test('the step bar is a breadcrumb with the back arrow in it', () => {
+        expect(clientJs).toContain('<div class="wv-crumbs"></div>');
+        expect(clientJs).not.toContain('wv-cpill');
+        expect(clientCss).not.toContain('.wv-cpill');
+        expect(clientJs).toContain("'<span class=\"wv-crumb' + (entry.id === current ? ' on' : '')");
+        // The arrow sits in the strip, not in the title bar beside the close X.
+        const header = clientJs.slice(clientJs.indexOf('<div class="wv-chead">'), clientJs.indexOf('<div class="wv-cstrip">'));
+        expect(header).not.toContain('wv-cback');
+        expect(clientJs.slice(clientJs.indexOf('<div class="wv-cstrip">'))).toContain('wv-cback');
+        // At the first step it closes the sheet instead of vanishing.
+        expect(clientJs).toContain("if (step === 'close') { close(); return; }");
+        const crumbOn = clientCss.slice(clientCss.indexOf('.wv-crumb.on {'), clientCss.indexOf('}', clientCss.indexOf('.wv-crumb.on {')));
+        expect(crumbOn).toContain('var(--wv-accent)');
+    });
+
+    test('each group is a MenuGroup header with help and a description', () => {
+        expect(build).toContain('<span class="wv-cgtitle">Build with LLM</span>');
+        expect(build).toContain('<span class="wv-cgtitle">Context for key inference</span>');
+        // '?' help on both headers, a muted 12px description under them.
+        expect(build.match(/class="wv-help"/g)).toHaveLength(2);
+        expect(build).toContain('<div class="wv-cgdesc wv-cextnote"></div>');
+        expect(clientCss).toMatch(/\.wv-cgtitle \{[\s\S]{0,80}font-size: 18px;/);
+        expect(clientCss).toMatch(/\.wv-cgdesc \{[\s\S]{0,120}font-size: 12px;/);
+        // The caps micro-header is gone.
+        expect(clientCss).not.toContain('.wv-cgrouphead');
+    });
+
+    test('the extracted content is a collapsed disclosure and download is a row', () => {
+        expect(build).toMatch(/class="wv-cm wv-cdisc" type="button" aria-expanded="false"/);
+        expect(build).toContain('<div class="wv-cdiscbody" hidden>');
+        // Download is a MenuItem row with an icon and a subtitle, not a button.
+        expect(build).toContain('class="wv-cm wv-cdltext"');
+        expect(build).not.toMatch(/wv-abtn[^"]*wv-cdltext/);
+        expect(build).toContain('Raw text, no entries or keys');
+        // Glaze's count is tokens, not blocks.
+        expect(clientJs).toContain("'Extracted content · ' + tokensOf(text) + ' tokens'");
+    });
+
+    test('a context source is a ContextSourceTile: text row, chevron, switch', () => {
+        // Label + token count, and the count is Glaze's ~4-char fallback.
+        expect(clientJs).toContain("? tokensOf(text) + ' tokens'");
+        expect(clientJs).toContain('Math.ceil(String(text).trim().length / 4)');
+        // Opening the text cannot flip the switch: the row and the switch are
+        // separate targets, like ContextSourceTile's InkWell + Switch.
+        expect(clientJs).toMatch(/class="wv-csrcmain" type="button"/);
+        expect(clientJs).toContain('data-switch=');
+        expect(clientJs).toContain("querySelectorAll('[data-switch]')");
+        expect(clientJs).toContain("button.closest('.wv-csrc').querySelector('.wv-csrcbody')");
+        // An empty source cannot be opened or sent.
+        expect(clientJs).toContain("(text ? (state.context[key] ? ' checked' : '') : ' disabled')");
+        expect(clientJs).toContain('Needs one extra site fetch');
+        // The row keeps showing what it would send after being switched off.
+        expect(clientJs).toContain('toggles: { card: true, catalog: true, scenario: true, greetings: true, lorebookDescs: true },');
+        expect(clientJs).toContain("'Card description on site'");
+        expect(clientJs).toContain("'First message(s)'");
+        expect(clientJs).toContain("'Lorebook titles + descriptions'");
+    });
+
+    test('the extra aliases are a switch that gates the field', () => {
+        expect(build).toContain('class="wv-cm wv-cswitchrow wv-cxrow" type="button" role="switch"');
+        expect(build).toContain('<label class="wv-cfield wv-cxtrafield" hidden>');
+        expect(clientJs).toContain("$('.wv-cxtrafield').hidden = !state.extraOn;");
+        // Off means the text is not sent, so the switch cannot lie.
+        expect(clientJs).toContain("extra: state.extraOn ? state.extra : '',");
+    });
+
+    test('the new rows cannot restyle the collect lists', () => {
+        // `.wv-crow` already belongs to a collect-stage book row with its own
+        // card background; the menu rows are `.wv-cm` so neither can win.
+        expect(clientCss).toMatch(/\.wv-crow \{[\s\S]{0,120}background: rgba\(255, 255, 255, 0\.04\);/);
+        expect(clientCss).toMatch(/\.wv-cm \{[\s\S]{0,120}display: flex;/);
+        // A menu row carries no fill of its own; only hover paints it.
+        expect(clientCss).not.toMatch(/\.wv-cm \{[\s\S]{0,140}background:/);
+    });
+
+    test('the actions do not stretch and the patience note follows them', () => {
+        expect(build).toContain('class="wv-cpatience"');
+        expect(build).toContain('please be patient.');
+        expect(clientCss).toMatch(/\.wv-cactions \.wv-abtn \{\r?\n\s+flex: 0 0 auto;/);
+        expect(clientCss).not.toContain('min-width: 170px;');
+    });
+});
