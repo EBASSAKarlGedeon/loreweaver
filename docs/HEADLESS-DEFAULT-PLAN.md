@@ -1,10 +1,10 @@
 # Headless by default — design proposal (embedded-engine Step 3)
 
-Status: **implemented 2026-11-25 behind `VAULT_BROWSER_HEADLESS` (default off).** Evidence:
-`docs/HEADLESS-PROBE.md` (probe 1: fingerprint parity; probe 2: 5/5 clear on the
-site, headless and headful alike) and the local smoke test below. The default is
-not flipped yet: that needs one site run on the vault profile, which costs a page
-load (~288 requests) and is waiting on the user.
+Status: **implemented 2026-11-25 behind `VAULT_BROWSER_HEADLESS` (default off), and
+now verified on the site.** Evidence: `docs/HEADLESS-PROBE.md` (probes 1-2:
+fingerprint parity; probe 3: headless on the vault's own profile, blocked at first,
+cleared once the user agent was moved onto the command line). Flipping the default
+is a one-line change and is waiting on the user, not on evidence.
 
 Where the code is: `src/endpoints/weavers-vault-headless-identity.js` (the identity:
 measure, cache, apply, refuse) and `src/endpoints/weavers-vault-chrome-backend.js`
@@ -101,6 +101,15 @@ throwaway profile against the local dev server, so it costs the site nothing:
 The earlier measuring path (a headful launch on `this.origin`) was replaced because
 for the janitor session `origin` is janitorai.com: it would have loaded the site
 once every 7 days for no reason. The `file://` probe removed that traffic entirely.
+
+## Verified on the site (2026-11-25)
+
+One page load + one same-origin fetch on `data/_vault-janitor-profile`, headless:
+title `JanitorAI - Build, share, and explore`, signed in, in-page fetch 200, start
+6.5 s, 0 OS windows for the profile's 8 processes. The run before it had been
+blocked (status 200, `Access Restricted`): the identity was applied over CDP after
+the first navigation, which is the request the firewall judges. `--user-agent=` on
+the headless launch fixed it; the whole story is PITFALLS #42 and #43.
 
 ## Risks, in order of how likely they are to bite
 

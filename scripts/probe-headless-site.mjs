@@ -10,6 +10,7 @@
  * Usage: node scripts/probe-headless-site.mjs [--profile <dir>] [--headful]
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ChromeBackend } from '../src/endpoints/weavers-vault-chrome-backend.js';
 
@@ -25,6 +26,7 @@ const PAGE_READ = `(() => ({
     url: location.href,
     ready: document.readyState,
     signedIn: !!document.querySelector('a[href*="/profile"], [data-testid="user-menu"]') || /log ?out/i.test(document.body.innerText || ''),
+    blocked: /Access Restricted|blocked by our firewall/i.test(document.body.innerText || ''),
     text: (document.body.innerText || "").slice(0, 160).replace(/\s+/g, " "),
     cookieNames: document.cookie.split(";").map(c => c.split("=")[0].trim()).filter(Boolean),
 }))()`;
@@ -61,6 +63,13 @@ async function main() {
             brands: (navigator.userAgentData?.brands ?? []).map(b => b.brand + '/' + b.version),
         }))()`, { awaitPromise: false, timeoutMs: 10_000 });
         result.cachedIdentity = fs.existsSync(path.join(profileDir, 'headless-identity.json'));
+        // If it blocked, keep the page: analysing a saved copy costs no requests.
+        if (result.page?.blocked === true) {
+            const html = await backend.page.evaluate('document.documentElement.outerHTML', { awaitPromise: false, timeoutMs: 20_000 });
+            const target = path.join(os.tmpdir(), 'headless-block.html');
+            fs.writeFileSync(target, String(html ?? ''), 'utf8');
+            result.blockPage = { saved: target, bytes: String(html ?? '').length };
+        }
         result.verdict = {
             document: result.page?.title,
             signedIn: result.page?.signedIn === true,

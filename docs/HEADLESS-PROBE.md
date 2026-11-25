@@ -151,3 +151,51 @@ node scripts/probe-site.mjs                 # 5 trials per variant, alternating,
 node scripts/probe-site.mjs --trials=3      # fewer sessions
 node scripts/probe-site.mjs --site=http://127.0.0.1:8000/csrf-token   # offline self-test of the plumbing
 ```
+
+## Probe 3 (2026-11-25): headless on the real profile, blocked, then cleared
+
+The first two probes compared a headless browser against a headful one. This one
+ran the **production backend** headless on the vault's signed-in janitor profile
+(`data/_vault-janitor-profile`), one page load plus one same-origin fetch per run,
+and it failed before it passed — which is the part worth keeping.
+
+**Run 1 — blocked.** Identity present and correct (`Chrome/158.0.0.0`, three
+brands, 1536x864, dpr 1.25, no `Headless` anywhere in the page), and the site
+answered with its firewall page: **status 200**, title `Access Restricted`, 710 KB,
+signed out, no `cf-mitigated`, no `_cf_chl_opt`. So the DOM fingerprint was not the
+tell, and the block was not a challenge either.
+
+**What the request said.** `scripts/probe-request-headers.mjs` points the backend at
+a local server that prints the raw headers it receives, so it costs the site
+nothing. The document request in headless mode carried
+`...HeadlessChrome/158.0.0.0...`; the very next fetch from that same page carried
+`...Chrome/158.0.0.0...`. Every other header — `Sec-CH-UA`, `Sec-CH-UA-Platform`,
+`Sec-Fetch-*`, `Accept-Language`, encodings — was already identical to headful. The
+identity was being applied over CDP *after* the navigation that gets judged.
+
+**Run 2 — cleared.** With `--user-agent=<measured UA>` on the headless command
+line (`ChromeBackend.launchArgs()`), the same profile, same identity, same machine:
+
+| | run 1 | run 2 |
+| --- | --- | --- |
+| start | 7020 ms | 6511 ms |
+| in-page fetch | 200 · 710762 B | 200 · 709648 B |
+| title | `Access Restricted` | `JanitorAI - Build, share, and explore` |
+| signed in | no | yes |
+| documented UA | `HeadlessChrome/158.0.0.0` | `Chrome/158.0.0.0` |
+| OS windows for the profile | 0 | 0 |
+
+The 710 KB in both rows is the same size for the block page and for the app shell,
+which is why the body, not the status or the length, has to be what a caller looks
+at: `needsHuman()` matches the block page by title/body, and `waitForPage()`
+(`readyExpression()`) refuses to call it the site or to mark the profile as having
+solved a challenge.
+
+Reproduce the local half any time; the site half needs a go-ahead and one page load:
+
+```
+node scripts/probe-browser-fingerprint.mjs   # page-side diff, headful vs headless
+node scripts/probe-request-headers.mjs       # wire-side diff, against a local server
+node scripts/smoke-headless-backend.mjs      # production backend, local origin, --headful for the other mode
+node scripts/probe-headless-site.mjs         # ONE real page load on the vault profile
+```
