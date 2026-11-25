@@ -31,15 +31,17 @@ export const IDENTITY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Whether the vault browser runs headless.
  *
- * Off unless asked for: `VAULT_BROWSER_HEADLESS=1` (or the `headless` option).
- * Explicit `0`/`false` wins even against a truthy option, so a config file can
- * always turn it off.
+ * On by default: a window the user should never see is the point, and the
+ * measured behaviour on the site is now the same headless as headful (probe 3).
+ * An explicit `0`/`false` wins everywhere — an option, the environment, or both —
+ * because that is the documented way back to a visible browser, and a switch that
+ * can be overridden by the thing it is meant to override is not a switch.
  * @param {boolean|string|null} [override] explicit value (option)
  * @param {Record<string,string|undefined>} [env]
  * @returns {boolean}
  */
 export function resolveHeadlessMode(override = null, env = process.env) {
-    let on = false;
+    let on = true;
     for (const value of [override, env?.VAULT_BROWSER_HEADLESS]) {
         if (value === null || value === undefined || value === '') continue;
         const text = String(value).trim().toLowerCase();

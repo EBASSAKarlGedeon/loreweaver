@@ -59,13 +59,15 @@ function tempProfile() {
 }
 
 describe('resolveHeadlessMode', () => {
-    test('is off by default', () => {
-        // The whole point of the switch: nobody gets a new behaviour by updating.
-        expect(resolveHeadlessMode(null, {})).toBe(false);
-        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: undefined })).toBe(false);
+    test('is on by default', () => {
+        // Flipped 2026-11-25, after probe 3: the site answers a headless browser
+        // whose first navigation carries the measured UA exactly as it answers a
+        // headful one. A window the user should never see is the point.
+        expect(resolveHeadlessMode(null, {})).toBe(true);
+        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: undefined })).toBe(true);
     });
 
-    test('turns on from the option or the environment', () => {
+    test('still turns on from the option or the environment', () => {
         expect(resolveHeadlessMode(true, {})).toBe(true);
         expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: '1' })).toBe(true);
         expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: 'true' })).toBe(true);
@@ -80,9 +82,14 @@ describe('resolveHeadlessMode', () => {
         expect(resolveHeadlessMode('off', {})).toBe(false);
     });
 
-    test('junk falls back to off', () => {
-        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: 'maybe' })).toBe(false);
-        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: '2' })).toBe(false);
+    test('only the off spellings turn it off, junk changes nothing', () => {
+        // A value we do not understand is ignored rather than guessed at; the
+        // documented off spellings are the switch.
+        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: 'maybe' })).toBe(true);
+        expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: '2' })).toBe(true);
+        for (const off of ['0', 'false', 'off', 'no', ' OFF ']) {
+            expect(resolveHeadlessMode(null, { VAULT_BROWSER_HEADLESS: off })).toBe(false);
+        }
     });
 });
 
