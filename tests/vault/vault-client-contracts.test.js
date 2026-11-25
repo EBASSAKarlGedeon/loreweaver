@@ -17,12 +17,19 @@ import path from 'node:path';
  *    matches).
  *  - The NSFW artwork blur is gone for good (user decision, 2026-11-26).
  *  - PITFALLS #35: `reveal()` must re-apply the taskbar style it just removed.
+ *
+ * The automation window's process/CDP/window code now lives in the Chrome backend
+ * (EMBEDDED-ENGINE-PLAN Phase 1), so the guards below read both modules: they pin
+ * what the code does, not which file it happens to sit in.
  */
 
 const clientDir = path.resolve('public/scripts/extensions/weavers-vault');
 const clientJs = fs.readFileSync(path.join(clientDir, 'index.js'), 'utf8');
 const clientCss = fs.readFileSync(path.join(clientDir, 'style.css'), 'utf8');
-const browserJs = fs.readFileSync(path.resolve('src/endpoints/weavers-vault-browser.js'), 'utf8');
+const browserJs = [
+    fs.readFileSync(path.resolve('src/endpoints/weavers-vault-browser.js'), 'utf8'),
+    fs.readFileSync(path.resolve('src/endpoints/weavers-vault-chrome-backend.js'), 'utf8'),
+].join('\n');
 
 describe('janitor search request', () => {
     test('sends the SFW/NSFW switch as the site mode parameter', () => {
@@ -83,5 +90,20 @@ describe('revealed automation window', () => {
         // The reveal must end by hiding the taskbar button again, or a sticky
         // hold leaves a Chrome icon up for its whole TTL.
         expect(body).toMatch(/this\.taskbarHidden = false;[\s\S]{0,400}await this\.hideWindow\(\)/);
+    });
+});
+
+describe('engine binary resolution', () => {
+    test('keeps the candidate list with the helper that reads it', () => {
+        // Splitting the engine out once moved findBrowserBinary() but left its
+        // candidate list behind: everything passed, because no unit test starts a
+        // browser and only start() reads that constant (PITFALLS #39).
+        expect(browserJs).toContain('const BROWSER_CANDIDATES = [');
+        const helper = browserJs.slice(browserJs.indexOf('function findBrowserBinary'));
+        const body = helper.slice(0, helper.indexOf('\n}'));
+        expect(body).toContain('BROWSER_CANDIDATES');
+        // And the list is still a real list, not an empty array left by a delete.
+        const list = browserJs.slice(browserJs.indexOf('const BROWSER_CANDIDATES = ['));
+        expect(list.slice(0, list.indexOf('].filter(Boolean)'))).toContain('chrome.exe');
     });
 });

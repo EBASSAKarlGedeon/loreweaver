@@ -75,15 +75,26 @@ fetch-token helpers, challenge waiting — is backend-independent and stays put.
 
 ## Phases
 
-### Phase 1 — extract the backend interface (pure refactor, zero behavior change)
-- Split `VaultBrowser`'s process/window/CDP-touching methods into
-  `ChromeBackend` (same file or `weavers-vault-chrome-backend.js`); `VaultBrowser`
-  keeps orchestration and calls the backend.
-- `getVaultBrowser(key, options)` picks the backend via a small factory:
-  `process.versions.electron ? 'electron' : 'chrome'`.
-- **Acceptance:** all 311 vault tests pass; one live UI pass (search + card
-  detail + a capture) behaves exactly as before; no window regressions. The
-  user's retest of PITFALLS #35/#37 fixes is the baseline.
+### Phase 1 — extract the backend interface (pure refactor, zero behavior change) — **done**
+- Landed as three modules: `weavers-vault-browser.js` (`VaultBrowser`: holds, the
+  request queue, idle teardown, and every page-level CDP verb),
+  `weavers-vault-chrome-backend.js` (`ChromeBackend`: spawn/attach, `CdpPage`,
+  window park/hide/reveal, profile reclaim, challenge wait, profile marker) and
+  `weavers-vault-browser-error.js` (`VaultBrowserUnavailable`, one definition so
+  the routes still catch it by identity).
+- The seam is two facts, not a big interface: the engine asks the session who
+  owns the window (`isHeld`) and reports its own exit (`onExit`). `VaultBrowser`
+  owns every decision; `ChromeBackend` owns every Chrome call.
+- `selectBrowserBackendKind()` exists but answers `'chrome'`: the packaged app is
+  Electron, so `process.versions.electron ? 'electron' : 'chrome'` before
+  `ElectronBackend` exists would leave the desktop build with no engine at all.
+  Phase 2 flips that one line.
+- **Acceptance met:** 319 vault tests pass (311 before + 8 seam tests); a local
+  session ran end to end (start → fetch → screenshot → reveal → release →
+  navigate → reload → dispose, 9.9 s, no leftover process) and a live janitor
+  search + card detail went through the new backend (34 normalised hits, detail
+  200, 4.7 s, 2 site requests). Capture was **not** run: it rewrites the site
+  account's API settings, so it stays a user-driven step.
 
 ### Phase 2 — ElectronBackend
 - New `src/electron/vault-driver.js` (Electron main process): creates hidden
