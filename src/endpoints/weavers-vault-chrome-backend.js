@@ -17,9 +17,10 @@
  * `HeadlessChrome` earns `403 Access Restricted`, a firewall block (measured
  * 2026-11-25). With the identity of a real Chrome on this machine applied first
  * it passes exactly like a headful one (probe 2: 5/5, and the same 200 fetch),
- * which is why `headless` exists: no window, so nothing to hide. It stays off
- * until `VAULT_BROWSER_HEADLESS=1`, and a human sign-in still needs a window,
- * which is what `escalateToSignIn()` provides.
+ * which is why `headless` exists: no window, so nothing to hide. It is the
+ * default (`resolveHeadlessMode`, `VAULT_BROWSER_HEADLESS=0` is the way back to
+ * a visible browser), and a human sign-in still needs a window, which is what
+ * `escalateToSignIn()` provides.
  */
 
 import { spawn, spawnSync } from 'node:child_process';

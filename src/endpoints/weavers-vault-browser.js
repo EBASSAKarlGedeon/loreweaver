@@ -144,9 +144,10 @@ export class VaultBrowser {
         this.idleTimer = null;
         /** How long an idle session survives; see `IDLE_TTL_MS`. */
         this.idleTtlMs = resolveIdleTtl(idleTtlMs);
-        // Off unless asked for; `VAULT_BROWSER_HEADLESS=1` turns it on and an
-        // explicit `0` always wins. Headless needs no window, so it needs none of
-        // the window hygiene; a human step escalates to a plain window instead.
+        // On by default: no window is the goal, and the site cannot tell the
+        // difference once the identity is applied (probe 3). An explicit `0`
+        // always wins. Headless needs no window, so it needs none of the window
+        // hygiene; a human step escalates to a plain window instead.
         this.headless = resolveHeadlessMode(headless);
         /** Set once a human has been asked for a check; see `escalateForHuman`. */
         this.escalated = false;

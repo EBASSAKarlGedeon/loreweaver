@@ -1,10 +1,15 @@
 # Headless by default — design proposal (embedded-engine Step 3)
 
-Status: **implemented 2026-11-25 behind `VAULT_BROWSER_HEADLESS` (default off), and
-now verified on the site.** Evidence: `docs/HEADLESS-PROBE.md` (probes 1-2:
-fingerprint parity; probe 3: headless on the vault's own profile, blocked at first,
-cleared once the user agent was moved onto the command line). Flipping the default
-is a one-line change and is waiting on the user, not on evidence.
+Status: **DONE — headless is the default (2026-11-25), verified on the site, committed
+and pushed.** `resolveHeadlessMode()` returns `true` unless an explicit `0`/`false`
+arrives (`VAULT_BROWSER_HEADLESS=0`, or the `headless` option); evidence in
+`docs/HEADLESS-PROBE.md` (probes 1-2: fingerprint parity; probe 3: headless on the
+vault's own profile, blocked at first, cleared once the user agent was moved onto the
+command line). A human sign-in still gets a real window through `escalateToSignIn()`.
+Probe 3 ran that exact headless path on the live site with the vault's own profile; the
+default flip only changes which flag value is used, not the code path probe 3 measured.
+In the headless path no window is created at all, so there is nothing to flash, park or
+hide.
 
 Where the code is: `src/endpoints/weavers-vault-headless-identity.js` (the identity:
 measure, cache, apply, refuse) and `src/endpoints/weavers-vault-chrome-backend.js`
