@@ -138,6 +138,16 @@ describe('the client wires those decisions', () => {
         expect(clientJs).not.toContain('wv-dfab-recover');
     });
 
+    test('the options are a menu anchored to the button, not a sheet over the layout', () => {
+        expect(clientJs).not.toContain('<div class="wv-modesheet">\n        + \'<div class="wv-modehandle"></div>');
+        expect(optionsSheet).toContain("'<div class=\"wv-importmenu\" role=\"menu\" aria-label=\"Import options\">'");
+        expect(optionsSheet).toContain('wv-mode-overlay wv-menuoverlay');
+        // Right edges flush with the button, 10px above it, clamped to 12px.
+        expect(optionsSheet).toContain('box.right - width');
+        expect(optionsSheet).toContain('box.top - height - 10');
+        expect(optionsSheet).toContain('const margin = 12;');
+    });
+
     test('the sheet is gated on the character listing books', () => {
         expect(openFlow).toContain('if (!refs.length)');
         expect(openFlow).toContain('showImportOptions({');
@@ -199,6 +209,24 @@ describe('the client wires those decisions', () => {
 });
 
 describe('capture sheet styles', () => {
+    test('row buttons never paint the UA buttonface', () => {
+        const reset = clientCss.slice(clientCss.indexOf(':where(#wv-root) button {'), clientCss.indexOf('}', clientCss.indexOf(':where(#wv-root) button {')));
+        expect(reset).toContain('background: transparent;');
+        expect(reset).toContain('border: 0;');
+        expect(reset).toContain('color: inherit;');
+        // Zero specificity, or every hover/focus rule in the file loses to it.
+        expect(reset).not.toContain('#wv-root button');
+        expect(clientCss.indexOf(':where(#wv-root) button {')).toBeLessThan(clientCss.indexOf('.wv-modecard button {'));
+    });
+
+    test('the import menu is compact and undimmed', () => {
+        const menu = clientCss.slice(clientCss.indexOf('.wv-importmenu {'), clientCss.indexOf('@keyframes wv-menu-in'));
+        expect(menu).toContain('width: min(320px, calc(100vw - 24px));');
+        expect(menu).toContain('position: absolute;');
+        const dim = clientCss.slice(clientCss.indexOf('.wv-menuoverlay {'), clientCss.indexOf('.wv-importmenu {'));
+        expect(dim).toContain('background: transparent;');
+    });
+
     test('a display rule cannot beat the hidden attribute', () => {
         // `.wv-cempty { display: flex }` would otherwise paint over [hidden].
         expect(clientCss).toContain('.wv-csheet [hidden] {');
