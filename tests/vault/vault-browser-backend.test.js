@@ -311,7 +311,11 @@ describe('a headless session that is blocked', () => {
     });
 
     test('needsHuman separates a block page from an ordinary 403', () => {
-        expect(needsHuman({ status: 403, body: 'Access Restricted', challenged: false })).toBe(true);
+        // Measured 2026-11-25 on the real site: the block page arrives with
+        // status 200, so a status check sees a perfectly good page.
+        expect(needsHuman({ status: 200, body: '<title>Access Restricted</title>', challenged: false })).toBe(true);
+        expect(needsHuman({ status: 200, body: '<html><head><title>Access Restricted</title></head>Your access has been blocked by our firewall</html>', challenged: false })).toBe(true);
+        expect(needsHuman({ status: 403, body: '<title>Access Restricted</title>', challenged: false })).toBe(true);
         expect(needsHuman({ status: 403, body: 'blocked by our firewall', challenged: false })).toBe(true);
         expect(needsHuman({ status: 403, body: 'not signed in', challenged: false })).toBe(false);
         expect(needsHuman({ status: 200, body: 'ok', challenged: false })).toBe(false);
@@ -393,6 +397,17 @@ describe('headless mode', () => {
             spy.mockRestore();
             fs.rmSync(dir, { recursive: true, force: true });
         }
+    });
+
+    test('the block page is not mistaken for the site', () => {
+        // Measured 2026-11-25: the firewall block page is titled "Access Restricted"
+        // and answers 200, so a readiness test that only asks for readyState and
+        // the hostname accepts it and marks the profile as challenge-solved.
+        const backend = new ChromeBackend({ ...OPTIONS });
+        const expression = backend.readyExpression();
+        expect(expression).toContain('_cf_chl_opt');
+        expect(expression).toContain(JSON.stringify(OPTIONS.host));
+        expect(expression).toMatch(/Access Restricted/);
     });
 
     test('no usable identity means no headless start, not a guess', async () => {

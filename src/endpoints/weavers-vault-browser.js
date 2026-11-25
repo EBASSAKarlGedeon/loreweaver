@@ -60,17 +60,20 @@ export function resolveIdleTtl(override = null, env = process.env) {
  *
  * `cf-mitigated` is Cloudflare's own word for a challenge. The second form is
  * the firewall's block page ("Access Restricted … blocked by our firewall"),
- * which is what a headless browser earns when its identity is wrong: it carries
- * no `cf-mitigated` and no `_cf_chl_opt`, so without this test it looks like an
- * ordinary 403 and would be retried forever (measured 2026-11-25).
+ * which is what a browser earns when its fingerprint is not believed. It carries
+ * no `cf-mitigated` and no `_cf_chl_opt`, and — measured 2026-11-25 — it comes
+ * back **200 OK**: the status says nothing at all, so the body is the only
+ * witness. Treating it as an ordinary page is how the vault would parse a
+ * 710 KB "your access has been blocked" page as if it were the site.
  * @param {{status?: number, body?: string, challenged?: boolean}|null} result
  * @returns {boolean}
  */
 export function needsHuman(result) {
     if (!result) return false;
     if (result.challenged === true) return true;
-    return Number(result.status) === 403
-        && /Access Restricted|blocked by our firewall/i.test(String(result.body ?? ''));
+    const body = String(result.body ?? '');
+    return /<title>\s*Access Restricted\s*<\/title>/i.test(body)
+        || /blocked by our firewall/i.test(body);
 }
 
 /**

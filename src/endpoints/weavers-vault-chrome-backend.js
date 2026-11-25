@@ -1182,10 +1182,7 @@ export class ChromeBackend {
         let lastFocus = startedAt;
         while (Date.now() < deadline) {
             try {
-                const ready = await this.page.evaluate(
-                    `document.readyState === "complete" && !window._cf_chl_opt && location.hostname === ${JSON.stringify(this.host)}`,
-                    { awaitPromise: false, timeoutMs: 5_000 },
-                );
+                const ready = await this.page.evaluate(this.readyExpression(), { awaitPromise: false, timeoutMs: 5_000 });
                 if (ready === true) {
                     this.logger.info?.(`[Weaver's Vault] ${this.label}: browser session ready`);
                     this.markSolved();
@@ -1202,6 +1199,25 @@ export class ChromeBackend {
         }
         this.logger.warn?.(`[Weaver's Vault] ${this.label}: challenge not cleared in time`);
         return false;
+    }
+
+    /**
+     * The readiness test: the real document, on the right host, not a challenge.
+     *
+     * The third condition is the firewall block page, which is titled exactly
+     * "Access Restricted" and arrives with **200 OK** (measured 2026-11-25):
+     * without it the block page counts as ready, the profile is marked as having
+     * solved the challenge, and every later wait returns at once on a page that
+     * is not the site.
+     * @returns {string}
+     */
+    readyExpression() {
+        return `(() => {
+            if (document.readyState !== "complete") return false;
+            if (window._cf_chl_opt) return false;
+            if (location.hostname !== ${JSON.stringify(this.host)}) return false;
+            return !/^Access Restricted$/i.test(String(document.title || "").trim());
+        })()`;
     }
 
     /** Whether this profile has cleared the challenge before (marker file). */
