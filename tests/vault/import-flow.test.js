@@ -384,6 +384,15 @@ describe('the saving stage matches Glaze', () => {
         expect(clientJs.split("downloadTextFile('extracted-lorebook.txt'").length - 1).toBe(1);
     });
 
+    test('a save is announced once, by the writer', () => {
+        // Live run 2026-11-25: pressing Save produced the same toast twice, once
+        // from save() and once from saveEntries(). Only the writer announces.
+        const start = clientJs.indexOf('const save = async () => {');
+        const body = clientJs.slice(start, clientJs.indexOf('\n    };', start));
+        expect(body).toContain('await saveEntries(');
+        expect(body).not.toContain('toastr.success');
+    });
+
     test('the Tavern JSON that Save writes is shown before it is written', () => {
         expect(save).toContain('<pre class="wv-cpre wv-cjsontext"></pre>');
         expect(clientJs).toContain('JSON.stringify(worldInfoFor(state.built.name, built), null, 2)');
