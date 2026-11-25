@@ -123,6 +123,35 @@ describe('launch sequence', () => {
     });
 });
 
+describe('detail sheet accordion', () => {
+    test('the open body has no pixel height cap (PITFALLS #44)', () => {
+        // The bug was a contract choice, not a typo: 'max-height: 2000px' plus
+        // 'overflow: hidden' painted 1956px of a 5665px description and left the
+        // sheet's own scrollbar ending at 2511px, i.e. the rest was unreachable.
+        // Measured 2026-11-26 in a stylesheet harness: 2511px scrollable before,
+        // 6160px after (content fully inside).
+        const rule = clientCss.slice(clientCss.indexOf('.wv-acc.open .wv-accbody'));
+        const openBlock = rule.slice(0, rule.indexOf('}'));
+        expect(openBlock).toMatch(/max-height:\s*none;/);
+        expect(openBlock).not.toMatch(/max-height:\s*\d+px/);
+        // The closed state keeps its 3-line clamp: only the open one is uncapped.
+        const closed = clientCss.slice(clientCss.indexOf('.wv-accbody {'));
+        expect(closed.slice(0, closed.indexOf('}'))).toMatch(/max-height:\s*\d+px;/);
+    });
+
+    test('the expansion is measured, not guessed', () => {
+        const all = clientJs.slice(clientJs.indexOf("popup.querySelectorAll('.wv-acc')"));
+        const handler = all.slice(0, all.indexOf('wv-greetrow'));
+        // Open: hand the real content height to the transition...
+        expect(handler).toContain('body.scrollHeight');
+        // ...then release it, or the body stays frozen at that height.
+        expect(handler).toContain('body.style.maxHeight =');
+        expect(handler).toContain('none');
+        // Closing pins the height first; from 'none' the transition would snap.
+        expect(handler).toContain('void body.offsetHeight');
+    });
+});
+
 describe('engine binary resolution', () => {
     test('keeps the candidate list with the helper that reads it', () => {
         // Splitting the engine out once moved findBrowserBinary() but left its
