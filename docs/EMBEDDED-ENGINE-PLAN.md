@@ -1,9 +1,17 @@
 # Embedded web engine for the vault (Electron) — plan
 
-Status: PLANNED, not started. Written 2026-11-27 after the user asked "can we
-embed the engine like Glaze does?" while the external-Chrome driver was still
-fresh from three window-management bug reports (PITFALLS #35, #37 and the
-taskbar reports).
+Status: **SHELVED 2026-11-25.** Phase 1 (the backend split) is done and in use.
+Phases 2-4 are filed, not started, and must not be started: the goal was
+narrowed by the user to window hygiene on the external-Chrome path — "the
+Chrome window the vault uses must never be seen: no flash on screen, no taskbar
+button, no Alt-Tab entry; it should only appear when I have to sign in." That is
+being fixed directly (PITFALLS #40, #41). Revisit this plan only if the headless
+experiment (Step 2: `--headless=new` + UA override) fails to clear Cloudflare;
+the Electron details below stay as evidence collected on 2026-11-25.
+
+Written 2026-11-27 after the user asked "can we embed the engine like Glaze
+does?" while the external-Chrome driver was still fresh from three
+window-management bug reports (PITFALLS #35, #37 and the taskbar reports).
 
 ## Why
 
@@ -96,7 +104,14 @@ fetch-token helpers, challenge waiting — is backend-independent and stays put.
   200, 4.7 s, 2 site requests). Capture was **not** run: it rewrites the site
   account's API settings, so it stays a user-driven step.
 
-### Phase 2 — ElectronBackend
+### Phase 2 — ElectronBackend — **shelved 2026-11-25, do not start**
+
+Shelved with the rest of the plan: window hygiene is being solved on the
+external-Chrome path (a taskbar watcher started before the spawn, park before
+the challenge wait, and a reveal that is a normal window — PITFALLS #40, #41),
+and the engine question moves to the headless experiment in `docs/` notes and
+`scripts/probe-headless.mjs`. The measurements below are kept because they are
+the evidence that would justify coming back.
 - New `src/electron/vault-driver.js` (Electron main process): creates hidden
   `BrowserWindow`s (`show: false`, `skipTaskbar: true`, one per source, session
   partition per source), exposes `send()`-shaped CDP through

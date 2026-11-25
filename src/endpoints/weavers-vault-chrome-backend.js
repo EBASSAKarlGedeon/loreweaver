@@ -159,6 +159,70 @@ Write-Output $script:n
 }
 
 /**
+ * The watcher that strips the taskbar button the moment a window exists.
+ *
+ * `hideProfileWindows()` can only run after the browser answers — and PowerShell
+ * has to boot first — so every launch carries a real taskbar button (and Alt-Tab
+ * entry) for a while: measured 2026-11-26, ~1050 ms on this machine. That is the
+ * window the user sees as "Chrome flashes open and shut", because there is
+ * nothing else to see: the window itself is born offscreen.
+ *
+ * Started *before* the spawn, so `Add-Type` compiles while Chrome boots. It
+ * polls every 50 ms and applies the tool-window style as soon as a window of
+ * this profile exists. `$script:` scoping is required: the enum callback runs
+ * outside the function scope, where plain `$pids` would be empty.
+ * @param {string} base profile folder name, matched against the command line
+ * @param {number} budgetMs how long to keep watching (it exits on its own)
+ * @returns {string} a PowerShell script that prints how many windows it restyled
+ */
+function taskbarWatchScript(base, budgetMs) {
+    const safe = String(base).replace(/'/g, "''");
+    return `
+Add-Type -Namespace Wv -Name W -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll", EntryPoint="GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+[DllImport("user32.dll", EntryPoint="SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+'@
+$script:pids = @()
+$script:nextRefresh = 0
+$script:n = 0
+$script:deadline = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() + ${Math.round(budgetMs)}
+$cb = [Wv.W+EnumWindowsProc]{
+    param($h, $l)
+    $procId = [uint32]0
+    [void][Wv.W]::GetWindowThreadProcessId($h, [ref]$procId)
+    if (($script:pids -contains $procId) -and [Wv.W]::IsWindowVisible($h)) {
+        $ex = [int64][Wv.W]::GetWindowLongPtr($h, -20)
+        # TOOLWINDOW on, APPWINDOW off: no taskbar button, no Alt-Tab entry.
+        $new = ($ex -bor 0x80) -band (-bnot 0x40000)
+        if ($new -ne $ex) {
+            [void][Wv.W]::SetWindowLongPtr($h, -20, [IntPtr]$new)
+            [void][Wv.W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x27)
+            $script:n++
+        }
+    }
+    return $true
+}
+while ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() -lt $script:deadline) {
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    if ($now -ge $script:nextRefresh) {
+        $script:pids = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" |
+            Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains('${safe}') } |
+            ForEach-Object { [uint32]$_.ProcessId })
+        $script:nextRefresh = $now + 1000
+    }
+    if ($script:pids.Count -gt 0) { [void][Wv.W]::EnumWindows($cb, [IntPtr]::Zero) }
+    Start-Sleep -Milliseconds 50
+}
+Write-Output $script:n
+`;
+}
+
+/**
  * Ask Chrome to shut down through its own shutdown path.
  *
  * A killed browser records `profile.exit_type: "Crashed"` in its Preferences,
@@ -471,6 +535,8 @@ export class ChromeBackend {
         // own command line relative too, which defeats profile reclaiming.
         this.profileDir = path.resolve(profileDir);
         this.child = null;
+        /** The taskbar watcher (Windows only), while one is running. */
+        this.taskbarWatch = null;
         /** The attached page; null until start() or adoptExisting() succeeds. */
         this.page = null;
         this.port = null;
@@ -483,11 +549,49 @@ export class ChromeBackend {
     }
 
     /**
+     * Start the taskbar watcher. Windows only, best effort, never throws.
+     *
+     * Called right before the browser spawns, so `Add-Type` compiles while Chrome
+     * boots: the first 50 ms tick that sees a window restyles it, instead of the
+     * ~1050 ms a taskbar button used to stay visible (measured 2026-11-26).
+     * @param {{budgetMs?: number}} [options]
+     * @returns {import('node:child_process').ChildProcess|null}
+     */
+    startTaskbarWatch({ budgetMs = 8000 } = {}) {
+        if (process.platform !== 'win32') return null;
+        this.stopTaskbarWatch();
+        try {
+            const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+                taskbarWatchScript(path.basename(this.profileDir), budgetMs)],
+            { stdio: 'ignore', windowsHide: true });
+            child.on('error', () => {});
+            child.unref?.();
+            this.taskbarWatch = child;
+            return child;
+        } catch {
+            return null;
+        }
+    }
+
+    /** Stop the watcher: a human reveal, or the browser going away. */
+    stopTaskbarWatch() {
+        const child = this.taskbarWatch;
+        this.taskbarWatch = null;
+        if (!child) return;
+        try { child.kill(); } catch { /* already gone */ }
+    }
+
+    /**
      * Put the window on screen for a human step: placed, raised, focused — and
-     * still without a taskbar button (the measured reason is inline).
+     * deliberately a *normal* window again. A window the user must find and type
+     * into is unusable while it has neither a taskbar button nor an Alt-Tab entry
+     * (the reported "I cannot Alt-Tab back to it", 2026-11-26). `park()` puts the
+     * tool style back when the step ends.
      * @returns {Promise<{revealed: number, running: boolean}>}
      */
     async reveal() {
+        // The watcher would strip the button again for the rest of its budget.
+        this.stopTaskbarWatch();
         await this.focusPage();
         // Chrome places its own window. Moving a window that was born at
         // -32000,-32000 with SetWindowPos leaves the compositor holding a stale
@@ -503,21 +607,10 @@ export class ChromeBackend {
         // to reallocate the compositor's output.
         await this.nudgeWindowSize();
         await this.focusPage();
-        // A revealed window is on screen and in front, so it does not need a
-        // taskbar button as well — and leaving one is exactly what the user sees
-        // as a stray Chrome icon while using the vault. Measured 2026-11-26 on the
-        // live janitor window: after reveal() the extended style was 0x00240100
-        // (WS_EX_APPWINDOW, tool=False), i.e. a taskbar button, and the only code
-        // that ever put TOOLWINDOW back was release()->park(). A sticky hold (the
-        // persona wall) blocks release() for its whole TTL, so the button then sat
-        // there for 20 minutes. hideWindow() only restyles: it neither moves nor
-        // hides the window, so the human can keep typing into it.
+        // Deliberately *not* re-hiding it: the sign-in window is a normal window
+        // for as long as the human needs it (taskbar button and Alt-Tab entry
+        // included). release() -> park() restores the tool style afterwards.
         this.taskbarHidden = false;
-        await this.hideWindow();
-        // The shell can add the button a beat after the window is shown, so apply
-        // it once more after things settle (hideWindow's no-op branch re-toggles
-        // the style, which is what forces the shell to re-evaluate).
-        setTimeout(() => { this.hideWindow().catch(() => {}); }, 1_500).unref?.();
         return { revealed: placed ? 1 : 0, raised, running: this.isRunning() };
     }
 
@@ -615,13 +708,63 @@ export class ChromeBackend {
         }
         fs.mkdirSync(this.profileDir, { recursive: true });
 
+        // Started before anything else in the start path, and long before the
+        // spawn: the watcher needs ~1.8 s to compile its C# helper (measured) and
+        // Chrome has a window up ~0.5 s after spawn, so starting it here is what
+        // makes the restyle land on the first tick instead of 1.8 s later. The
+        // budget covers a slow start (challenge waits happen after this).
+        this.startTaskbarWatch({ budgetMs: 25_000 });
+
         // A previous run can leave the browser holding the profile lock (a crash
         // skips dispose()). Chrome then refuses to start a second instance on the
         // same profile and the remote-debugging file is stale, so adopt the live
         // session when it still answers — the profile is ours and single-owner.
         const adopted = await this.adoptExisting();
-        if (adopted) return;
+        if (adopted) {
+            // The adopted window is parked below; the watcher has no work left.
+            this.stopTaskbarWatch();
+            return;
+        }
 
+        await this.prepareProfile();
+
+        // Spawn and attach live in launch(): they need a real browser, while the
+        // lines above are policy decisions that a test can drive with a mock.
+        await this.launch(binary);
+
+        // Keep the window out of the taskbar. The watcher started at the top of
+        // start() usually beat us to it (that is the point); this is the
+        // fallback for when PowerShell could not start at all.
+        await this.hideWindow();
+        // Park *before* the wait, not after it: waitForPage() can spend the whole
+        // challenge budget (up to two minutes) and until park() runs the window
+        // sits wherever Chrome restored its saved placement — mid-desktop after a
+        // sign-in, for the entire wait (measured 2026-11-26).
+        await this.park();
+        const cleared = await this.waitForPage();
+        // Safety net: a window created while loading (Chrome restores one after a
+        // crash) would not carry the style, and Chrome may restore a placement.
+        await this.hideWindow();
+        await this.park();
+        if (!cleared) {
+            // Leave nothing half-solved behind: a challenged page would be reused
+            // by the next request and fail the same way.
+            await this.dispose();
+            throw new VaultBrowserUnavailable(
+                'The Cloudflare check did not finish. A Chrome window stays open for a moment — '
+                + 'if it shows a verification button, click it once and retry.',
+            );
+        }
+    }
+
+    /**
+     * Take the profile back from a previous run, before anything spawns.
+     *
+     * Split out of `start()` so a test can drive the start sequence without a
+     * browser: this is the only part that touches PowerShell and the filesystem.
+     * @returns {Promise<void>}
+     */
+    async prepareProfile() {
         // Nothing answers on the recorded port, but a previous run's browser can
         // still be alive and holding the profile. Chrome would hand our URL to it
         // and exit 0 with no debugging port — a wedge that looked like Cloudflare
@@ -642,7 +785,14 @@ export class ChromeBackend {
                 fs.rmSync(path.join(this.profileDir, name), { force: true, recursive: true });
             } catch { /* best effort */ }
         }
+    }
 
+    /**
+     * Spawn the browser, read its debugging port and attach to its page.
+     * @param {string} binary
+     * @returns {Promise<void>}
+     */
+    async launch(binary) {
         const args = [
             '--remote-debugging-port=0',
             `--user-data-dir=${this.profileDir}`,
@@ -673,6 +823,7 @@ export class ChromeBackend {
         ];
         if (this.headless) args.splice(args.length - 1, 0, '--headless=new');
 
+
         this.child = spawn(binary, args, { stdio: ['ignore', 'ignore', 'pipe'], detached: false });
         let stderrTail = '';
         this.child.stderr?.on('data', chunk => {
@@ -681,6 +832,7 @@ export class ChromeBackend {
         let exited = null;
         this.child.on('exit', code => {
             exited = code;
+            this.stopTaskbarWatch();
             this.page?.close();
             this.page = null;
             this.child = null;
@@ -699,6 +851,7 @@ export class ChromeBackend {
             await new Promise(r => setTimeout(r, 150));
         }
         if (!port) {
+            this.stopTaskbarWatch();
             const detail = exited !== null ? ` (browser exited with code ${exited}${stderrTail ? `: ${stderrTail.trim().split('\n').slice(-2).join(' ')}` : ''})` : '';
             throw new VaultBrowserUnavailable(`The browser did not expose a debugging port in time${detail}.`);
         }
@@ -706,30 +859,8 @@ export class ChromeBackend {
         this.port = port;
         this.page = await this.attachToPage(port);
         if (!this.page) {
+            this.stopTaskbarWatch();
             throw new VaultBrowserUnavailable('The browser page could not be attached.');
-        }
-
-        // Keep the window out of the taskbar. Applied per window, so it must run
-        // after the window exists; re-applied below in case the page creates
-        // another one while loading.
-        await this.hideWindow();
-        const cleared = await this.waitForPage();
-        // A window created while loading (Chrome restores one on a crash) would
-        // not carry the style yet.
-        await this.hideWindow();
-        // And put it back offscreen by CDP, not by trusting `--window-position`:
-        // Chrome restores the last placement it saved for the profile, so a reveal
-        // in an earlier session makes every later session born on screen. Measured
-        // 2026-11-26: the window appeared mid-desktop for its whole 30 s lifetime.
-        await this.park();
-        if (!cleared) {
-            // Leave nothing half-solved behind: a challenged page would be reused
-            // by the next request and fail the same way.
-            await this.dispose();
-            throw new VaultBrowserUnavailable(
-                'The Cloudflare check did not finish. A Chrome window stays open for a moment — '
-                + 'if it shows a verification button, click it once and retry.',
-            );
         }
     }
 
@@ -849,6 +980,7 @@ export class ChromeBackend {
     }
 
     async dispose() {
+        this.stopTaskbarWatch();
         this.page?.close();
         this.page = null;
         const child = this.child;

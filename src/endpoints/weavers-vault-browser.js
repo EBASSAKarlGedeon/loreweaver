@@ -26,7 +26,33 @@ import { VaultBrowserUnavailable } from './weavers-vault-browser-error.js';
 export { VaultBrowserUnavailable };
 export { findBrowserBinary } from './weavers-vault-chrome-backend.js';
 
-const IDLE_TTL_MS = 30_000;
+/**
+ * How long an idle session keeps its parked browser alive.
+ *
+ * Was 30 s, which made every pause longer than half a minute pay for a fresh
+ * browser start — spawn, port, attach, page load: ~10 s of wall time, on a
+ * profile that has signed in with a window that briefly carries a taskbar
+ * button (measured 2026-11-26). Ten minutes keeps a signed-in session warm
+ * across a browsing session and still tears it down when the machine goes idle.
+ *
+ * Override with `VAULT_BROWSER_IDLE_TTL_MS` (milliseconds) while debugging, or
+ * per session with the `idleTtlMs` option.
+ */
+export const IDLE_TTL_MS = 10 * 60_000;
+
+/**
+ * The idle TTL in force for one session.
+ * @param {number|string|null} [override] explicit value (option or env)
+ * @param {Record<string,string|undefined>} [env]
+ * @returns {number} milliseconds, always positive
+ */
+export function resolveIdleTtl(override = null, env = process.env) {
+    for (const value of [override, env?.VAULT_BROWSER_IDLE_TTL_MS]) {
+        const ms = Number(value);
+        if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    return IDLE_TTL_MS;
+}
 
 /**
  * Which engine backend drives a session.
@@ -70,14 +96,15 @@ export class VaultBrowser {
     /**
      * @param {{profileDir: string, host: string, origin: string, label?: string,
      *   chromePath?: string|null, settingName?: string, envName?: string,
-     *   headless?: boolean, logger?: {info: Function, warn: Function}}} options
+     *   headless?: boolean, idleTtlMs?: number|null,
+     *   logger?: {info: Function, warn: Function}}} options
      *   `host` matches page targets and is asserted by `waitForPage`; `origin`
      *   is the URL the browser is parked on. Everything else is per-source only
      *   for messages.
      */
     constructor({ profileDir, host, origin, label = 'Vault', chromePath = null,
         settingName = 'vaultBrowserPath', envName = 'VAULT_BROWSER_PATH',
-        headless = false, logger = console }) {
+        headless = false, idleTtlMs = null, logger = console }) {
         if (!host || !origin) throw new Error('VaultBrowser needs a host and an origin');
         this.host = host;
         this.origin = origin;
@@ -93,6 +120,8 @@ export class VaultBrowser {
         this.gate = Promise.resolve();
         this.pending = 0;
         this.idleTimer = null;
+        /** How long an idle session survives; see `IDLE_TTL_MS`. */
+        this.idleTtlMs = resolveIdleTtl(idleTtlMs);
         /** Epoch ms until which the idle teardown must not fire. */
         this.holdUntil = 0;
         /** A hold that only its own deadline can end (a human mid-form). */
@@ -185,7 +214,7 @@ export class VaultBrowser {
                 return;
             }
             this.dispose().catch(() => {});
-        }, IDLE_TTL_MS + held);
+        }, this.idleTtlMs + held);
         this.idleTimer.unref?.();
     }
 

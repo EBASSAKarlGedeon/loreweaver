@@ -1,10 +1,12 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, jest } from '@jest/globals';
 import {
+    IDLE_TTL_MS,
     VaultBrowser,
     VaultBrowserUnavailable,
     disposeVaultBrowser,
     findBrowserBinary,
     getVaultBrowser,
+    resolveIdleTtl,
     selectBrowserBackendKind,
 } from '../../src/endpoints/weavers-vault-browser.js';
 import { ChromeBackend } from '../../src/endpoints/weavers-vault-chrome-backend.js';
@@ -142,5 +144,82 @@ describe('policy through the backend', () => {
         expect(disposed).toBe(1);
         expect(browser.isHeld()).toBe(false);
         expect(browser.idleTimer).toBeNull();
+    });
+});
+
+describe('idle teardown', () => {
+    test('keeps a parked browser for ten minutes, not thirty seconds', () => {
+        // Thirty seconds meant every pause paid for a fresh ~10 s start (and a
+        // window that briefly carried a taskbar button) only to close the browser
+        // again half a minute later.
+        expect(IDLE_TTL_MS).toBe(10 * 60_000);
+        expect(new VaultBrowser(OPTIONS).idleTtlMs).toBe(IDLE_TTL_MS);
+    });
+
+    test('accepts an explicit TTL or the environment override', () => {
+        expect(new VaultBrowser({ ...OPTIONS, idleTtlMs: 1234 }).idleTtlMs).toBe(1234);
+        expect(resolveIdleTtl(null, { VAULT_BROWSER_IDLE_TTL_MS: '2500' })).toBe(2500);
+        expect(resolveIdleTtl('500', {})).toBe(500);
+        // Junk and non-positive values must fall back, never schedule no teardown
+        // (a 0 ms timer would close the browser while a request uses it).
+        expect(resolveIdleTtl('nope', {})).toBe(IDLE_TTL_MS);
+        expect(resolveIdleTtl(0, {})).toBe(IDLE_TTL_MS);
+        expect(resolveIdleTtl(-1, {})).toBe(IDLE_TTL_MS);
+    });
+
+    test('the scheduled teardown uses the session TTL', () => {
+        const browser = new VaultBrowser({ ...OPTIONS, idleTtlMs: 5_000 });
+        const spy = jest.spyOn(global, 'setTimeout');
+        browser.scheduleIdleShutdown();
+        const delays = spy.mock.calls.map(call => call[1]);
+        expect(delays).toContain(5_000);
+        spy.mockRestore();
+        disarm(browser);
+    });
+});
+
+describe('window hygiene', () => {
+    /** A backend whose only real step is the order of its own calls. */
+    function stubBackend(overrides = {}) {
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe' });
+        const calls = [];
+        backend.adoptExisting = async () => false;
+        backend.prepareProfile = async () => { calls.push('prepare'); };
+        backend.launch = async () => { calls.push('launch'); };
+        backend.hideWindow = async () => { calls.push('hide'); };
+        backend.park = async () => { calls.push('park'); };
+        backend.waitForPage = async () => { calls.push('wait'); return true; };
+        backend.dispose = async () => { calls.push('dispose'); };
+        Object.assign(backend, overrides);
+        return { backend, calls };
+    }
+
+    test('start parks the window before the challenge wait, and again after it', async () => {
+        const { backend, calls } = stubBackend();
+        await backend.start();
+        // waitForPage() can spend the whole two-minute challenge budget; parking
+        // after it left the window where Chrome restored its placement, on screen,
+        // for the entire wait (measured 2026-11-26). The trailing hide+park is the
+        // safety net for a window Chrome creates late.
+        expect(calls).toEqual(['prepare', 'launch', 'hide', 'park', 'wait', 'hide', 'park']);
+    });
+
+    test('a challenge that never clears disposes instead of keeping the window', async () => {
+        const { backend, calls } = stubBackend({ waitForPage: async () => false });
+        await expect(backend.start()).rejects.toBeInstanceOf(VaultBrowserUnavailable);
+        expect(calls).toContain('dispose');
+        expect(calls[calls.length - 1]).toBe('dispose');
+    });
+
+    test('the taskbar watcher is stopped before a human needs the window', () => {
+        const backend = new ChromeBackend({ ...OPTIONS, chromePath: 'C:/fake/chrome.exe' });
+        const killed = [];
+        backend.taskbarWatch = { kill: () => killed.push('kill') };
+        backend.stopTaskbarWatch();
+        expect(killed).toEqual(['kill']);
+        expect(backend.taskbarWatch).toBeNull();
+        // Idempotent: dispose() and reveal() both call it.
+        backend.stopTaskbarWatch();
+        expect(killed).toEqual(['kill']);
     });
 });

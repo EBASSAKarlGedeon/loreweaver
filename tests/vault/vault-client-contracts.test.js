@@ -84,12 +84,42 @@ describe('revealed automation window', () => {
         expect(body).toMatch(/if \(!this\.isHeld\(\)\) this\.hold\(/);
     });
 
-    test('re-applies the taskbar style after a human step', () => {
+    test('leaves a normal window (taskbar button and Alt-Tab) for the human', () => {
         const reveal = browserJs.slice(browserJs.indexOf('async reveal()'));
         const body = reveal.slice(0, reveal.indexOf('async placeWindowOnScreen'));
-        // The reveal must end by hiding the taskbar button again, or a sticky
-        // hold leaves a Chrome icon up for its whole TTL.
-        expect(body).toMatch(/this\.taskbarHidden = false;[\s\S]{0,400}await this\.hideWindow\(\)/);
+        // This test used to assert the opposite. Stripping the taskbar button
+        // from the window a human has to sign in through left it with neither a
+        // taskbar button nor an Alt-Tab entry, i.e. findable only by luck (the
+        // user's complaint, 2026-11-26). park() restores the tool style on release.
+        expect(body).not.toMatch(/hideWindow/);
+        expect(body).toContain('this.taskbarHidden = false;');
+    });
+
+    test('stops the taskbar watcher before it hands the window over', () => {
+        const reveal = browserJs.slice(browserJs.indexOf('async reveal()'));
+        const body = reveal.slice(0, reveal.indexOf('async placeWindowOnScreen'));
+        // The watcher restyles every window it sees for its whole budget; left
+        // running, it would strip the button again a tick after normalizeProfileWindows().
+        const stop = body.indexOf('this.stopTaskbarWatch()');
+        expect(stop).toBeGreaterThan(-1);
+        expect(stop).toBeLessThan(body.indexOf('focusPage()'));
+    });
+});
+
+describe('launch sequence', () => {
+    test('parks the window before the challenge wait', () => {
+        const start = browserJs.slice(browserJs.indexOf('async start()'));
+        const body = start.slice(0, start.indexOf('async prepareProfile('));
+        const park = body.indexOf('await this.park()');
+        const wait = body.indexOf('await this.waitForPage()');
+        // waitForPage() can spend the whole challenge budget. Parking after it
+        // left the window wherever Chrome restored its saved placement — on
+        // screen, mid-desktop, for the entire wait (measured 2026-11-26).
+        expect(park).toBeGreaterThan(-1);
+        expect(wait).toBeGreaterThan(-1);
+        expect(park).toBeLessThan(wait);
+        // And still a safety net after the wait, for a window Chrome created late.
+        expect(body.lastIndexOf('await this.park()')).toBeGreaterThan(wait);
     });
 });
 
