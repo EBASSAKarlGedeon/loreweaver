@@ -418,3 +418,26 @@ that is the documented form, and it keeps the newest server code against the git
 SILLYTAVERN_SYNC_ENABLED=false nohup node server.js --port 8001 \
   --dataRoot "C:/Users/Gedeon/Documents/Coding/Loreweaver-testing/data"
 ```
+
+## Weaver's Vault: the rebuild still calls the model I replaced (429 / 401 from a model I no longer use)
+
+**Symptom**: the OpenRouter model dropdown is set to a working model (Nemotron), yet a vault
+rebuild fails with `Too Many Requests` from `google/gemma-4-31b-it:free` — the model that was
+rate-limited — and the server log shows that other model in the payload.
+
+**Cause**: a **connection profile carries its own `model` field**, and
+`ConnectionManagerRequestService.sendRequest` sends that field
+(`public/scripts/extensions/shared.js:444`, `model: profile.model`), never the global
+`chatCompletionSettings.openrouter_model` that the Chat Completion dropdown writes. Measured
+2026-11-25: `oai_settings.openrouter_model = nvidia/nemotron-3.5-lightning:free` while profile
+`Openrouter` (`432b3e02-…`) still held `google/gemma-4-31b-it:free`. The dropdown and the
+profile are two different settings; the vault reads the profile.
+
+**Fix**: change the model **inside the profile**: Extensions → Connection Manager → select the
+profile → pick the model in its own Connection Profile panel (or use *Update to current model*)
+→ save. Confirm it stuck: `extension_settings.connectionManager.profiles[<id>].model` in
+`data/default-user/settings.json`. The vault then logs that model in its build payload.
+
+**See also**: the same class of surprise explains an `Invalid API key` 401 — the sheet used to
+pick the *first* profile in the list (PITFALLS #50), so the key that failed was the wrong
+account's.

@@ -393,3 +393,40 @@ describe('the saving stage matches Glaze', () => {
         expect(clientCss).toMatch(/\.wv-cpre \{[\s\S]{0,220}border-radius: 12px;/);
     });
 });
+/**
+ * Which profile builds, and what a failure says.
+ *
+ * Glaze builds with the app's active model. Ours looked the profile up as
+ * `profiles[0]` when the saved id was empty, so a book could be sent to a
+ * profile the user never selected (2026-11-25: the first profile's key was not
+ * an OpenRouter key, the provider answered 401, and all the sheet could say was
+ * 'API request failed' because `extensions/shared.js:485` wraps every transport
+ * error and hangs the provider's sentence off `cause`).
+ */
+describe('the build uses the active connection profile', () => {
+    const sheetStart = clientJs.indexOf('function openCaptureSheet(');
+    const sheet = clientJs.slice(
+        sheetStart,
+        clientJs.indexOf('// ─── The import workflow', sheetStart),
+    );
+
+    test('the profile is the saved one, else the active one, never the first listed', () => {
+        expect(sheet).toContain('resolveRebuildProfile(profiles, config.profileId,');
+        expect(sheet).toContain('extension_settings.connectionManager?.selectedProfile');
+        expect(sheet).not.toContain('|| profiles[0]');
+        expect(clientJs).not.toContain('state.profileId');
+    });
+
+    test('the model call sends to that profile for every part', () => {
+        expect(sheet).toContain('const profile = rebuildProfile;');
+        expect(sheet).toContain('partCacheKey({ profileId: profile.id, model: config.model || profile.model }');
+        expect(sheet).toContain("state.built = { name, entries, model: config.model || rebuildProfile?.model || '' };");
+    });
+
+    test('a provider failure repeats what the provider said', () => {
+        expect(sheet).toContain('const honestError = (error) => {');
+        expect(sheet).toContain('while (deepest && deepest.cause');
+        expect(sheet).toContain('const message = honestError(error);');
+        expect(sheet).toContain('toastr.error(honestError(error)');
+    });
+});
