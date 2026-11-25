@@ -1,8 +1,30 @@
 # Lorebook rebuild (LLM) — spec
 
-Status: **decided, not built** (2026-11-26). Every contract below is read out of the Glaze source
+Status: **built, never yet run** (2026-11-27). Every contract below is read out of the Glaze source
 (`C:/Users/Gedeon/Documents/Coding/Glaze-stable`), with file/line references so it can be re-checked.
 Where we deviate, it says so and why.
+
+Shipped in two slices, both offline:
+
+- `lorebook-rebuild.js` — the pure core (prompts, intros, budget, chunking, parsing, settings,
+  profile choice, context assembly). 35 tests in `tests/vault/lorebook-rebuild.test.js`.
+- `index.js` + `style.css` — the build sheet, opened once after an import when scripted books were
+  found; 6 contract tests in `tests/vault/vault-client-contracts.test.js` pin the sheet, the
+  confirm-before-send gate, the boundless call and the no-overwrite naming.
+
+No connection-profile call has been made. The first one waits for an explicit go-ahead and a
+profile the user has chosen for it.
+
+Implementation notes, so the next reader does not mistake them for the design:
+
+- The `catalog` toggle ships **disabled**: our server keeps only the short public bio, so this
+  block needs one extra janitorai.com fetch — an ask, not a default.
+- `[Build]` runs the checked books in sequence, one call per book (this answers §12's
+  `[Build all]`), and confirms once with the profile, model, request count and 'spends tokens'.
+- The sheet is reachable only from an import that found scripted books; there is no 'Rebuild'
+  button in the detail sheet yet.
+- The part cache (§5.3) lives in the sheet's closure: closing the sheet discards built parts. Retry
+  inside the same sheet is cheap; reopening it starts over.
 
 ## 1. What it is
 
@@ -340,13 +362,14 @@ step.
 
 ## 11. Done means
 
-* §10 green plus the existing 358 vault tests;
-* one logged real request whose body matches the preview byte for byte, and whose `max_tokens` is the
-  large value (this is the check §5.1 demands);
+* §10 green plus the rest of `tests/vault` — 399 tests, 14 suites, as of this build;
+* one logged real request whose body matches the preview byte for byte, and which carries **no**
+  `max_tokens` at all (this is the check §5.1 demands);
 * one real scripted book rebuilt and compared to the site: entry count within the site's, every entry
   has content and >= 1 key, and no context text leaked into an entry (grep an entry body for the first
   sentence of the card description);
-* one forced failure (bad model id) showing `failed at part i/n` and a working `[Resume]`.
+* one forced failure (bad model id) showing `failed at part i/n`, and pressing Build again reusing the
+  parts already built ('part k of n already built') instead of re-billing them.
 
 ## 12. Open decisions
 

@@ -5,9 +5,15 @@ import {
     DEFAULT_CHUNK_TOKENS,
     JS_SYSTEM_PROMPT,
     MIN_CHUNK_TOKENS,
+    REBUILD_CONTEXT_DEFAULTS,
     REQUEST_TEMPERATURE,
     RebuildError,
     TEXT_SYSTEM_PROMPT,
+    contextFor,
+    greetingsContext,
+    lorebookDescsContext,
+    readRebuildSettings,
+    resolveRebuildProfile,
     asKeys,
     chunkBudget,
     chunkText,
@@ -263,5 +269,133 @@ describe('transport', () => {
         expect(key).not.toBe(partCacheKey({ profileId: 'p2', model: 'm1' }, messages));
         expect(key).not.toBe(partCacheKey({ profileId: 'p1', model: 'm2' }, messages));
         expect(key).not.toBe(partCacheKey({ profileId: 'p1', model: 'm1' }, messagesFor('OTHER')));
+    });
+});
+describe('build settings', () => {
+    test('a missing or garbled entry becomes complete defaults', () => {
+        for (const raw of [undefined, null, 'x', 5, [], {}]) {
+            const settings = readRebuildSettings(raw);
+            expect(settings.chunkTokens).toBe(DEFAULT_CHUNK_TOKENS);
+            expect(settings.profileId).toBe('');
+            expect(settings.context).toEqual(REBUILD_CONTEXT_DEFAULTS);
+            expect(settings.extra).toBe('');
+            expect(settings.systemJs).toBe('');
+        }
+    });
+
+    test('what the user saved survives, and nonsense is repaired', () => {
+        const settings = readRebuildSettings({
+            profileId: 'p1',
+            model: '  cheap-model  ',
+            chunkTokens: -4,
+            context: { catalog: true, greetings: 'yes' },
+            extra: 'Names: the Warden',
+        });
+        expect(settings.profileId).toBe('p1');
+        expect(settings.model).toBe('cheap-model');
+        expect(settings.chunkTokens).toBe(DEFAULT_CHUNK_TOKENS);
+        expect(settings.context.catalog).toBe(true);
+        expect(settings.context.greetings).toBe(false);
+        expect(settings.context.lorebookDescs).toBe(true);
+        expect(settings.extra).toBe('Names: the Warden');
+    });
+
+    test('0 chunk tokens is kept: it means one request, not a default', () => {
+        expect(readRebuildSettings({ chunkTokens: 0 }).chunkTokens).toBe(0);
+    });
+});
+
+describe('profile choice', () => {
+    const profiles = [
+        { id: 'p1', name: 'Cheaper', model: 'm1' },
+        { id: 'p2', name: 'Active', model: 'm2' },
+    ];
+
+    test('a valid saved profile wins, and is not a fallback', () => {
+        const chosen = resolveRebuildProfile(profiles, 'p1', 'p2');
+        expect(chosen.profile.id).toBe('p1');
+        expect(chosen.fellBack).toBe(false);
+        expect(chosen.staleId).toBe('');
+    });
+
+    test('an empty saved id means the active profile, without a warning', () => {
+        const chosen = resolveRebuildProfile(profiles, '', 'p2');
+        expect(chosen.profile.id).toBe('p2');
+        expect(chosen.fellBack).toBe(false);
+    });
+
+    test('a stale saved id falls back to active and says which id died', () => {
+        const chosen = resolveRebuildProfile(profiles, 'gone', 'p2');
+        expect(chosen.profile.id).toBe('p2');
+        expect(chosen.fellBack).toBe(true);
+        expect(chosen.staleId).toBe('gone');
+    });
+
+    test('no usable profile is an error, never a silent guess', () => {
+        expect(() => resolveRebuildProfile([], 'p1', 'p2')).toThrow(RebuildError);
+        try {
+            resolveRebuildProfile([], '', '');
+        } catch (error) {
+            expect(error.code).toBe('no-profile');
+        }
+    });
+});
+
+describe('context', () => {
+    const card = {
+        data: {
+            description: 'A lighthouse keeper.',
+            scenario: 'A storm.',
+            first_mes: 'Hello.',
+            alternate_greetings: ['Hi.', '', 'Hey.'],
+        },
+    };
+    const books = [
+        { title: 'The Warden', description: 'Who keeps the light.' },
+        { name: 'Folklore', description: '' },
+        { description: 'No title at all.' },
+    ];
+
+    test('the card fields map to their own blocks', () => {
+        const context = contextFor({ card, books, toggles: { greetings: true } });
+        expect(context.card).toBe('A lighthouse keeper.');
+        expect(context.scenario).toBe('A storm.');
+        expect(context.greetings).toBe('Hello.\n\n---\n\nHi.\n\n---\n\nHey.');
+        expect(context.lorebookDescs).toBe('The Warden\n\nWho keeps the light.\n\n\nFolklore\n\n\nNo title at all.');
+        expect(context.catalog).toBe('');
+    });
+
+    test('a build leaves greetings off by default, exactly like Glaze', () => {
+        // janitor_lorebook_capture_sheet.dart:233 — the build sources default to
+        // card/catalog/scenario/lorebookDescs, and greetings stay opt-in.
+        expect(contextFor({ card }).greetings).toBe('');
+        expect(REBUILD_CONTEXT_DEFAULTS).toEqual({
+            card: true, catalog: false, scenario: true, greetings: false, lorebookDescs: true,
+        });
+    });
+
+    test('a toggle that is off sends nothing for its block', () => {
+        const context = contextFor({ card, books, toggles: { card: false, scenario: false, lorebookDescs: false } });
+        expect(context.card).toBe('');
+        expect(context.scenario).toBe('');
+        expect(context.lorebookDescs).toBe('');
+        expect(context.greetings).toBe('');
+    });
+
+    test('the extra box is free text, always included when non-empty', () => {
+        expect(contextFor({ extra: '  the Warden\nthe Keeper  ' }).extra).toBe('the Warden\nthe Keeper');
+        expect(contextFor({}).extra).toBe('');
+    });
+
+    test('a context object flows into the messages unchanged', () => {
+        const context = contextFor({ card, books, extra: 'Alias: Ward' });
+        const plan = planBuild({ text: 'const loreEntries = []', fromJs: true, context, countTokens: words });
+        const content = plan.requests[0][1].content;
+        expect(content).toContain('A lighthouse keeper.');
+        expect(content).toContain('A storm.');
+        expect(content).toContain('The Warden');
+        expect(content).toContain('Alias: Ward');
+        expect(content).not.toContain('Hello.');
+        expect(content.indexOf('A lighthouse keeper.')).toBeLessThan(content.indexOf('const loreEntries'));
     });
 });

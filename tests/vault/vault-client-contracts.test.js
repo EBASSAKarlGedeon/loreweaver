@@ -166,3 +166,60 @@ describe('engine binary resolution', () => {
         expect(list.slice(0, list.indexOf('].filter(Boolean)'))).toContain('chrome.exe');
     });
 });
+
+describe('scripted lorebook rebuild', () => {
+    test('only books with a JavaScript source are offered', () => {
+        expect(clientJs).toContain('if (book.jsSource) scripted.push(book);');
+        // The sheet opens once, after the import loop, and only if something was
+        // collected. No per-book toast that a user cannot act on.
+        expect(clientJs.match(/openRebuildSheet\(\{/g)).toHaveLength(2);
+        expect(clientJs).toContain('if (scripted.length) {');
+    });
+
+    test('nothing is sent without a confirm that names the profile and the cost', () => {
+        const handler = clientJs.slice(clientJs.indexOf("buildButton.addEventListener('click'"));
+        expect(handler.length).toBeGreaterThan(0);
+        const sendAt = handler.indexOf('ConnectionManagerRequestService.sendRequest(');
+        const confirmAt = handler.indexOf('confirm(`Build');
+        expect(confirmAt).toBeGreaterThan(-1);
+        expect(sendAt).toBeGreaterThan(confirmAt);
+        // One send site in the whole client, and it is this one.
+        expect(clientJs.match(/ConnectionManagerRequestService\.sendRequest\(/g)).toHaveLength(1);
+        expect(handler).toContain('spends tokens');
+    });
+
+    test('the reply stays boundless and the preview is the request', () => {
+        expect(clientJs).toContain('transportFor(messages)');
+        expect(clientJs).toContain('request.maxTokens');
+        // No number is ever handed to sendRequest as a cap, anywhere in the
+        // rebuild block (elsewhere `maxTokens:` is a catalog filter, not a cap).
+        const rebuild = clientJs.slice(clientJs.indexOf('function rebuildConfig()'));
+        expect(rebuild).not.toMatch(/maxTokens:\s*\d/);
+        // Preview and send both price through planFor(), so they cannot drift.
+        expect(clientJs).toContain('const planFor = (book) => {');
+        expect(clientJs).toContain('const plan = planFor(book);');
+        expect(clientJs).toContain('const plans = picked.map(planFor);');
+    });
+
+    test('a retry reuses the parts that already came back', () => {
+        expect(clientJs).toContain('const partCache = new Map();');
+        expect(clientJs).toContain('partCache.get(cacheKeys[i])');
+        expect(clientJs).toContain('partCache.set(cacheKeys[i], parsed.entries);');
+        expect(clientJs).toContain('already built');
+    });
+
+    test('only chat-completion profiles are offered', () => {
+        expect(clientJs).toContain("validateProfile(profile).selected === 'openai'");
+        expect(clientJs).toContain('resolveRebuildProfile(profiles, config.profileId,');
+    });
+
+    test('saved books never overwrite a world the user already has', () => {
+        expect(clientJs).toContain('function uniqueWorldName(base) {');
+        expect(clientJs).toContain('uniqueWorldName(book.title || book.name)');
+    });
+
+    test('the sheet scrolls as a whole instead of clipping a sub-box', () => {
+        expect(clientCss).toMatch(/\.wv-rbscroll \{[^}]*overflow-y: auto/);
+        expect(clientCss).toMatch(/\.wv-rbsheet \{[^}]*max-height: 86vh/);
+    });
+});
