@@ -22,11 +22,23 @@ embedded engine and delete that whole class of problem.
 
 ## Scope decision
 
-- **Packaged app / `npm run start:electron`** → embedded engine (Electron
+- **Packaged app (`dist/Loreweaver.exe`) and the repo source launched through
+  its Electron entry (`npm run start:electron`)** → embedded engine (Electron
   `BrowserWindow` hidden + `webContents.debugger` for CDP).
-- **Repo app as a web server, hub on `thinkpad-srv`, Android/Termux** → external
-  Chrome, unchanged. Node has no engine to embed; this is permanent, not a
-  TODO.
+- **Repo source launched as a plain server (`node server.js`, localhost in your
+  own browser), hub on `thinkpad-srv`, Android/Termux** → external Chrome,
+  unchanged. Node has no engine to embed; this is permanent, not a TODO.
+
+  Note on the boundary, because "repo app" is ambiguous: the deciding factor is
+  not which checkout is running, it is whether the server process *is* an
+  Electron main process. `src/electron/index.js:116` boots the server with
+  `import('../server-global.js')` — in-process, same PID — so the Express server
+  sees `process.versions.electron` there and the factory below picks the
+  embedded backend. Run `node server.js` instead and that global is absent, so
+  the same source falls back to external Chrome. What is *impossible* is
+  embedding an engine inside a normal browser tab: a web page cannot host a
+  browser engine (no `<webview>` for web content), so the browser-hosted repo
+  app can never match Glaze's one-process setup.
 - Both backends sit behind one interface; routes, classification, ledger and UI
   do not change.
 
