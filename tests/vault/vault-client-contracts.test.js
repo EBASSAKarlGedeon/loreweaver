@@ -1,6 +1,7 @@
 import { describe, test, expect } from '@jest/globals';
 import fs from 'node:fs';
 import path from 'node:path';
+import { descriptionBodyHtml, escapeHtml, infoBioHtml } from '../../public/scripts/extensions/weavers-vault/detail-view.js';
 
 /**
  * Contract guards for the vault client and the automation window.
@@ -52,6 +53,62 @@ describe('converted janitor bio', () => {
         expect(guard).toContain('blockquote');
         expect(guard).toContain('\\b');
         expect(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(clientJs)).toBe(false);
+    });
+});
+
+describe('closed janitor definition', () => {
+    // User report 2026-11-27: a card whose definition the site hides showed its
+    // public bio inside Prompt Blocks → Description, and the Info tab was empty.
+    // Verified in the live UI; these pin the two halves of the fix.
+    const bio = '<p>A wandering <b>warden</b> of the salt flats.</p>';
+
+    test('the public bio renders on the Info tab of a closed card', () => {
+        const html = infoBioHtml({ bioText: bio, isHtml: true, tagCount: 2, closed: true });
+        expect(html).toBe('<div class="wv-dseclabel">Description</div><div class="wv-bio wv-biohtml">' + bio + '</div>');
+    });
+
+    test('and never fills the Description drawer', () => {
+        expect(descriptionBodyHtml('')).toBe('');
+        expect(descriptionBodyHtml(undefined)).toBe('');
+        // A real body is still shown, escaped.
+        expect(descriptionBodyHtml('line & <tag>')).toBe('line &amp; &lt;tag&gt;');
+    });
+
+    test('a plain-text bio is escaped and keeps its line breaks', () => {
+        const html = infoBioHtml({ bioText: 'a & b\nc', closed: true });
+        expect(html).toContain('a &amp; b<br>c');
+        expect(html).not.toContain('<b>');
+    });
+
+    test('an empty card says so instead of faking a bio', () => {
+        expect(infoBioHtml({ bioText: '', tagCount: 3 })).toBe('');
+        expect(infoBioHtml({ bioText: '', closed: true })).toBe('');
+        expect(infoBioHtml({ bioText: '' })).toContain('No preview available');
+    });
+
+    test('the renderer goes through those helpers, not an inline copy', () => {
+        expect(clientJs).toContain("from './detail-view.js'");
+        expect(clientJs).toContain('infoBioHtml({ bioText, isHtml, tagCount:');
+        expect(clientJs).toContain('descriptionBodyHtml(d.description)');
+        // The old gate that hid the bio for closed cards must stay gone.
+        expect(clientJs).not.toMatch(/closed \? '' : \(bioText/);
+        // And the drawer must not fall back to the bio HTML any more.
+        expect(clientJs).not.toMatch(/bioHtml \|\| \(bioText/);
+    });
+});
+
+describe('detail window backdrop', () => {
+    test('a press that starts outside the window closes it', () => {
+        expect(clientJs).toContain('function wireDetailBackdrop(popup)');
+        expect(clientJs).toContain('pressedOnBackdrop = event.button === 0 && event.target === popup;');
+        expect(clientJs).toContain('const close = pressedOnBackdrop && event.target === popup;');
+        expect(clientJs).toContain('if (close) popup.hidden = true;');
+        expect(clientJs).toContain('wireDetailBackdrop(popup);');
+    });
+
+    test('it is wired once, however many cards are opened', () => {
+        expect(clientJs).toContain("if (popup.dataset.backdrop === '1') return;");
+        expect(clientJs).toContain("popup.dataset.backdrop = '1';");
     });
 });
 
