@@ -1,6 +1,6 @@
 # Headless by default — design proposal (embedded-engine Step 3)
 
-Status: **proposal, nothing implemented.** Needs approval before code. Evidence:
+Status: **approved 2026-11-25; steps 1-2 of the live test done, code not written yet.** Evidence:
 `docs/HEADLESS-PROBE.md` (probe 1: fingerprint parity; probe 2: 5/5 clear on the
 site, headless and headful alike).
 
@@ -87,3 +87,44 @@ thing to flip if the site starts challenging headless.
    must be impossible to see any Chrome window at all, with no taskbar button.
 
 Cost: 2-3 requests to janitorai.com, plus the human's sign-in.
+
+## What the live test measured (2026-11-25)
+
+Run with `scripts/probe-signin.mjs` on the vault's own profile
+(`data/_vault-janitor-profile`), which is signed in. It measured the identity on a
+parked headful launch (no site traffic), then:
+
+| | headless, before the window | headless, after the window closed |
+|---|---|---|
+| document | 200 `JanitorAI - Build, share, and explore` | 200, same |
+| home content | signed-in home ("Create a Character", upgrade banner) | same |
+| same-origin `fetch()` | 200, 709 KB, no `cf-mitigated`, 515 ms | same |
+| `cf_clearance` | present | present |
+| brands / dpr / screen | `Chromium/158, Not.A/Brand/24, Google Chrome/158` / 1.25 / 1536x864 | same |
+
+The plain window opened on the profile, was closed normally (`closed (0)`), and
+headless came back on the same cookies: **the escalation shape works**.
+
+### Three things the live test taught, which the code must respect
+
+1. **A headless browser must never describe itself.** Launching headless and
+   copying *its* `navigator.userAgent` / `Browser.getVersion` gives a UA that says
+   `HeadlessChrome`, and the site answers that with **403 "Access Restricted /
+   blocked by our firewall"** — a block page, not a challenge, so no amount of
+   challenge handling would recover. The identity has to come from the machine
+   (binary version + OS), never from the headless page.
+2. **`navigator.userAgentData` is empty on `about:blank`.** Reading the reference
+   there produced an override with `brands: []`, which no real Chrome reports. The
+   reference must be captured on a real document (a local page is enough).
+3. **`window.outerWidth/outerHeight` stay 800x600 in headless** even after
+   `Browser.setWindowBounds` to 1281x883, so `outer < inner` (1280x795) — an
+   impossible reading for a real browser window. Not observed to matter yet (the
+   site answered 200 with it), but it is the next fingerprint item to fix;
+   `Emulation.setDeviceMetricsOverride` takes a `dontSetVisibleSize` flag that may
+   let the real window size stand while only screen size and DPR are overridden.
+
+### Rule for probes from now on
+
+Never write cookie values to a log or a report. A signed-in profile's cookie
+header is a live account session (access token + refresh token), and these probe
+logs are plain text in `%TEMP%`. Log cookie **names** and counts only.
