@@ -218,3 +218,23 @@ JanitorAI, which is fine for the mechanics):
 Headless start 5.3 s; the human took 218 s to close the window, and the timeout
 path (close it ourselves after the budget) was not needed. The one window in this
 trace is the one the user is *supposed* to see; everything else stayed invisible.
+
+## Probe 5 (2026-11-25): the vault's own authenticated read, headless
+
+The home page answering 200 says the fingerprint passes the firewall. It says
+nothing about the vault's actual read path, which is a Supabase bearer token in an
+`Authorization` header. `scripts/probe-headless-account.mjs` runs the production
+path (`getJanitorBrowser()` -> `readJanitorAccount()` -> `GET /hampter/profiles/mine`)
+on the real profile, headless, once:
+
+| | result |
+| --- | --- |
+| identity | reused from the cache (`Chrome 158`) |
+| start | 7570 ms |
+| account read | **200**, `signedIn: true`, name `Hiro`, no challenge |
+| account read time | 1419 ms |
+| page | `JanitorAI - Build, share, and explore`, no `Headless` in the UA |
+| OS windows | **0** of 9 processes |
+
+So the token read, the bearer header, the JSON parse and the session check all
+survive headless — the mode does not just load the front page, it serves the app.
