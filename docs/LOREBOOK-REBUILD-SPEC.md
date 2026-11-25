@@ -154,16 +154,25 @@ so the call is client-side (Glaze is identical — the rebuild is not part of th
 
 ```js
 import { ConnectionManagerRequestService } from '../shared.js';   // shared.js:388
-import { getTokenCountAsync } from '../../tokenizers.js';
+import { getTokenCount } from '../../tokenizers.js';              // SYNC: planning needs a number now
 import { createWorldInfoEntry, saveWorldInfo, updateWorldInfoList } from '../../world-info.js';
+import { planBuild, transportFor, parseReply } from './lorebook-rebuild.js';
+
+// Sync by design: planBuild() must price a request before it is sent, and the
+// async counter belongs to rendering, not to the plan.
+const countTokens = (text) => {
+    try { return getTokenCount(text, 0); } catch { return Math.ceil(String(text).length / 4); }
+};
+
+const plan = planBuild({ text: jsSource, fromJs: true, context, countTokens });
+const { messages, maxTokens, temperature, stream, includePreset } = transportFor(plan.requests[0]);
 
 const data = await ConnectionManagerRequestService.sendRequest(
-    profileId,
-    [ { role: 'system', content: systemPrompt }, { role: 'user', content: userMessage } ],
-    maxTokens,                                   // see §5 — deliberately NOT a small cap
-    { stream: false, includePreset: false, includeInstruct: false },
+    profileId, messages,
+    maxTokens,                                   // undefined => no cap (§5.1)
+    { stream, includePreset, includeInstruct: false, overridePayload: { temperature } },
 );
-const reply = data.content;
+const reply = data.content;                      // parseReply(reply, { part, total })
 ```
 
 `sendRequest` takes a real message array (`shared.js:439`), so the system prompt is a system message
@@ -192,17 +201,24 @@ a connection of unknown window; the dialog then says *"window unknown — one re
 
 ### 5.1 Parameters — do not cap the reply
 
-Glaze sends `maxTokens: 0` (the transport omits `max_tokens`), `temperature: 0.2`, no timeout
-(`:562-589`), with the reason written in the source:
+**The reply is boundless.** Glaze sends `maxTokens: 0` to a transport that drops the field
+(`:573-578`), with the reason written in the source:
 
 > On reasoning models `max_tokens` bounds the COMBINED reasoning + content output, so any finite cap
 > can be spent entirely on the thinking stream — leaving `content` empty (finish_reason "length")
 > before the model ever emits the JSON.
 
-Our path always carries `max_tokens` (`shared.js:443`). So: pass a **large** value (16000), and prove
-the request body with one logged call before trusting it — a small cap on a reasoning model is exactly
-the failure Glaze measured. Same for `temperature: 0.2` via `overridePayload`. No client-side timeout;
-a chunked build of a big book legitimately takes minutes.
+Our transport can do the same: `sendRequest(profileId, messages, maxTokens)` forwards `max_tokens`
+into `ChatCompletionService.processRequest`, and `createRequestData()` deletes every `undefined`
+value (`custom-request.js:444-449`) before `JSON.stringify` — so `undefined` means the field never
+reaches the provider. `transportFor()` (in `lorebook-rebuild.js`) returns exactly that, and the
+module exports `BOUNDLESS_MAX_TOKENS === undefined` so no caller can quietly reintroduce a cap.
+
+`temperature: 0.2` rides the payload (`overridePayload`), no client-side timeout: a chunked build of
+a big book legitimately takes minutes. A source whose API *requires* `max_tokens` (Anthropic-style)
+is a named refusal rather than a silent default — none of the four profiles here are.
+
+Before the first real build, one logged request must show no `max_tokens` in the body (§11).
 
 ### 5.2 Parsing (`_stripFences` `:377`, `_coerceEntries` `:389`, `_buildEntry` `:410`)
 
@@ -299,7 +315,13 @@ tests/vault/lorebook-rebuild.test.js NEW  §10
 `planBuild()` takes injected `countTokens` and `window`, so every rule below is testable without a
 browser or a network call.
 
-## 10. Tests (no network)
+## 10. Tests (no network, no connection profile)
+
+Standing rule from 2026-11-26: **no test and no slice may call a connection profile without an
+explicit go-ahead from the user**, who will switch to a cheaper model for the run that matters. The
+core below is pure, so every rule is proven offline; the first real call is a separate, asked-for
+step.
+
 
 1. text under budget -> 1 request; system = text prompt; user ends with the raw-text header; the
    selected blocks appear in order with their exact intros.
@@ -313,7 +335,8 @@ browser or a network call.
    aliases; `constant: true`; missing order -> 100; contentless entry dropped and counted.
 8. parse failure -> `VaultRebuildError` naming the part, never an empty list.
 9. resume: a cached part is not resent; a different model misses the cache.
-10. `max_tokens` sent is 16000 (the test asserts the payload), never a small cap.
+10. `transportFor()` hands the transport `undefined` `max_tokens` (the test asserts it), so the
+    request body carries no output cap at all; temperature is 0.2.
 
 ## 11. Done means
 
