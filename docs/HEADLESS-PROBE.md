@@ -199,3 +199,22 @@ node scripts/probe-request-headers.mjs       # wire-side diff, against a local s
 node scripts/smoke-headless-backend.mjs      # production backend, local origin, --headful for the other mode
 node scripts/probe-headless-site.mjs         # ONE real page load on the vault profile
 ```
+
+## Probe 4 (2026-11-25): the escalation round trip, on a local origin
+
+The promise is "a window only when a human is needed", so the hand-off itself has
+to work: headless browser closed, plain window opened on the same profile, window
+closed by the human, headless session back. `scripts/probe-escalation.mjs` runs that
+against the local dev server (no site traffic; the window shows Loreweaver, not
+JanitorAI, which is fine for the mechanics):
+
+| | before the hand-off | after it |
+| --- | --- | --- |
+| chrome processes on the profile | 8 | 9 |
+| **windows** | **0** | **0** |
+| page | Loreweaver, fetch 200 | Loreweaver, fetch 200 |
+| `reveal()` | — | `{revealed: 1, escalated: true, closed: true, running: true}` |
+
+Headless start 5.3 s; the human took 218 s to close the window, and the timeout
+path (close it ourselves after the budget) was not needed. The one window in this
+trace is the one the user is *supposed* to see; everything else stayed invisible.
