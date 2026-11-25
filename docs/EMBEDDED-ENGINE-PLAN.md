@@ -110,6 +110,25 @@ fetch-token helpers, challenge waiting — is backend-independent and stays put.
   passes without user interaction; sign-in works from the packaged app; a card
   + lorebook import lands in `data/` and is verified on disk.
 
+- **Measured 2026-11-25** (Electron 41.1.1, fresh `persist:` partition,
+  anonymous, 3 navigations + 1 in-page fetch):
+  - `webContents.debugger.attach('1.3')` works, and `Runtime.evaluate` with
+    `awaitPromise` hands back the fetch result — the `CdpPage` surface maps 1:1.
+  - A hidden window (`show: false`) still reports
+    `document.visibilityState === 'visible'` and `navigator.webdriver === false`,
+    so a challenge running in it is not told the window is invisible.
+  - First load 5.0 s and **no challenge at all**: `_cf_chl_opt` never appeared and
+    `cf_clearance` was set (httpOnly, `.janitorai.com`); warm reload 1.8 s, API 200
+    (104 KB, no `cf-mitigated`).
+  - UA: Electron adds `<package name>/<version>` as well as `Electron/41.1.1`.
+    Stripping only the `Electron/x.y` token and leaving the app token in place
+    still passed — the app token alone is not what the edge objects to.
+  - Still unmeasured: signed-in state (needs the account), a cold profile on a
+    different network, and the site sign-in window itself.
+  - Tooling note: with `ELECTRON_RUN_AS_NODE=1` in the environment, `electron.exe`
+    runs as plain Node and `require('electron')` fails — clear it when launching
+    the app by hand.
+
 ### Phase 3 — in-app login/verification surfaces
 - `reveal()` under Electron = `show()` on the same hidden window
   (`skipTaskbar: true` keeps it out of Alt-Tab/Taskbar natively — no
