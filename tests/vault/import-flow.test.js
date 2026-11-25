@@ -339,3 +339,57 @@ describe('the building stage matches Glaze', () => {
         expect(clientCss).not.toContain('min-width: 170px;');
     });
 });
+
+/**
+ * The saving stage, matched to Glaze's `_buildResult`
+ * (janitor_lorebook_capture_sheet.dart:1629): a MenuGroup with the name field
+ * and two MenuItem rows, then the Tavern JSON ContentPane. Ours had an action
+ * bar with three pills — two of them duplicating rows that already exist — and
+ * no view of what Save actually writes.
+ */
+describe('the saving stage matches Glaze', () => {
+    const saveStart = clientJs.indexOf('<div class="wv-cstage-save" hidden>');
+    const save = clientJs.slice(
+        saveStart,
+        clientJs.indexOf('root.appendChild(overlay);', saveStart),
+    );
+
+    test('the built count is a MenuGroup header with help', () => {
+        expect(save).toContain('<div class="wv-cghead"><span class="wv-cgtitle wv-cbuilt-head">Built 0 entries</span>');
+        expect(save).toContain('<span class="wv-help" title="What Save and Export write.');
+        expect(clientJs).toContain("'Built ' + state.built.entries.length");
+    });
+
+    test('the scope sentence is the group description, not a loose note', () => {
+        expect(save).toContain('<div class="wv-cgdesc wv-cscope"></div>');
+        expect(clientCss).toMatch(/\.wv-cgdesc \{[\s\S]{0,120}font-size: 12px;/);
+    });
+
+    test('Save and Export are menu rows, not a stretched action bar', () => {
+        expect(save).toContain('class="wv-cm wv-csave"');
+        expect(save).toContain('class="wv-cm wv-cexport"');
+        expect(save).toContain('fa-bookmark wv-cmicon');
+        expect(save).toContain('fa-download wv-cmicon');
+        expect(save).toContain('Adds the book to your World Info and attaches it to the card.');
+        expect(save).toContain('SillyTavern world info, nothing written to the library.');
+        expect(save).not.toContain('wv-cactions');
+    });
+
+    test('the extracted .txt download stays in the building group only', () => {
+        expect(save).not.toContain('wv-cdltext2');
+        expect(clientJs).not.toContain('wv-cdltext2');
+        // It lives in the Building group's disclosure row, wired once.
+        expect(clientJs).toContain("$('.wv-cdltext').addEventListener");
+        expect(clientJs).toContain("downloadTextFile('extracted-lorebook.txt'");
+        expect(clientJs.split("downloadTextFile('extracted-lorebook.txt'").length - 1).toBe(1);
+    });
+
+    test('the Tavern JSON that Save writes is shown before it is written', () => {
+        expect(save).toContain('<pre class="wv-cpre wv-cjsontext"></pre>');
+        expect(clientJs).toContain('JSON.stringify(worldInfoFor(state.built.name, built), null, 2)');
+        expect(clientCss).toMatch(/\.wv-cjsontext \{[\s\S]{0,160}font-family: ui-monospace/);
+        // ContentPane: capped at 220 px, rounded like Glaze's pane (r12).
+        expect(clientCss).toMatch(/\.wv-cpre \{[\s\S]{0,160}max-height: 220px;/);
+        expect(clientCss).toMatch(/\.wv-cpre \{[\s\S]{0,220}border-radius: 12px;/);
+    });
+});
