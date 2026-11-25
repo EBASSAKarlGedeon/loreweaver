@@ -158,6 +158,14 @@ describe('the client wires those decisions', () => {
         expect(optionsSheet).toContain('openCaptureSheet({ item, meta, character, characterImport: importJanitorCharacter });');
     });
 
+    test('an unchecked book is never folded into the closed list', () => {
+        const sheet = clientJs.slice(clientJs.indexOf('function openCaptureSheet'), clientJs.indexOf('function showImportOptions'));
+        expect(sheet).toContain("state.books.filter(book => book.kind === 'closed')");
+        expect(sheet).toContain("const failedBooks = () => state.books.filter(book => book.kind === 'failed')");
+        expect(sheet).toContain("$('.wv-cfailed').hidden = !failed.length");
+        expect(sheet).toContain("'Not checked · '");
+    });
+
     test('one capture serves both the card and its lorebook text', () => {
         const importJanitor = optionsSheet.slice(optionsSheet.indexOf('const importJanitorCharacter'));
         expect(importJanitor).toContain('captureJanitorLore(item, onPhase)');
