@@ -236,7 +236,11 @@ export function normalizeJanitorHit(row) {
         // The grid draws a one-line blurb as text; the HTML belongs to the sheet.
         description: janitorHtmlToText(item.blurb),
         avatarUrl: item.avatar,
-        chatCount: item.chats,
+        // The site's own card badge is the message count, not the chat count.
+        // Measured 2026-11-26 on "The Bracelet Stays On": the site showed 991k
+        // while stats.chat was 26,787 and stats.message was 994,892 — the grid
+        // showed 26.7k, a number the site never displays.
+        chatCount: item.messages || item.chats,
         createdAt: Number.isFinite(created) ? created : 0,
     };
 }

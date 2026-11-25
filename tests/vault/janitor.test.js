@@ -114,7 +114,10 @@ describe('normalizeJanitorHit', () => {
         // The card blurb is text; the HTML belongs to the detail sheet.
         expect(hit.description).toBe('Husband material');
         expect(hit.tokens).toBe(2742);
-        expect(hit.chatCount).toBe(25);
+        // The badge is the message total (PITFALLS #38): the site prints it
+        // under the chat bubble, `stats.chat` is a different number.
+        expect(hit.chatCount).toBe(136);
+        expect(hit.chats).toBe(25);
         expect(hit.nsfw).toBe(true);
         expect(hit.tagIds).toEqual(['1']);
         // The site sends tag objects; the grid draws their names.
@@ -386,5 +389,22 @@ describe('normalizeJanitorRow', () => {
         expect(normalizeJanitorRow({ is_proxy_enabled: false }).proxyEnabled).toBe(false);
         expect(normalizeJanitorRow({ allow_proxy: false }).proxyEnabled).toBe(false);
         expect(normalizeJanitorRow({}).proxyEnabled).toBe(true);
+    });
+});
+
+describe('the badge number', () => {
+    test('is the message total the site shows, not the chat count', () => {
+        // Measured 2026-11-26 on "The Bracelet Stays On": the site printed 991k
+        // while stats.chat was 26,787 and stats.message was 994,892.
+        const hit = normalizeJanitorHit({
+            id: 'abc12345-0000-4000-8000-000000000000',
+            name: 'The Bracelet Stays On',
+            stats: { chat: 26787, message: 994892 },
+        });
+        expect(hit.chatCount).toBe(994892);
+        expect(hit.chats).toBe(26787);
+        expect(hit.messages).toBe(994892);
+        // A row with no stats at all must not invent one.
+        expect(normalizeJanitorHit({ id: 'x', name: 'y' }).chatCount).toBe(0);
     });
 });

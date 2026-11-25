@@ -683,6 +683,12 @@ export class VaultBrowser {
      */
     async reveal() {
         await this.ensureStarted();
+        // A revealed window belongs to a human step, and an unheld window is
+        // closed by the 30 s idle teardown — the "appears and disappears after
+        // about 30 seconds" report. Give the step its own budget; `release()`
+        // ends it early when the step works, and `park()` takes the window back
+        // offscreen afterwards.
+        if (!this.isHeld()) this.hold(3 * 60_000);
         await this.focusPage();
         // Chrome places its own window. Moving a window that was born at
         // -32000,-32000 with SetWindowPos leaves the compositor holding a stale
@@ -759,16 +765,33 @@ export class VaultBrowser {
         } catch { /* cosmetic */ }
     }
 
+    /** Whether a human step currently owns the window. */
+    isHeld() {
+        return Boolean(this.holdUntil) && Date.now() < this.holdUntil;
+    }
+
     /**
      * Park the window again after a human step finishes: offscreen, out of the
      * taskbar, so a lingering session is invisible.
      * @returns {Promise<void>}
      */
     async park() {
-        if (!this.page || !this.windowId) return;
-        try {
-            await this.page.send('Browser.setWindowBounds', { windowId: this.windowId, bounds: { left: -32000, top: -32000 } });
-        } catch { /* cosmetic */ }
+        if (!this.page) return;
+        // `windowId` is only set by `placeWindowOnScreen()`, so a parked window
+        // that was never revealed had no id and this method silently did nothing
+        // — which is why a browser born on screen (Chrome restores the last
+        // placement) stayed there. Ask for the id instead.
+        if (!this.windowId) {
+            try {
+                const { windowId } = await this.page.send('Browser.getWindowForTarget', {});
+                this.windowId = windowId;
+            } catch { /* no target window yet; hideWindow still applies */ }
+        }
+        if (this.windowId) {
+            try {
+                await this.page.send('Browser.setWindowBounds', { windowId: this.windowId, bounds: { left: -32000, top: -32000 } });
+            } catch { /* cosmetic */ }
+        }
         this.taskbarHidden = false;
         await this.hideWindow();
     }
@@ -900,6 +923,11 @@ export class VaultBrowser {
         // A window created while loading (Chrome restores one on a crash) would
         // not carry the style yet.
         await this.hideWindow();
+        // And put it back offscreen by CDP, not by trusting `--window-position`:
+        // Chrome restores the last placement it saved for the profile, so a reveal
+        // in an earlier session makes every later session born on screen. Measured
+        // 2026-11-26: the window appeared mid-desktop for its whole 30 s lifetime.
+        await this.park();
         if (!cleared) {
             // Leave nothing half-solved behind: a challenged page would be reused
             // by the next request and fail the same way.
@@ -933,6 +961,15 @@ export class VaultBrowser {
         this.page = page;
         // The adopted instance may still be mid-challenge; waitForPage covers it.
         await this.waitForPage();
+        // Adoption is the common case — every request after the first reuses the
+        // running browser — and it used to skip both the taskbar style and the
+        // offscreen move. A window left on screen by a reveal therefore stayed on
+        // screen for the rest of the session and then vanished with the idle
+        // teardown: "the Chrome window appears and disappears after 30 seconds".
+        // Parking is safe here because a human step holds the window; only an
+        // unheld window is put back offscreen.
+        if (this.isHeld()) await this.hideWindow();
+        else await this.park();
         this.logger.info?.(`[Weaver's Vault] ${this.label}: adopted the running browser session`);
         return true;
     }

@@ -57,7 +57,26 @@ describe('nsfw artwork', () => {
     });
 });
 
+describe('reused automation session', () => {
+    test('adoption re-asserts the window state instead of inheriting it', () => {
+        const adopt = browserJs.slice(browserJs.indexOf('async adoptExisting'));
+        const body = adopt.slice(0, adopt.indexOf('async start()'));
+        // Every request after the first reuses the running browser; leaving the
+        // window where the last human step put it is PITFALLS #37.
+        expect(body).toMatch(/this\.isHeld\(\)[\s\S]{0,120}park\(\)/);
+        // And park() must be able to find the window without a prior reveal.
+        const park = browserJs.slice(browserJs.indexOf('async park()'));
+        expect(park.slice(0, park.indexOf('async hideWindow'))).toContain('Browser.getWindowForTarget');
+    });
+});
+
 describe('revealed automation window', () => {
+    test('takes its own hold so the idle teardown cannot close it', () => {
+        const reveal = browserJs.slice(browserJs.indexOf('async reveal()'));
+        const body = reveal.slice(0, reveal.indexOf('async placeWindowOnScreen'));
+        expect(body).toMatch(/if \(!this\.isHeld\(\)\) this\.hold\(/);
+    });
+
     test('re-applies the taskbar style after a human step', () => {
         const reveal = browserJs.slice(browserJs.indexOf('async reveal()'));
         const body = reveal.slice(0, reveal.indexOf('async placeWindowOnScreen'));
