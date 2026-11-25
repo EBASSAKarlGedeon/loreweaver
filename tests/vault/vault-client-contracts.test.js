@@ -220,6 +220,18 @@ describe('scripted lorebook rebuild', () => {
 
     test('the sheet scrolls as a whole instead of clipping a sub-box', () => {
         expect(clientCss).toMatch(/\.wv-rbscroll \{[^}]*overflow-y: auto/);
-        expect(clientCss).toMatch(/\.wv-rbsheet \{[^}]*max-height: 86vh/);
+        expect(clientCss).toMatch(/\.wv-modesheet\.wv-rbsheet \{[^}]*max-height: 86vh/);
+    });
+
+    // PITFALLS #45: a capped flex column shrinks every child unless told not to,
+    // which turned the 46px fields into 18px ones and left nothing to scroll.
+    test('only the scroll body may shrink, and fields share one height', () => {
+        expect(clientCss).toMatch(/\.wv-rbscroll \{[^}]*flex: 1 1 auto/);
+        expect(clientCss).toMatch(/\.wv-rbscroll > \* \{[^}]*flex: 0 0 auto/);
+        expect(clientCss).toMatch(/\.wv-rbsheet \.wv-tokeninput \{[^}]*height: 46px/);
+        expect(clientCss).toMatch(/\.wv-modesheet\.wv-rbsheet \{[^}]*box-sizing: border-box/);
+        // The profile dropdown fits a name, not a name and a model id: a native
+        // select clips the longer string with no ellipsis (seen at 348px).
+        expect(clientJs).toContain('title="${escapeHtml(`${profile.name || profile.id} — ${profile.model || \'\'}`)}"');
     });
 });
