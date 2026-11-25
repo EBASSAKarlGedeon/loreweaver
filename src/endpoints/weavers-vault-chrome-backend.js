@@ -864,9 +864,9 @@ export class ChromeBackend {
      * Measure the identity with a real Chrome on this machine.
      *
      * The one thing a headless browser must not be asked to describe. The
-     * measuring browser is a normal headful launch of the same binary: parked
-     * offscreen and out of the taskbar by `start()`, so it is never seen, and it
-     * loads only the vault's own origin — no site traffic.
+     * measuring browser is a normal headful launch of the same binary, parked
+     * offscreen and out of the taskbar, on a throwaway profile and a local
+     * `file://` page: no network, so no site traffic and no site cookies.
      * @param {string} binary
      * @returns {Promise<void>}
      */
@@ -1002,8 +1002,16 @@ export class ChromeBackend {
      *
      * Split out of `launch()` so a test can read it without spawning a browser.
      * A headless launch is deliberately minimal: it has no window to place, so
-     * the window flags would describe one that does not exist, and the identity
-     * that matters is applied over CDP (`applyHeadlessIdentity`).
+     * the window flags would describe one that does not exist.
+     *
+     * The user agent goes on the command line, not only through
+     * `Emulation.setUserAgentOverride`, and that is not belt-and-braces: the
+     * *first* navigation happens before any override can be applied, and that is
+     * the request the firewall judges. Measured 2026-11-25 with a local server
+     * that prints what arrived: the document request carried
+     * `HeadlessChrome/158.0.0.0` while the same page's next fetch carried the
+     * clean one — and the site had answered that first request with its block
+     * page. `--user-agent` is the only way to make the very first request right.
      * @returns {string[]}
      */
     launchArgs() {
@@ -1032,6 +1040,9 @@ export class ChromeBackend {
         ];
         if (this.headless) {
             args.push('--headless=new');
+            // `ensureIdentity()` runs before `launch()`, so the reference is here.
+            const agent = this.identity?.userAgent;
+            if (agent) args.push(`--user-agent=${agent}`);
         } else {
             // Offscreen but *headful*: a parked real window is what a challenge
             // expects when the identity is not ours to claim.

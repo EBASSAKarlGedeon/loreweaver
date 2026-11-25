@@ -365,7 +365,11 @@ describe('headless mode', () => {
 
     test('a headless launch asks for headless and no window placement', () => {
         const headless = new ChromeBackend({ ...OPTIONS, headless: true });
+        // The identity is measured before the launch; the first navigation has to
+        // carry it, or the request the firewall sees still says HeadlessChrome.
+        headless.identity = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/158.0.0.0 Safari/537.36' };
         const args = headless.launchArgs();
+        expect(args).toContain('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/158.0.0.0 Safari/537.36');
         expect(args).toContain('--headless=new');
         expect(args.some(arg => arg.startsWith('--window-position'))).toBe(false);
         expect(args.some(arg => arg.startsWith('--window-size'))).toBe(false);
