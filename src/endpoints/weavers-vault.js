@@ -899,10 +899,16 @@ router.post('/janitor/capture', async (req, res) => {
                 });
             }
 
+            // A closed lorebook's keys fire only on words the sent message
+            // contains, and the default trigger is the card's own text. A coverage
+            // pass needs to name the keys it is testing, so the caller may add its
+            // own words here; the cap keeps a stray paste out of the prompt.
+            const triggerText = String(req.body?.triggerText ?? '').slice(0, 20_000);
             const capture = await captureJanitorCard({
                 browser,
                 characterId: id,
                 authHeaders: auth.headers,
+                triggerText,
                 pageScript: JANITOR_CAPTURE_PAGE_SCRIPT,
                 dataRoot: globalThis.DATA_ROOT ?? path.join(serverDirectory, 'data'),
                 onPhase: name => phases.push(name),

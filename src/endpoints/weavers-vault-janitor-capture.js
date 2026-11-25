@@ -613,6 +613,24 @@ async function fetchChatGreetings(browser, authHeaders, chatId) {
 }
 
 /**
+ * The message that trips a closed lorebook's keys.
+ *
+ * A key only fires on words that are in the sent message, so the trigger is the
+ * card's own text (which is what the card would say in its first turn, and is
+ * free coverage) plus whatever the caller names — a coverage pass has to be able
+ * to say "morrowfen" even when the card never uses that word — plus the
+ * greetings. Parts are trimmed and empty ones dropped, so the joins never leave
+ * stray separators; a capture with nothing to say falls back to `"."`.
+ * Measured 2026-11-24: this text is the only vocabulary the scan window sees.
+ */
+export function janitorTriggerMessage({ card = '', triggerText = '', greetings = [] } = {}) {
+    return [card, String(triggerText ?? '').trim(), greetings.join('\n\n---\n\n')]
+        .map(part => String(part ?? '').trim())
+        .filter(Boolean)
+        .join('\n\n') || '.';
+}
+
+/**
  * Capture one card.
  *
  * Single-turn capture (v1): a `"."` probe send supplies the card, one trigger
@@ -728,10 +746,7 @@ export async function captureJanitorCard({
         }
 
         const rawCard = extractCard(probe.payload);
-        const trigger = [rawCard, triggerText.trim(), greetings.join('\n\n---\n\n')]
-            .map(part => String(part ?? '').trim())
-            .filter(Boolean)
-            .join('\n\n') || '.';
+        const trigger = janitorTriggerMessage({ card: rawCard, triggerText, greetings });
 
         phase('sending trigger');
         await resetCapture(browser);
