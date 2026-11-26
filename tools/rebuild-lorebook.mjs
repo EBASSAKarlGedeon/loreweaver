@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+// Rebuild a World Info book from a captured Janitor lorebook prompt.
+//
+//   node tools/rebuild-lorebook.mjs <capture.txt> <out.json> [keys.json]
+//
+// keys.json is an optional map of { "normalised title": ["key", ...] } taken from
+// the author's entry list. Prints the report; exits 1 when a gate fails.
+import fs from 'node:fs';
+import path from 'node:path';
+import { buildLorebook } from '../public/scripts/extensions/weavers-vault/lorebook-build.js';
+
+const [capturePath, outPath, keysPath] = process.argv.slice(2);
+if (!capturePath || !outPath) {
+    console.error('usage: node tools/rebuild-lorebook.mjs <capture.txt> <out.json> [keys.json]');
+    process.exit(2);
+}
+
+const text = fs.readFileSync(capturePath, 'utf8');
+const authorKeys = keysPath ? JSON.parse(fs.readFileSync(keysPath, 'utf8')) : null;
+const { book, report } = buildLorebook({ text, authorKeys });
+
+fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
+fs.writeFileSync(outPath, JSON.stringify(book, null, 1));
+
+const { summary, failures, warnings, segmentation } = report;
+console.log(JSON.stringify({
+    entries: summary.entries,
+    chars: summary.chars,
+    keys: summary.keys,
+    sheets: summary.sheets,
+    containers: summary.containers,
+    topics: summary.topics,
+    captured: segmentation.stats.chars,
+    flags: segmentation.flags.length,
+    ok: report.ok,
+}, null, 1));
+
+for (const failure of failures) console.error('FAIL ' + failure.gate + '/' + failure.code + ': ' + failure.message);
+for (const warning of warnings) console.log('warn ' + warning.gate + '/' + warning.code + ': ' + warning.message);
+for (const flag of segmentation.flags) console.log('flag ' + flag.code + ': ' + flag.message);
+process.exit(report.ok ? 0 : 1);
