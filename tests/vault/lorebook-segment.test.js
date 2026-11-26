@@ -2,6 +2,7 @@ import { describe, test, expect } from '@jest/globals';
 import {
     OPENERS,
     cleanTitle,
+    codenameAfter,
     matchOpener,
     normaliseText,
     segmentLorebook,
@@ -177,6 +178,31 @@ describe('segmentLorebook', () => {
         expect(texts[0]).toContain('First Singularity');
     });
 
+    test('a "◉ Information:" block with a Codename opens the Singularity setting', () => {
+        const text = [
+            '- Servant Name: Arthur Pendragon;',
+            '- Height/Weight: 170cm, 68kg;',
+            '',
+            '◉ Information:',
+            'Codename: [Flame Contaminated City: Fuyuki]',
+            '- Location: Fuyuki City - Japan | A.D.2004',
+            '◉ Objective: [Seize the Holy Grail.]',
+            '',
+            '- Servant Name: Mash Kyrielight;',
+            '- Height/Weight: 158cm, 45kg;',
+        ].join('\n');
+        const { entries } = segmentLorebook(text);
+        expect(entries.map((entry) => entry.title)).toEqual(['Arthur Pendragon', 'Flame Contaminated City: Fuyuki', 'Mash Kyrielight']);
+        expect(entries[1].role).toBe('container');
+        expect(entries[1].rule).toBe('singularity-setting');
+        expect(entries[1].content).toContain('◉ Objective: [Seize the Holy Grail.]');
+    });
+
+    test('a "◉ Information:" block without a Codename is a section, not an entry', () => {
+        const text = ['- Servant Name: Rin Tohsaka;', '◉ Information:', '- Location: nowhere worth naming'].join('\n');
+        expect(segmentLorebook(text).entries).toHaveLength(1);
+    });
+
     test('duplicate titles are produced and left for the gate to reject', () => {
         const text = [
             '[System OOC]: This entry contains the information for the Clock Tower.',
@@ -218,6 +244,13 @@ describe('segmentLorebook', () => {
 });
 
 describe('helpers', () => {
+    test('codenameAfter reads the codename and drops its brackets', () => {
+        expect(codenameAfter(['◉ Information:', '- Codename: Æsir Götterdämmerung'], 0)).toBe('Æsir Götterdämmerung');
+        expect(codenameAfter(['◉ Information:', 'Codename: [City of a Thousand and One Lies]'], 0)).toBe('City of a Thousand and One Lies');
+        expect(codenameAfter(['◉ Information:', '- Location: nowhere'], 0)).toBeNull();
+        expect(codenameAfter(['◉ Information:', '', 'Codename: too late'], 0)).toBeNull();
+    });
+
     test('cleanTitle strips the trailing semicolon', () => {
         expect(cleanTitle('Artoria Pendragon;')).toBe('Artoria Pendragon');
     });
