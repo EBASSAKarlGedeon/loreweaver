@@ -36,6 +36,7 @@ console.log(JSON.stringify({
     captured: segmentation.stats.chars,
     flags: segmentation.flags.length,
     reviewed: report.review.applied.length,
+    fingerprint: report.provenance.source.fingerprint,
     ok: report.ok,
 }, null, 1));
 

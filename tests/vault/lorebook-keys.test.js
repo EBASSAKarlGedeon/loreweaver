@@ -43,12 +43,21 @@ describe('buildKeyStore', () => {
         expect(store['cerejeira elron']).toEqual(['Cerejeira Elron', 'Cerejeira']);
     });
 
-    test('reports a key that two entries would both claim', () => {
-        const { collisions } = buildKeyStore([
-            { title: 'Caenis', content: '- Servant Name: Caenis;' },
-            { title: 'Caenis (Summer)', content: '- Servant Name: Caenis;' },
+    test('a summer sheet is its own entry and does not claim the bare name', () => {
+        const { store, collisions } = buildKeyStore([
+            { title: 'Scáthach', content: '- Servant Name: Scáthach;' },
+            { title: 'Scáthach (Summer)', content: '- Servant Name: Scáthach;' },
         ]);
-        expect(collisions.map((entry) => entry.key)).toContain('Caenis');
+        expect(store['scáthach (summer)']).toEqual(['Scáthach (Summer)']);
+        expect(collisions).toEqual([]);
+    });
+
+    test('a declared keyword shared by two sheets is still reported', () => {
+        const { collisions } = buildKeyStore([
+            { title: 'Kiara', content: '- Keywords: "Chaldea"' },
+            { title: 'Kiara (Summer)', content: '- Keywords: "Chaldea"' },
+        ]);
+        expect(collisions.map((entry) => entry.key)).toContain('Chaldea');
     });
 
     test('a qualified title falls back to the base name', () => {
