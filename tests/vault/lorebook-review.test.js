@@ -68,6 +68,88 @@ describe('applyReview', () => {
     });
 });
 
+// A sheet that ends and is followed by another servant's fields with no name line: the
+// capture gives no opener, so only a reviewer can place the boundary (and the author's
+// list supplies the half's title). See the Paracelsus/Li Shuwen weld in the Grand Order card.
+const WELD = [
+    '- Servant Name: Arthur Pendragon',
+    '- Class: Saber;',
+    '<Noble Phantasm: "Excalibur"',
+    '- NP Info: [Sword.]>',
+    '',
+    '- Height/Weight: 183cm, 65kg',
+    '<Noble Phantasm: "Sword of Paracelsus"',
+    '- NP Info: [Elixir.]>',
+].join('\n');
+
+function welded(decisions) {
+    const generated = segmentLorebook(WELD);
+    return applyReview({ entries: generated.entries, decisions });
+}
+
+describe('applyReview explicit offsets', () => {
+    test('splits a headerless fragment off and titles it from the author list', () => {
+        const at = WELD.indexOf('- Height/Weight');
+        const result = welded({ splits: [{ entry: 0, at, title: 'Paracelsus von Hohenheim' }] });
+        expect(result.entries).toHaveLength(2);
+        expect(result.entries[0].title).toBe('Arthur Pendragon');
+        expect(result.entries[1].title).toBe('Paracelsus von Hohenheim');
+        expect(result.entries[1].role).toBe('unknown');
+        expect(result.entries[0].content).not.toContain('Sword of Paracelsus');
+        expect(result.entries[1].content.startsWith('- Height/Weight: 183cm')).toBe(true);
+        for (const entry of result.entries) {
+            expect(entry.content).toBe(WELD.slice(entry.start, entry.end));
+        }
+        expect(result.problems).toEqual([]);
+        expect(result.applied).toEqual([{ kind: 'split', entry: 0, at: WELD.indexOf('- Height/Weight'), title: 'Paracelsus von Hohenheim' }]);
+    });
+
+    test('two offsets carve three entries, in source order', () => {
+        const first = WELD.indexOf('- Height/Weight');
+        const second = WELD.indexOf('<Noble Phantasm: "Sword');
+        const result = welded({
+            splits: [
+                { entry: 0, at: second, title: 'Second' },
+                { entry: 0, at: first, title: 'First' },
+            ],
+        });
+        expect(result.entries.map((entry) => entry.title)).toEqual(['Arthur Pendragon', 'First', 'Second']);
+        expect(result.entries[1].content).toBe('- Height/Weight: 183cm, 65kg');
+        expect(result.entries[2].content).toContain('Sword of Paracelsus');
+    });
+
+    test('a split with neither candidate nor offset is reported', () => {
+        const result = welded({ splits: [{ entry: 0 }] });
+        expect(result.entries).toHaveLength(1);
+        expect(result.problems[0]).toContain('needs a candidate or an at offset');
+    });
+
+    test('offsets that would empty a half or are not whole numbers are reported', () => {
+        for (const at of [0, WELD.length, 2.5]) {
+            const result = welded({ splits: [{ entry: 0, at }] });
+            expect(result.entries).toHaveLength(1);
+            expect(result.problems).toHaveLength(1);
+        }
+    });
+
+    test('the verifier accepts the halves as verbatim and adjacent', () => {
+        const at = WELD.indexOf('- Height/Weight');
+        const result = welded({ splits: [{ entry: 0, at, title: 'Paracelsus von Hohenheim' }] });
+        const entries = result.entries.map((entry, index) => ({
+            uid: index,
+            comment: entry.title,
+            key: [entry.title],
+            content: entry.content,
+            constant: false,
+            position: 4,
+            depth: 10,
+            start: entry.start,
+            end: entry.end,
+        }));
+        const report = verifyLorebook({ source: WELD, entries });
+        expect(report.failures).toEqual([]);
+    });
+});
 describe('verifyLorebook title qualifier', () => {
     test('a parenthesised qualifier disambiguates without touching the body', () => {
         const content = '- Servant Name: Goetia;\n- Class: Caster;';
