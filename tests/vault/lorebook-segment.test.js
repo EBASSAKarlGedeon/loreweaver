@@ -160,6 +160,23 @@ describe('segmentLorebook', () => {
         expect(flags.some((flag) => flag.code === 'candidate-split')).toBe(true);
     });
 
+    test('an entry-level bracket header is a candidate, a known section is not', () => {
+        const text = [
+            '- Servant Name: Artoria Pendragon;',
+            '- Height/Weight: 154cm, 42kg;',
+            '',
+            '[First Singularity: City of a Thousand and One Lies - NPCs]:',
+            'body',
+            '',
+            '[Example Dialogues]:',
+            '"..."',
+        ].join('\n');
+        const { entries } = segmentLorebook(text);
+        const texts = entries[0].candidates.map((candidate) => candidate.text);
+        expect(texts).toHaveLength(1);
+        expect(texts[0]).toContain('First Singularity');
+    });
+
     test('duplicate titles are produced and left for the gate to reject', () => {
         const text = [
             '[System OOC]: This entry contains the information for the Clock Tower.',
