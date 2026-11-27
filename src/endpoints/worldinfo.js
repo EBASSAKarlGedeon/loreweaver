@@ -6,13 +6,14 @@ import sanitize from 'sanitize-filename';
 import _ from 'lodash';
 import { sync as writeFileAtomicSync } from 'write-file-atomic';
 import { tryParse } from '../util.js';
+import { normalizeWorldInfoUids } from '../worldinfo-normalizer.js';
 
 /**
  * Reads a World Info file and returns its contents
  * @param {import('../users.js').UserDirectoryList} directories User directories
  * @param {string} worldInfoName Name of the World Info file
  * @param {boolean} allowDummy If true, returns an empty object if the file doesn't exist
- * @returns {object} World Info file contents
+ * @returns {object} World Info file contents, with entry uids normalized for the editor
  */
 export function readWorldInfoFile(directories, worldInfoName, allowDummy) {
     const dummyObject = allowDummy ? { entries: {} } : null;
@@ -31,7 +32,7 @@ export function readWorldInfoFile(directories, worldInfoName, allowDummy) {
 
     const worldInfoText = fs.readFileSync(pathToWorldInfo, 'utf8');
     const worldInfo = JSON.parse(worldInfoText);
-    return worldInfo;
+    return normalizeWorldInfoUids(worldInfo);
 }
 
 export const router = express.Router();
@@ -111,11 +112,13 @@ router.post('/import', (request, response) => {
         fs.unlinkSync(pathToUpload);
     }
 
+    let worldContent = null;
     try {
-        const worldContent = JSON.parse(fileContents);
+        worldContent = JSON.parse(fileContents);
         if (!('entries' in worldContent)) {
             throw new Error('File must contain a world info entries list');
         }
+        normalizeWorldInfoUids(worldContent);
     } catch (err) {
         return response.status(400).send('Is not a valid world info file');
     }
@@ -127,7 +130,7 @@ router.post('/import', (request, response) => {
         return response.status(400).send('World file must have a name');
     }
 
-    writeFileAtomicSync(pathToNewFile, fileContents);
+    writeFileAtomicSync(pathToNewFile, JSON.stringify(worldContent, null, 4));
     return response.send({ name: worldName });
 });
 
@@ -144,6 +147,7 @@ router.post('/edit', (request, response) => {
         if (!('entries' in request.body.data)) {
             throw new Error('World info must contain an entries list');
         }
+        normalizeWorldInfoUids(request.body.data);
     } catch (err) {
         return response.status(400).send('Is not a valid world info file');
     }
