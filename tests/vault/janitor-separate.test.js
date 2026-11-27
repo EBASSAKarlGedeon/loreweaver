@@ -162,6 +162,16 @@ describe('restoreMacros', () => {
         expect(restoreMacros('text', {})).toBe('text');
         expect(restoreMacros('', { charNames: ['Anna Lee'] })).toBe('');
     });
+
+    test('every candidate user name is swapped, longest first', () => {
+        const out = restoreMacros('Hiro_123 met Hiro.', { userNames: ['Hiro', 'Hiro_123'] });
+        expect(out).toBe('{{user}} met {{user}}.');
+    });
+
+    test('short user names are ignored like short character names', () => {
+        expect(restoreMacros('Al met Anna.', { userNames: ['Al', ''], charNames: ['Anna'] }))
+            .toBe('Al met {{char}}.');
+    });
 });
 
 describe('stripJanitorCredit', () => {

@@ -292,22 +292,31 @@ export function extractFirstMessage(payload) {
 /**
  * Put macros back where the server expanded them.
  *
+ * The assembled prompt has already replaced `{{char}}` with the card's name and
+ * `{{user}}` with the account's persona name. Both have to be swapped back, or
+ * the imported card carries one person's name where the macro belongs — a card
+ * whose description says "Hiro" is unusable by any other persona.
+ *
  * Names shorter than three characters are skipped: a two-letter name matches
  * everywhere and would shred the text. Names are swapped longest-first so
- * "Anna Lee" is replaced before "Anna".
+ * "Anna Lee" is replaced before "Anna", and a persona's display name is handled
+ * before its shorter handle for the same reason.
+ *
+ * `userNames` is the multi-candidate form: the site's profile endpoint carries
+ * a display name and a handle, and either can be the one baked into the prompt.
+ * `userName` stays for callers that know exactly one.
  * @param {string} text
- * @param {{charNames?: string[], userName?: string}} [options]
+ * @param {{charNames?: string[], userName?: string, userNames?: string[]}} [options]
  * @returns {string}
  */
-export function restoreMacros(text, { charNames = [], userName = '' } = {}) {
+export function restoreMacros(text, { charNames = [], userName = '', userNames = [] } = {}) {
     const input = String(text ?? '');
     if (!input) return input;
-    const names = [...new Set(charNames.map(name => String(name ?? '').trim()).filter(name => name.length >= 3))]
+    const pick = names => [...new Set(names.map(name => String(name ?? '').trim()).filter(name => name.length >= 3))]
         .sort((a, b) => b.length - a.length);
     let out = input;
-    for (const name of names) out = out.split(name).join('{{char}}');
-    const user = String(userName ?? '').trim();
-    if (user.length >= 3) out = out.split(user).join('{{user}}');
+    for (const name of pick(charNames)) out = out.split(name).join('{{char}}');
+    for (const name of pick([userName, ...userNames])) out = out.split(name).join('{{user}}');
     return out;
 }
 

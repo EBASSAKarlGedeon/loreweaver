@@ -3,6 +3,7 @@ import {
     JANITOR_SORTS,
     classifyJanitorError,
     janitorAccount,
+    janitorAccountNames,
     janitorAvatarUrl,
     janitorBlockReason,
     janitorCardCharacter,
@@ -167,6 +168,21 @@ describe('janitorAccount', () => {
         expect(janitorAccount({ id: 'abc', name: 'Yang', user_name: 'Yang Goka' }).name).toBe('Yang');
         expect(janitorAccount({ id: 'abc' }).name).toBe('');
         expect(janitorAccount(null)).toEqual({ signedIn: false, name: '', id: '' });
+    });
+});
+
+describe('janitorAccountNames', () => {
+    test('returns every non-empty identity, display name first, de-duplicated', () => {
+        expect(janitorAccountNames({ id: 'abc', name: 'Yang', user_name: 'Yang Goka' }))
+            .toEqual(['Yang', 'Yang Goka']);
+        expect(janitorAccountNames({ data: { handle: 'gedeon', username: 'gedeon' } }))
+            .toEqual(['gedeon']);
+    });
+
+    test('skips the empty display name instead of returning it', () => {
+        expect(janitorAccountNames({ id: 'abc', name: '', user_name: 'Neo' })).toEqual(['Neo']);
+        expect(janitorAccountNames({ id: 'abc' })).toEqual([]);
+        expect(janitorAccountNames(null)).toEqual([]);
     });
 });
 

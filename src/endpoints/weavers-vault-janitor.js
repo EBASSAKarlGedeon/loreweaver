@@ -370,6 +370,28 @@ export function janitorCardCharacter(meta, { body = '', avatarUrl = '', retrieve
 }
 
 /**
+ * Every identity the profile payload carries, display name first.
+ *
+ * The capture needs *all* of them, not one: JanitorAI bakes the account's
+ * persona name into `{{user}}` at render time, and which field that name comes
+ * from depends on the account (a display `name` on one, only the `user_name`
+ * handle on the next — measured on a second account whose display name was
+ * empty). Restoring `{{user}}` from a single guess leaves the other spelling in
+ * the imported card.
+ * @param {unknown} payload
+ * @returns {string[]}
+ */
+export function janitorAccountNames(payload) {
+    const source = payload && typeof payload === 'object' ? (payload.data && typeof payload.data === 'object' ? payload.data : payload) : null;
+    if (!source) return [];
+    // First *non-empty* candidate per field: `String(undefined).trim()` is not a
+    // name, and a profile with `name: ''` must not report as "named ''".
+    return [...new Set([source.name, source.display_name, source.handle, source.username, source.user_name]
+        .map(value => String(value ?? '').trim())
+        .filter(value => value.length > 0))];
+}
+
+/**
  * Read the signed-in account out of `/hampter/profiles/mine`.
  *
  * Verified shape (measured): the payload is an object with `id`/`handle`/`name`
@@ -382,14 +404,7 @@ export function janitorAccount(payload) {
     const source = payload && typeof payload === 'object' ? (payload.data && typeof payload.data === 'object' ? payload.data : payload) : null;
     if (!source) return { signedIn: false, name: '', id: '' };
     const id = String(source.id ?? source.user_id ?? '').trim();
-    // `user_name` is the handle the site shows on reviews and profiles; an account
-    // whose display `name` is empty reports as nameless without it (measured on a
-    // second account: 200 with a real id, name '').
-    // First *non-empty* candidate: `??` alone does not skip `name: ''`, which is
-    // exactly the shape a second account had (200, real id, empty display name).
-    const name = [source.name, source.display_name, source.handle, source.username, source.user_name]
-        .map(value => String(value ?? '').trim())
-        .find(value => value.length > 0) ?? '';
+    const name = janitorAccountNames(payload)[0] ?? '';
     return { signedIn: Boolean(id || name), name, id };
 }
 

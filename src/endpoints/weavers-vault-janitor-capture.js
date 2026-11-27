@@ -12,9 +12,11 @@
  * What our port does differently, and why:
  *  - **No persona is created.** `/hampter/personas` answers 404 (measured
  *    2026-11-24), so Glaze's `{{user}}` persona step cannot be reproduced as
- *    written. v1 creates the chat without `persona_id` and puts the account's own
- *    display names back into the text as macros instead. Fewer account mutations
- *    is the safer direction for the riskiest stage.
+ *    written. v1 creates the chat without `persona_id`, which makes the site bake
+ *    the account's *own* persona name into every `{{user}}` it expands; the
+ *    capture reads that name from `/hampter/profiles/mine` and swaps it back to
+ *    `{{user}}` (as Glaze's `bakedUserName` swap-back does). Fewer account
+ *    mutations is the safer direction for the riskiest stage.
  *  - **The snapshot is durable.** Glaze restores only in a `finally`, so a killed
  *    process leaves the account with a dummy preset selected, `source: 'proxy'`
  *    and `context_length: 0` — after which every normal chat has no context. Here
@@ -38,7 +40,7 @@ import {
     janitorRestorePlan,
     janitorStrayPresets,
 } from './weavers-vault-janitor-account.js';
-import { JANITOR_API, janitorAvatarUrl, janitorBioToNotes, janitorPublicUrl } from './weavers-vault-janitor.js';
+import { JANITOR_API, janitorAccountNames, janitorAvatarUrl, janitorBioToNotes, janitorPublicUrl } from './weavers-vault-janitor.js';
 import {
     extractCard,
     extractCharName,
@@ -152,6 +154,39 @@ async function readApiSettings(browser, authHeaders) {
 }
 
 /**
+ * The account identities the site expands `{{user}}` into.
+ *
+ * The capture creates no persona (see the module comment), so whatever persona
+ * the account already has is the one the site substitutes. Its name is not in
+ * the assembled prompt as a labelled field — only baked into the prose — so it
+ * is read from the profile endpoint and every candidate is returned (display
+ * name and handle can differ, and the response version decides which one is
+ * filled).
+ *
+ * A failed read is logged, never thrown: the capture has already mutated the
+ * account by the time the text is processed, so spending that work is worse than
+ * importing the card with a literal name in it. The warning says exactly which
+ * happened.
+ * @param {import('./weavers-vault-browser.js').VaultBrowser} browser
+ * @param {Record<string,string>} authHeaders
+ * @param {{logger?: Console}} [options]
+ * @returns {Promise<string[]>}
+ */
+async function readAccountUserNames(browser, authHeaders, { logger = console } = {}) {
+    try {
+        const result = await apiCall(browser, { url: `${JANITOR_API}/profiles/mine`, authHeaders });
+        if (result.status !== 200 || !result.json) {
+            logger.warn?.(`[Weaver's Vault] janitor capture: account profile read failed (HTTP ${result.status}); the persona name will stay literal in the card`);
+            return [];
+        }
+        return janitorAccountNames(result.json);
+    } catch (error) {
+        logger.warn?.("[Weaver's Vault] janitor capture: account profile read failed; the persona name will stay literal in the card:", error.message);
+        return [];
+    }
+}
+
+/**
  * Force the account onto a throwaway preset so the site assembles a prompt.
  *
  * Reproduced literally from Glaze, including the two patches that are applied
@@ -162,7 +197,7 @@ async function readApiSettings(browser, authHeaders) {
  * @param {Record<string,string>} authHeaders
  * @param {{logger?: Console}} [options]
  */
-async function enterExtractionMode(browser, authHeaders, { logger = console } = {}) {
+async function enterExtractionMode(browser, authHeaders, { logger = console, contextLength = 0 } = {}) {
     const before = await readApiSettings(browser, authHeaders);
     if (before.status !== 200 || !before.json) {
         throw new Error(`Could not read the account's API settings (HTTP ${before.status}).`);
@@ -200,7 +235,13 @@ async function enterExtractionMode(browser, authHeaders, { logger = console } = 
 
     // Independently, per the original: a rejection here must not deselect.
     await apiCall(browser, { method: 'PATCH', url: `${JANITOR_API}/api-settings`, body: { source: 'proxy' }, authHeaders });
-    const generation = snapshot.generationSettings ? { ...snapshot.generationSettings, context_length: 0 } : { context_length: 0 };
+    // 0 means "no declared window", under which JanitorAI fills its ~120k-token
+    // lore cap with the lorebook's first entries regardless of the message. A
+    // real window forces it to choose by relevance, which is the only way a
+    // probe reaches entries past that prefix.
+    const generation = snapshot.generationSettings
+        ? { ...snapshot.generationSettings, context_length: contextLength }
+        : { context_length: contextLength };
     await apiCall(browser, {
         method: 'PATCH',
         url: `${JANITOR_API}/api-settings`,
@@ -208,7 +249,7 @@ async function enterExtractionMode(browser, authHeaders, { logger = console } = 
         authHeaders,
     });
 
-    logger.info?.(`[Weaver's Vault] janitor capture: extraction mode on (preset ${match.id}, context_length 0)`);
+    logger.info?.(`[Weaver's Vault] janitor capture: extraction mode on (preset ${match.id}, context_length ${contextLength})`);
     return { snapshot, presetId: match.id };
 }
 
@@ -595,6 +636,37 @@ async function resetCapture(browser) {
 }
 
 /**
+ * Replace the chat's first bot message with `.`.
+ *
+ * The greeting is part of the message history JanitorAI scans for lorebook
+ * keys, and a guide-style greeting that lists every character fires the whole
+ * character book on message one. Rewriting it to a neutral dot leaves the scan
+ * with only what the caller sends, which is what makes a targeted probe work
+ * on a saturated book.
+ * @returns {Promise<boolean>} true when the greeting was rewritten
+ */
+async function blankChatGreeting(browser, authHeaders, chatId, { logger = console, text = '.' } = {}) {
+    const chat = await apiCall(browser, { url: `${JANITOR_API}/chats/${chatId}`, authHeaders });
+    const messages = Array.isArray(chat.json?.chatMessages) ? chat.json.chatMessages : [];
+    const first = messages.find(message => message?.is_bot && message?.id);
+    if (!first) {
+        logger.warn?.('[Weaver\'s Vault] janitor capture: no bot greeting to blank');
+        return false;
+    }
+    const patched = await apiCall(browser, {
+        method: 'PATCH',
+        url: `${JANITOR_API}/chats/${chatId}/messages/${first.id}`,
+        body: { message: text },
+        authHeaders,
+    });
+    if (patched.status >= 400) {
+        logger.warn?.(`[Weaver\'s Vault] janitor capture: greeting blank answered ${patched.status} ${String(patched.body ?? '').slice(0, 120)}`);
+        return false;
+    }
+    return true;
+}
+
+/**
  * The greetings the site stored on the chat object.
  * @returns {Promise<string[]>}
  */
@@ -648,7 +720,7 @@ export function janitorTriggerMessage({ card = '', triggerText = '', greetings =
  * @returns {Promise<{
  *   characterId: string, card: string, scenario: string, example: string,
  *   firstMes: string, alternateGreetings: string[], lorebookText: string,
- *   entryCount: number, greetings: string[], probeSystemChars: number,
+ *   entryCount: number, userNames: string[], greetings: string[], probeSystemChars: number,
  *   triggerSystemChars: number, snapshot: object, restored: object,
  * }>}
  */
@@ -671,12 +743,35 @@ async function saveFailureShot(shot, dataRoot, logger) {
     }
 }
 
+/**
+ * The macro restorer for one capture.
+ *
+ * Every text field the import keeps goes through this: the card body, scenario,
+ * example dialogues, every greeting and the whole lorebook. `separate.js` can
+ * only restore a macro it can name, so the restorer is built from both name sets
+ * — the card's own name(s) from the `<…'s Persona>` tag and the account's
+ * persona name(s) from the profile read — and applies them in one place so no
+ * field can quietly skip the swap.
+ * @param {{charNames?: string[], userNames?: string[]}} [options]
+ * @returns {(text: string) => string}
+ */
+export function janitorMacroRestorer({ charNames = [], userNames = [] } = {}) {
+    return text => restoreMacros(stripJanitorCredit(text), { charNames, userNames });
+}
+
 export async function captureJanitorCard({
     browser,
     characterId,
     authHeaders,
     pageScript,
     triggerText = '',
+    settleSends = 0,
+    minimalTrigger = false,
+    blankGreeting = false,
+    greetingText = '.',
+    greetingClicks = 0,
+    contextLength = 0,
+    onPayload = null,
     persist = () => {},
     onPhase = () => {},
     logger = console,
@@ -699,6 +794,11 @@ export async function captureJanitorCard({
             .replace('Restore it before importing again.', 'Run the account restore and try again.'));
     }
 
+    // Read-only and before the first mutation: the persona name is needed to undo
+    // the site's `{{user}}` expansion on the captured text.
+    phase('reading account name');
+    const userNames = await readAccountUserNames(browser, authHeaders, { logger });
+
     let entered = null;
     let chatId = null;
     let capture = null;
@@ -706,7 +806,7 @@ export async function captureJanitorCard({
 
     try {
         phase('configuring proxy');
-        entered = await enterExtractionMode(browser, authHeaders, { logger });
+        entered = await enterExtractionMode(browser, authHeaders, { logger, contextLength });
         // Durable BEFORE the first irreversible step: from here a kill is
         // recoverable, because the snapshot is on disk.
         persist({ phase: 'capturing', takenAt: new Date().toISOString(), snapshot: entered.snapshot, presetId: entered.presetId });
@@ -732,8 +832,30 @@ export async function captureJanitorCard({
         await browser.reloadPage();
         await waitForComposer(browser, { logger });
 
+        if (greetingClicks > 0) {
+            phase(`switching greeting x${greetingClicks}`);
+            for (let click = 0; click < greetingClicks; click++) {
+                const moved = await browser.evaluateInPage(`(() => {
+                    const next = document.querySelector('button[aria-label="Next"]');
+                    if (!next) return 'no-button';
+                    next.click();
+                    return 'clicked';
+                })()`, { timeoutMs: 15_000 }).catch(() => 'error');
+                if (moved !== 'clicked') {
+                    logger.warn?.(`[Weaver's Vault] janitor capture: greeting switch ${click + 1} found no Next button (${moved})`);
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 900));
+            }
+        }
+
         phase('reading greetings');
         const greetings = await fetchChatGreetings(browser, authHeaders, chatId);
+
+        if (blankGreeting) {
+            phase('blanking greeting');
+            await blankChatGreeting(browser, authHeaders, chatId, { logger, text: greetingText });
+        }
 
         phase('sending probe');
         await resetCapture(browser);
@@ -746,7 +868,25 @@ export async function captureJanitorCard({
         }
 
         const rawCard = extractCard(probe.payload);
-        const trigger = janitorTriggerMessage({ card: rawCard, triggerText, greetings });
+        // A saturated lorebook needs the opposite of the importer's maximising
+        // trigger: card and greetings are themselves keyword soup, so a probe that
+        // includes them fires the same entries every time and never reaches past
+        // JanitorAI's cap. Minimal mode scans only what the caller asked for.
+        const trigger = minimalTrigger ? String(triggerText ?? '') : janitorTriggerMessage({ card: rawCard, triggerText, greetings });
+
+        // A lorebook whose greeting (or card) names most of its own entries fires
+        // them on the first message and saturates JanitorAI's ~120k-token lore cap,
+        // so a targeted trigger adds nothing. Settle sends push the greeting out of
+        // the scan window before the real trigger, which frees the cap for it.
+        for (let k = 0; k < settleSends; k++) {
+            phase(`settling ${k + 1}/${settleSends}`);
+            await resetCapture(browser);
+            const filler = await captureOneSend(browser, '.', { budgetMs: CAPTURE_TIMINGS.probeMs, logger });
+            if (!filler.payload) {
+                logger.warn?.(`[Weaver's Vault] janitor capture: settle send ${k + 1} of ${settleSends} did not answer`);
+                break;
+            }
+        }
 
         phase('sending trigger');
         await resetCapture(browser);
@@ -754,6 +894,9 @@ export async function captureJanitorCard({
         // The trigger payload is preferred, but a probe-only capture still holds
         // the card; only a refusal on the trigger makes the run fail.
         const payload = full.payload ?? probe.payload;
+        if (payload && typeof onPayload === 'function') {
+            try { onPayload(payload); } catch { /* diagnostics must not break a capture */ }
+        }
         if (!payload) {
             await saveFailureShot(full.screenshot, dataRoot, logger);
             throw new Error(full.problem);
@@ -764,7 +907,7 @@ export async function captureJanitorCard({
         const name = extractCharName(payload) || extractCharName(probe.payload);
 
         const charNames = [name, extractCharName(probe.payload)].filter(Boolean);
-        const macro = text => restoreMacros(stripJanitorCredit(text), { charNames });
+        const macro = janitorMacroRestorer({ charNames, userNames });
         const cardSource = probe.payload;
         const card = macro(extractCard(cardSource));
         const scenario = macro(extractScenario(cardSource));
@@ -787,6 +930,7 @@ export async function captureJanitorCard({
             alternateGreetings: alternates,
             lorebookText,
             entryCount: splitEntries(lorebookText).length,
+            userNames,
             greetings: siteGreetings,
             probeSystemChars: String(probe.payload?.messages?.[0]?.content ?? '').length,
             triggerSystemChars: String(payload?.messages?.[0]?.content ?? '').length,
